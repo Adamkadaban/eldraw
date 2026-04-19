@@ -140,20 +140,20 @@ lossless.
 
 ## Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| P / H / E | Pen / Highlighter / Eraser |
-| L | Straight line |
-| G | Graph tool |
-| 1–9 | Palette color slots |
-| [ / ] | Decrease / increase width |
-| D | Toggle dash cycle (solid → dashed → dotted) |
-| ← / → / PgUp / PgDn | Prev / next page |
-| B | Insert blank page after current |
-| Ctrl+Z / Ctrl+Shift+Z | Undo / redo |
-| F | Fullscreen / presentation mode |
-| Space (hold) | Pan |
-| Tab | Toggle sidebar |
+| Key                   | Action                                      |
+| --------------------- | ------------------------------------------- |
+| P / H / E             | Pen / Highlighter / Eraser                  |
+| L                     | Straight line                               |
+| G                     | Graph tool                                  |
+| 1–9                   | Palette color slots                         |
+| [ / ]                 | Decrease / increase width                   |
+| D                     | Toggle dash cycle (solid → dashed → dotted) |
+| ← / → / PgUp / PgDn   | Prev / next page                            |
+| B                     | Insert blank page after current             |
+| Ctrl+Z / Ctrl+Shift+Z | Undo / redo                                 |
+| F                     | Fullscreen / presentation mode              |
+| Space (hold)          | Pan                                         |
+| Tab                   | Toggle sidebar                              |
 
 ## Phased Roadmap
 
