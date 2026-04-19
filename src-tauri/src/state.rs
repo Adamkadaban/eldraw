@@ -4,8 +4,8 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::error::{AppError, AppResult};
 
-/// Owns the currently-open PDF bytes, keyed by absolute path, plus a lazily
-/// initialised Pdfium handle shared across commands.
+/// Owns the currently-open PDF bytes, keyed by canonical absolute path, plus
+/// a lazily initialised Pdfium handle shared across commands.
 #[derive(Default)]
 pub struct AppState {
     inner: Mutex<Option<OpenPdf>>,
@@ -23,7 +23,11 @@ impl AppState {
             .inner
             .lock()
             .map_err(|_| AppError::Pdf("state mutex poisoned".into()))?;
-        *guard = Some(OpenPdf { path, bytes });
+        let canonical = std::fs::canonicalize(&path).unwrap_or(path);
+        *guard = Some(OpenPdf {
+            path: canonical,
+            bytes,
+        });
         Ok(())
     }
 
@@ -40,16 +44,20 @@ impl AppState {
     }
 }
 
-/// Returns a process-wide Pdfium handle. The library resolves its native
-/// binary by first trying the system loader (`Pdfium::default()`), then
-/// falling back to a binary co-located with the executable. If neither is
-/// available, the error is surfaced to the caller.
+/// Returns a process-wide Pdfium handle. The native binary is resolved by
+/// first trying `Pdfium::bind_to_system_library()`, then falling back to a
+/// binary co-located with the running executable. If neither is available,
+/// the error is surfaced to the caller.
 pub fn pdfium() -> AppResult<&'static Pdfium> {
     static PDFIUM: OnceLock<Result<Pdfium, String>> = OnceLock::new();
     let slot = PDFIUM.get_or_init(|| {
         let bindings = Pdfium::bind_to_system_library()
             .or_else(|_| {
-                Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
+                let exe_dir = std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(PathBuf::from))
+                    .unwrap_or_else(|| PathBuf::from("."));
+                Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&exe_dir))
             })
             .map_err(|e| format!("failed to load pdfium binary: {e}"))?;
         Ok(Pdfium::new(bindings))

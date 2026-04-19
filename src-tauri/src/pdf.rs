@@ -83,6 +83,10 @@ pub async fn open_pdf(path: String, state: State<'_, AppState>) -> AppResult<Pdf
     })
 }
 
+/// Upper bound on the rendered bitmap size (pixels). Guards against
+/// pathological scale values producing multi-GB bitmaps.
+const MAX_PIXEL_AREA: u64 = 64 * 1024 * 1024;
+
 #[tauri::command]
 pub async fn render_page(
     page_index: u32,
@@ -105,6 +109,12 @@ pub async fn render_page(
 
         let width_px = pixel_dim(page.width().value, scale);
         let height_px = pixel_dim(page.height().value, scale);
+        let area = u64::from(width_px.unsigned_abs()) * u64::from(height_px.unsigned_abs());
+        if area > MAX_PIXEL_AREA {
+            return Err(AppError::Pdf(format!(
+                "requested bitmap {width_px}x{height_px} exceeds {MAX_PIXEL_AREA}-pixel cap"
+            )));
+        }
 
         let config = PdfRenderConfig::new()
             .set_target_width(width_px)

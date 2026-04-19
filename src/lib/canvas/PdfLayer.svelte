@@ -10,25 +10,33 @@
 
   let canvas: HTMLCanvasElement | undefined = $state();
   let error: string | null = $state(null);
+  let latestRequestId = 0;
 
-  async function draw(index: number, s: number): Promise<void> {
-    if (!canvas) return;
+  async function draw(
+    target: HTMLCanvasElement,
+    index: number,
+    s: number,
+    requestId: number,
+  ): Promise<void> {
     error = null;
     try {
       const pngBytes = await renderPage(index, s);
+      if (requestId !== latestRequestId) return;
       const blob = new Blob([pngBytes], { type: 'image/png' });
       const url = URL.createObjectURL(blob);
       try {
         const image = await loadImage(url);
-        canvas.width = image.width;
-        canvas.height = image.height;
-        const ctx = canvas.getContext('2d');
+        if (requestId !== latestRequestId) return;
+        target.width = image.width;
+        target.height = image.height;
+        const ctx = target.getContext('2d');
         if (!ctx) throw new Error('2d canvas context unavailable');
         ctx.drawImage(image, 0, 0);
       } finally {
         URL.revokeObjectURL(url);
       }
     } catch (err) {
+      if (requestId !== latestRequestId) return;
       error = err instanceof Error ? err.message : String(err);
     }
   }
@@ -43,7 +51,10 @@
   }
 
   $effect(() => {
-    void draw(pageIndex, scale);
+    const target = canvas;
+    if (!target) return;
+    const requestId = ++latestRequestId;
+    void draw(target, pageIndex, scale, requestId);
   });
 </script>
 
