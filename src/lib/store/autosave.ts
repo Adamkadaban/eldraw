@@ -25,14 +25,14 @@ export function startAutosave(pdfPath: string | null, opts: AutosaveOptions = {}
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   let pending: EldrawDocument | null = null;
-  let skipFirst = true;
+  let skipInitialDocument = true;
 
   const unsubscribe = source.subscribe((doc) => {
-    if (skipFirst) {
-      skipFirst = false;
+    if (!doc) return;
+    if (skipInitialDocument) {
+      skipInitialDocument = false;
       return;
     }
-    if (!doc) return;
     pending = doc;
     if (timer !== null) clearTimeout(timer);
     timer = setTimeout(() => {

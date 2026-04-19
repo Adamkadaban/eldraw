@@ -57,6 +57,9 @@ export interface History {
   redo(pageIndex: number, page: Page): Page | null;
   canUndo(pageIndex: number): Readable<boolean>;
   canRedo(pageIndex: number): Readable<boolean>;
+  /** Shift all page stacks at index >= `from` up by one to keep them
+   *  aligned with document pages after an insert at `from`. */
+  shiftPageIndicesFrom(from: number): void;
   clear(): void;
   /** For tests. */
   _stacks: Readable<Record<number, PageStack>>;
@@ -117,6 +120,17 @@ export function createHistory(): History {
 
     clear() {
       stacks.set({});
+    },
+
+    shiftPageIndicesFrom(from) {
+      stacks.update((all) => {
+        const next: Record<number, PageStack> = {};
+        for (const [k, v] of Object.entries(all)) {
+          const idx = Number(k);
+          next[idx >= from ? idx + 1 : idx] = v;
+        }
+        return next;
+      });
     },
 
     _stacks: { subscribe: stacks.subscribe },

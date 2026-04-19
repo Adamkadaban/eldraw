@@ -4,7 +4,8 @@
 //! Lock file:               `"{pdf_path}.eldraw.lock"`.
 //! Writes go via `"{pdf_path}.eldraw.json.tmp"` + rename for atomicity.
 
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -54,8 +55,16 @@ pub fn save_sidecar_impl(pdf_path: &str, doc: &EldrawDocument) -> AppResult<()> 
     let tmp = tmp_path(pdf_path);
     ensure_parent(&final_path)?;
     let json = serde_json::to_vec_pretty(doc)?;
-    fs::write(&tmp, &json)?;
-    fs::rename(&tmp, &final_path)?;
+    // Write to tmp first; on any subsequent failure, remove tmp so we don't
+    // leave a partial file lying next to the PDF.
+    if let Err(e) = fs::write(&tmp, &json) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e.into());
+    }
+    if let Err(e) = fs::rename(&tmp, &final_path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e.into());
+    }
     Ok(())
 }
 
@@ -85,25 +94,51 @@ fn parse_lock_pid(contents: &str) -> Option<u32> {
 pub fn acquire_lock_impl(pdf_path: &str) -> AppResult<bool> {
     let path = lock_path(pdf_path);
     ensure_parent(&path)?;
-    if path.exists() {
-        let contents = fs::read_to_string(&path).unwrap_or_default();
-        if let Some(existing_pid) = parse_lock_pid(&contents) {
-            if existing_pid != std::process::id() && pid_alive(existing_pid) {
-                return Ok(false);
+    let body = format!("{}\n{}\n", std::process::id(), iso_now());
+
+    match OpenOptions::new().write(true).create_new(true).open(&path) {
+        Ok(mut f) => {
+            f.write_all(body.as_bytes())?;
+            Ok(true)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let contents = fs::read_to_string(&path).unwrap_or_default();
+            if let Some(existing_pid) = parse_lock_pid(&contents) {
+                if existing_pid != std::process::id() && pid_alive(existing_pid) {
+                    return Ok(false);
+                }
+            }
+            // Stale (or our own) lock: reclaim by overwriting atomically via
+            // remove + create_new so no other process can sneak in.
+            let _ = fs::remove_file(&path);
+            match OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(mut f) => {
+                    f.write_all(body.as_bytes())?;
+                    Ok(true)
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+                Err(e) => Err(e.into()),
             }
         }
+        Err(e) => Err(e.into()),
     }
-    let body = format!("{}\n{}\n", std::process::id(), iso_now());
-    fs::write(&path, body)?;
-    Ok(true)
 }
 
 pub fn release_lock_impl(pdf_path: &str) -> AppResult<()> {
     let path = lock_path(pdf_path);
-    if path.exists() {
-        fs::remove_file(&path)?;
+    let contents = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    match parse_lock_pid(&contents) {
+        Some(pid) if pid == std::process::id() => match fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.into()),
+        },
+        _ => Ok(()),
     }
-    Ok(())
 }
 
 #[tauri::command]
@@ -218,6 +253,7 @@ mod tests {
         release_lock_impl(&pdf).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn live_foreign_pid_blocks_lock() {
         let dir = TempDir::new().unwrap();

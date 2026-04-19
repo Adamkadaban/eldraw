@@ -109,4 +109,15 @@ describe('history', () => {
     expect(get(h.canUndo(0))).toBe(true);
     expect(get(h.canUndo(1))).toBe(false);
   });
+
+  it('shiftPageIndicesFrom moves stacks to match page inserts', () => {
+    const h = createHistory();
+    h.pushCommand(0, { type: 'add', object: stroke('a') });
+    h.pushCommand(2, { type: 'add', object: stroke('b') });
+    h.shiftPageIndicesFrom(1);
+    expect(get(h.canUndo(0))).toBe(true);
+    expect(get(h.canUndo(1))).toBe(false);
+    expect(get(h.canUndo(2))).toBe(false);
+    expect(get(h.canUndo(3))).toBe(true);
+  });
 });

@@ -104,6 +104,7 @@ export function createDocumentStore(): DocumentStore {
         const pages = [...doc.pages];
         pages.splice(insertIdx, 0, blank);
         const reindexed = pages.map((p, i) => ({ ...p, pageIndex: i }));
+        history.shiftPageIndicesFrom(insertIdx);
         return { ...doc, pages: reindexed };
       });
     },
