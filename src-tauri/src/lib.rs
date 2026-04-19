@@ -17,6 +17,8 @@ pub fn run() {
             pdf::render_page,
             storage::load_sidecar,
             storage::save_sidecar,
+            storage::acquire_lock,
+            storage::release_lock,
             export::export_flattened_pdf,
         ])
         .run(tauri::generate_context!())
