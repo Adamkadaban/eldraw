@@ -6,13 +6,15 @@ import { viewport } from '$lib/store/viewport';
 import { isEditableTarget } from './shortcutParser';
 
 /**
- * Global keyboard shortcuts for the app shell. Mounted on the root so events
- * fire regardless of focused element, unless the target is a text input.
+ * Global keyboard shortcuts for the app shell. Listeners are attached to
+ * `window` so events fire regardless of focus, unless the target is a text
+ * input. The action's host element is only used as the action's lifecycle
+ * anchor.
  *
  * Space is tracked separately from the keydown routing to distinguish
  * hold-vs-tap for pan mode.
  */
-export const shortcuts: Action<HTMLElement> = (node) => {
+export const shortcuts: Action<HTMLElement> = () => {
   let spaceHeld = false;
 
   function pickPaletteSlot(slot: number): void {
@@ -164,13 +166,17 @@ export const shortcuts: Action<HTMLElement> = (node) => {
     }
   }
 
-  node.addEventListener('keydown', handleKeyDown);
-  node.addEventListener('keyup', handleKeyUp);
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+  }
 
   return {
     destroy(): void {
-      node.removeEventListener('keydown', handleKeyDown);
-      node.removeEventListener('keyup', handleKeyUp);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+      }
     },
   };
 };

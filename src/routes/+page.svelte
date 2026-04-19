@@ -6,7 +6,7 @@
   import { loadSidecar } from '$lib/ipc';
   import { pdf } from '$lib/store/pdf';
   import { sidebar } from '$lib/store/sidebar';
-  import { currentDocument, documentStore } from '$lib/store/document';
+  import { currentDocument, documentStore, pdfPageIndexAt } from '$lib/store/document';
   import { startAutosave } from '$lib/store/autosave';
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
   import { startToolBridge } from '$lib/app/toolBridge';
@@ -29,6 +29,7 @@
   const pageCount = $derived(doc?.pages.length ?? meta?.pageCount ?? 0);
   const pageIndex = $derived(Math.min(view.currentPageIndex, Math.max(0, pageCount - 1)));
   const currentPage = $derived(doc?.pages[pageIndex] ?? null);
+  const pdfPageIndex = $derived(doc ? pdfPageIndexAt(doc.pages, pageIndex) : pageIndex);
   const pageObjects = $derived<AnyObject[]>(currentPage?.objects ?? []);
   const pageStrokes = $derived<StrokeObject[]>(
     pageObjects.filter((o): o is StrokeObject => o.type === 'stroke'),
@@ -176,9 +177,9 @@
           class="page-frame"
           style="width: {size.width}px; height: {size.height}px; transform: translate({view.offsetX}px, {view.offsetY}px);"
         >
-          {#if meta && currentPage?.type !== 'blank'}
+          {#if meta && currentPage?.type !== 'blank' && pdfPageIndex !== null}
             <div class="pdf-slot">
-              <PdfLayer {pageIndex} scale={view.scale} />
+              <PdfLayer pageIndex={pdfPageIndex} scale={view.scale} />
             </div>
           {:else if currentPage?.type === 'blank'}
             <div class="blank-slot" style="width: {size.width}px; height: {size.height}px;"></div>

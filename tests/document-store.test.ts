@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { get } from 'svelte/store';
-import { createDocumentStore } from '$lib/store/document';
+import { createDocumentStore, pdfPageIndexAt } from '$lib/store/document';
 import type { EldrawDocument, Page, StrokeObject } from '$lib/types';
 
 function stroke(id: string, width = 2): StrokeObject {
@@ -94,6 +94,34 @@ describe('documentStore', () => {
     expect(pages[0].pageIndex).toBe(0);
     expect(pages[1].pageIndex).toBe(1);
     expect(pages[2].pageIndex).toBe(2);
+  });
+
+  it('insertBlankPageAfter with preceding blank records correct pdf index', () => {
+    const store = createDocumentStore();
+    store.load(docWithPages([pdfPage(0), pdfPage(1)]));
+    store.insertBlankPageAfter(0, 500, 700);
+    store.insertBlankPageAfter(1, 500, 700);
+    const pages = get(store)!.pages;
+    expect(pages).toHaveLength(4);
+    expect(pages[1].type).toBe('blank');
+    expect(pages[1].insertedAfterPdfPage).toBe(0);
+    expect(pages[2].type).toBe('blank');
+    expect(pages[2].insertedAfterPdfPage).toBe(0);
+    expect(pages[3].type).toBe('pdf');
+  });
+
+  it('pdfPageIndexAt maps array positions to underlying PDF indices', () => {
+    const pages: Page[] = [
+      pdfPage(0),
+      { ...pdfPage(1), type: 'blank', insertedAfterPdfPage: 0 },
+      pdfPage(1),
+      pdfPage(2),
+    ];
+    expect(pdfPageIndexAt(pages, 0)).toBe(0);
+    expect(pdfPageIndexAt(pages, 1)).toBeNull();
+    expect(pdfPageIndexAt(pages, 2)).toBe(1);
+    expect(pdfPageIndexAt(pages, 3)).toBe(2);
+    expect(pdfPageIndexAt(pages, 99)).toBeNull();
   });
 
   it('load clears history', () => {

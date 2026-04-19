@@ -1,4 +1,5 @@
 import { currentStyle, sidebar } from '$lib/store/sidebar';
+import type { ToolKind } from '$lib/types';
 import { setStyle, setTool } from '$lib/store/tool';
 
 /**
@@ -6,7 +7,13 @@ import { setStyle, setTool } from '$lib/store/tool';
  * Returns an unsubscribe function.
  */
 export function startToolBridge(): () => void {
-  const unsubTool = sidebar.subscribe((s) => setTool(s.activeTool));
+  let lastTool: ToolKind | null = null;
+  const unsubTool = sidebar.subscribe((s) => {
+    if (s.activeTool !== lastTool) {
+      lastTool = s.activeTool;
+      setTool(s.activeTool);
+    }
+  });
   const unsubStyle = currentStyle.subscribe((style) => setStyle(style));
   return () => {
     unsubTool();
