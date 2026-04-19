@@ -12,6 +12,9 @@ pub enum AppError {
     #[error("pdf: {0}")]
     Pdf(String),
 
+    #[error("image: {0}")]
+    Image(#[from] image::ImageError),
+
     #[error("not implemented: {0}")]
     NotImplemented(&'static str),
 }
