@@ -17,6 +17,14 @@ export async function saveSidecar(pdfPath: string, doc: EldrawDocument): Promise
   return invoke('save_sidecar', { pdfPath, doc });
 }
 
+export async function acquireLock(pdfPath: string): Promise<boolean> {
+  return invoke('acquire_lock', { pdfPath });
+}
+
+export async function releaseLock(pdfPath: string): Promise<void> {
+  return invoke('release_lock', { pdfPath });
+}
+
 export async function exportFlattenedPdf(
   pdfPath: string,
   doc: EldrawDocument,

@@ -12,6 +12,12 @@ pub enum AppError {
     #[error("pdf: {0}")]
     Pdf(String),
 
+    #[error("unsupported sidecar version: {0}")]
+    Version(u32),
+
+    #[error("lock held by another process: {0}")]
+    Lock(String),
+
     #[error("not implemented: {0}")]
     NotImplemented(&'static str),
 }

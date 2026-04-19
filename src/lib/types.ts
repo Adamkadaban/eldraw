@@ -135,6 +135,8 @@ export interface IpcCommands {
   render_page: (args: { pageIndex: number; scale: number }) => Promise<Uint8Array>;
   load_sidecar: (args: { pdfPath: string }) => Promise<EldrawDocument | null>;
   save_sidecar: (args: { pdfPath: string; doc: EldrawDocument }) => Promise<void>;
+  acquire_lock: (args: { pdfPath: string }) => Promise<boolean>;
+  release_lock: (args: { pdfPath: string }) => Promise<void>;
   export_flattened_pdf: (args: {
     pdfPath: string;
     doc: EldrawDocument;
