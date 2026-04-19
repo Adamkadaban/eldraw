@@ -59,4 +59,17 @@ describe('tool store', () => {
     expect(get(toolStore).tool).toBe('eraser');
     expect(get(toolStore).style.color).toBe('#123456');
   });
+
+  it('clamps highlighter opacity to 0.3 at the store boundary', () => {
+    setTool('highlighter');
+    setStyle({ opacity: 0.9 });
+    expect(get(toolStore).style.opacity).toBe(0.3);
+
+    setStyle({ opacity: 0.1 });
+    expect(get(toolStore).style.opacity).toBe(0.1);
+
+    setTool('pen');
+    setStyle({ opacity: 0.9 });
+    expect(get(toolStore).style.opacity).toBe(0.9);
+  });
 });

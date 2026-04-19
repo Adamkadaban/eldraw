@@ -18,6 +18,15 @@ const perToolStyle: Record<StrokeTool, StrokeStyle> = {
   highlighter: { ...DEFAULT_STYLES.highlighter },
 };
 
+const HIGHLIGHTER_MAX_OPACITY = 0.3;
+
+function clampStyle(tool: ToolKind, style: StrokeStyle): StrokeStyle {
+  if (tool === 'highlighter' && style.opacity > HIGHLIGHTER_MAX_OPACITY) {
+    return { ...style, opacity: HIGHLIGHTER_MAX_OPACITY };
+  }
+  return style;
+}
+
 function initialState(): ToolState {
   return { tool: 'pen', style: { ...perToolStyle.pen } };
 }
@@ -35,14 +44,14 @@ export function setTool(tool: ToolKind): void {
     if (isStrokeTool(s.tool)) {
       perToolStyle[s.tool] = { ...s.style };
     }
-    const style = isStrokeTool(tool) ? { ...perToolStyle[tool] } : s.style;
+    const style = isStrokeTool(tool) ? clampStyle(tool, { ...perToolStyle[tool] }) : s.style;
     return { tool, style };
   });
 }
 
 export function setStyle(patch: Partial<StrokeStyle>): void {
   store.update((s) => {
-    const style = { ...s.style, ...patch };
+    const style = clampStyle(s.tool, { ...s.style, ...patch });
     if (isStrokeTool(s.tool)) {
       perToolStyle[s.tool] = { ...style };
     }

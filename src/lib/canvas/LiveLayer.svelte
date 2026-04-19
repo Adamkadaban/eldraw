@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { Point, StrokeObject, StrokeStyle, ToolKind } from '$lib/types';
   import { toolStore } from '$lib/store/tool';
   import { strokeFromInput } from '$lib/tools/pen';
@@ -27,10 +27,11 @@
     opacity: 1,
   };
 
-  toolStore.subscribe((s) => {
+  const unsubscribeTool = toolStore.subscribe((s) => {
     currentTool = s.tool;
     currentStyle = s.style;
   });
+  onDestroy(unsubscribeTool);
 
   function ctx(): CanvasRenderingContext2D | null {
     return canvas?.getContext('2d') ?? null;
@@ -43,6 +44,13 @@
   }
 
   export function clearLive() {
+    if (activePointerId !== null) {
+      try {
+        canvas?.releasePointerCapture(activePointerId);
+      } catch {
+        // not captured; ignore
+      }
+    }
     activePointerId = null;
     points = [];
     clear();
@@ -67,13 +75,7 @@
     clear();
     if (currentTool === 'highlighter') {
       c.globalCompositeOperation = 'multiply';
-      drawLiveStroke(
-        c,
-        points,
-        { ...currentStyle, opacity: Math.min(currentStyle.opacity, 0.3) },
-        'highlighter',
-        ptToPx,
-      );
+      drawLiveStroke(c, points, currentStyle, 'highlighter', ptToPx);
     } else if (currentTool === 'pen') {
       c.globalCompositeOperation = 'source-over';
       drawLiveStroke(c, points, currentStyle, 'pen', ptToPx);
