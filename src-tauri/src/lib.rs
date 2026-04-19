@@ -12,6 +12,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(state::AppState::default())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             pdf::open_pdf,
             pdf::render_page,
