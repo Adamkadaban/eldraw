@@ -24,7 +24,13 @@
 <div class="dash">
   <div class="header">
     <span class="label">Dash</span>
-    <button type="button" class="cycle" title="Cycle dash (D)" onclick={cycle}>{value}</button>
+    <button
+      type="button"
+      class="cycle"
+      aria-label="Cycle dash style"
+      title="Cycle dash (D)"
+      onclick={cycle}>{value}</button
+    >
   </div>
   <div class="row" role="group" aria-label="Dash style">
     {#each order as style (style)}

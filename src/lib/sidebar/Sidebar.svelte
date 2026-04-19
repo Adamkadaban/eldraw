@@ -36,7 +36,9 @@
     if (disabled) return;
     sidebar.setTool(tool);
     onToolChange?.(tool);
-    onStyleChange?.(sidebar.snapshot().toolStyles.pen);
+    if (tool === 'pen' || tool === 'highlighter' || tool === 'line') {
+      onStyleChange?.(sidebar.snapshot().toolStyles[tool]);
+    }
   }
 
   function onColor(color: string) {
@@ -71,10 +73,11 @@
       type="button"
       class="pin"
       aria-pressed={state.pinned}
+      aria-label={state.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
       title={state.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
       onclick={togglePin}
     >
-      {state.pinned ? '📌' : '📍'}
+      <span aria-hidden="true">{state.pinned ? '📌' : '📍'}</span>
     </button>
   </header>
 

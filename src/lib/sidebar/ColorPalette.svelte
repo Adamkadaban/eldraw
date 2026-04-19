@@ -73,7 +73,10 @@
     align-items: center;
   }
   .row {
-    display: contents;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
   }
   .swatch {
     width: 22px;
