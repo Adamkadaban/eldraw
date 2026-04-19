@@ -5,12 +5,14 @@ node_modules/
 # Build output
 dist/
 build/
+/build
 .svelte-kit/
+/.svelte-kit
+/package
 src-tauri/target/
 src-tauri/gen/
 
 # Editor
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -29,7 +31,11 @@ Thumbs.db
 npm-debug.log*
 pnpm-debug.log*
 
-# Lockfile noise from pdfium
+# Vite cache timestamps
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# pdfium binaries (downloaded at build time)
 src-tauri/pdfium/
 
 # Autosave / crash recovery
