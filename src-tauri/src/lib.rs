@@ -2,6 +2,7 @@ mod error;
 mod export;
 mod model;
 mod pdf;
+mod state;
 mod storage;
 
 pub use error::{AppError, AppResult};
@@ -9,6 +10,7 @@ pub use error::{AppError, AppResult};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(state::AppState::default())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             pdf::open_pdf,

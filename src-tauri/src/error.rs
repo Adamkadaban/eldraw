@@ -18,6 +18,9 @@ pub enum AppError {
     #[error("lock held by another process: {0}")]
     Lock(String),
 
+    #[error("image: {0}")]
+    Image(#[from] image::ImageError),
+
     #[error("not implemented: {0}")]
     NotImplemented(&'static str),
 }

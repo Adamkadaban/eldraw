@@ -20,6 +20,13 @@ serde_json = "1"
 thiserror = "2"
 sha2 = "0.10"
 sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+pdfium-render = { version = "0.9", default-features = false, features = [
+  "pdfium_latest",
+  "image_latest",
+  "image_api",
+  "thread_safe",
+] }
+image = "0.25"
 
 [dev-dependencies]
 tempfile = "3"
