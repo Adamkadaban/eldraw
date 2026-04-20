@@ -68,9 +68,12 @@ function subdivide(
 ): void {
   if (budget.count >= budget.max || depth <= 0) return;
   const dx = xb - xa;
-  if (dx < minDx) return;
+  if (Math.abs(dx) < minDx) return;
 
   const xm = (xa + xb) / 2;
+  // Float rounding can collapse the midpoint onto an endpoint for tiny
+  // intervals; further subdivision would divide by zero.
+  if (xm === xa || xm === xb) return;
   const ym = fn(xm);
 
   const finiteA = Number.isFinite(ya);
@@ -84,6 +87,7 @@ function subdivide(
     const linearMid = (ya + yb) / 2;
     const dev = Math.abs(ym - linearMid);
     const halfDx = xm - xa;
+    if (halfDx === 0) return;
     const slopeChange = Math.abs((yb - ym) / halfDx - (ym - ya) / halfDx);
     shouldSplit = dev > tol || slopeChange > slopeTol;
   }

@@ -93,6 +93,17 @@ describe('plotFunction', () => {
     expect(segs).toEqual([]);
   });
 
+  it('handles a degenerate tiny xRange without NaN/Infinity', () => {
+    const segs = plotFunction((x) => x, {
+      xRange: [1, 1.0000000001],
+      yRange: [-1, 1],
+      samples: 50,
+    });
+    const points = segs.flat();
+    expect(points.length).toBeGreaterThan(0);
+    expect(points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true);
+  });
+
   it('preserves the exact xRange endpoints', () => {
     const segs = plotFunction((x) => x * 2, {
       xRange: [0, 4],
