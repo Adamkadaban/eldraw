@@ -11,7 +11,12 @@ export interface DocumentStore {
   removeObject(pageIndex: number, id: ObjectId): void;
   updateObject(pageIndex: number, id: ObjectId, patch: Partial<AnyObject>): void;
 
-  insertBlankPageAfter(afterArrayIndex: number, width: number, height: number): void;
+  insertBlankPageAfter(
+    afterArrayIndex: number,
+    width: number,
+    height: number,
+    background?: string,
+  ): void;
   movePage(from: number, to: number): void;
   duplicatePage(index: number): void;
   deletePage(index: number): void;
@@ -169,7 +174,7 @@ export function createDocumentStore(): DocumentStore {
       pushAndApply(pageIndex, { type: 'update', objectId: id, before, after });
     },
 
-    insertBlankPageAfter(afterArrayIndex, width, height) {
+    insertBlankPageAfter(afterArrayIndex, width, height, background) {
       state.update((doc) => {
         if (!doc) return doc;
         const insertIdx = afterArrayIndex + 1;
@@ -180,6 +185,7 @@ export function createDocumentStore(): DocumentStore {
           insertedAfterPdfPage,
           width,
           height,
+          ...(background ? { background } : {}),
           objects: [],
         };
         const pages = [...doc.pages];

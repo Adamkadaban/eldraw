@@ -154,6 +154,12 @@ export interface Page {
   /** Page dimensions in PDF points. */
   width: number;
   height: number;
+  /**
+   * Fill color for blank pages, sampled from the preceding PDF page when
+   * available. Optional for back-compat and for pdf pages (which ignore it).
+   * Any CSS color string; sampler emits `#rrggbb`.
+   */
+  background?: string;
   objects: AnyObject[];
 }
 

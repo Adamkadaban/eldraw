@@ -416,7 +416,11 @@
               <PdfLayer pageIndex={pdfPageIndex} scale={view.scale} />
             </div>
           {:else if currentPage?.type === 'blank'}
-            <div class="blank-slot" style="width: {size.width}px; height: {size.height}px;"></div>
+            <div
+              class="blank-slot"
+              style="width: {size.width}px; height: {size.height}px; background: {currentPage.background ??
+                '#fff'};"
+            ></div>
           {/if}
           <div class="stack-slot">
             <CanvasStack
@@ -704,6 +708,7 @@
   }
   .blank-slot {
     background: #fff;
+    box-sizing: border-box;
   }
   .empty {
     position: absolute;
