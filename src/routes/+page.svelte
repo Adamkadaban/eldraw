@@ -464,6 +464,7 @@
     <ThumbnailStrip
       {pages}
       currentIndex={pageIndex}
+      docKey={doc?.pdfHash ?? null}
       onpick={onThumbPick}
       onmove={onThumbMove}
       onduplicate={onThumbDuplicate}
