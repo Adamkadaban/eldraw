@@ -123,7 +123,8 @@
   <section class="functions">
     <h4 class="section-title">Functions</h4>
     {#each graph.functions as fn (fn.id)}
-      {@const err = exprError(fn.expr, fn.kind)}
+      {@const kind = (fn.kind ?? 'explicit') as GraphFunctionKind}
+      {@const err = exprError(fn.expr, kind)}
       <div class="fn">
         <input
           type="color"
@@ -135,7 +136,7 @@
         <select
           class="kind"
           aria-label="Expression kind"
-          value={fn.kind}
+          value={kind}
           onchange={(e) =>
             updateFunction(fn.id, {
               kind: (e.currentTarget as HTMLSelectElement).value as GraphFunctionKind,
@@ -150,7 +151,7 @@
           type="text"
           spellcheck="false"
           value={fn.expr}
-          placeholder={fn.kind === 'implicit' ? 'e.g. x^2 + y^2 = 4' : 'e.g. sin(x)'}
+          placeholder={kind === 'implicit' ? 'e.g. x^2 + y^2 = 4' : 'e.g. sin(x)'}
           oninput={(e) =>
             updateFunction(fn.id, { expr: (e.currentTarget as HTMLInputElement).value })}
         />

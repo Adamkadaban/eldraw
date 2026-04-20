@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { marchingSquares, stitchSegments } from '$lib/graph/implicit';
+import { MAX_IMPLICIT_CELLS, marchingSquares, stitchSegments } from '$lib/graph/implicit';
 
 const circle = (r: number) => (x: number, y: number) => x * x + y * y - r * r;
 const hyperbola = (x: number, y: number) => x * y - 1;
@@ -57,6 +57,20 @@ describe('marchingSquares', () => {
       resolution: 16,
     });
     expect(segs.length).toBeGreaterThan(0);
+  });
+
+  it('caps total cells for extreme aspect ratios', () => {
+    let calls = 0;
+    const fn = (x: number, y: number) => {
+      calls += 1;
+      return x * x + y * y - 1;
+    };
+    marchingSquares(fn, {
+      xRange: [-1, 1],
+      yRange: [-1e6, 1e6],
+      resolution: 2000,
+    });
+    expect(calls).toBeLessThan(MAX_IMPLICIT_CELLS * 2);
   });
 });
 

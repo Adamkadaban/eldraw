@@ -24,14 +24,28 @@ export interface ImplicitOptions {
  * ambiguous cases (5 and 10) are disambiguated by the sign of the cell
  * centre to avoid the classic "saddle crossover" artifact.
  */
+export const MAX_IMPLICIT_CELLS = 400_000;
+
 export function marchingSquares(fn: CompiledFnXY, opts: ImplicitOptions): ImplicitSegment[] {
   const { xRange, yRange, resolution } = opts;
   const [x0, x1] = xRange;
   const [y0, y1] = yRange;
-  const nx = Math.max(2, Math.floor(resolution));
-  const ny = Math.max(2, Math.floor((resolution * (y1 - y0)) / (x1 - x0)));
-  const dx = (x1 - x0) / nx;
-  const dy = (y1 - y0) / ny;
+  const xSpan = x1 - x0;
+  const ySpan = y1 - y0;
+  if (xSpan <= 0 || ySpan <= 0) return [];
+  let nx = Math.max(2, Math.floor(resolution));
+  let ny = Math.max(2, Math.floor((resolution * ySpan) / xSpan));
+  if (nx * ny > MAX_IMPLICIT_CELLS) {
+    const scale = Math.sqrt(MAX_IMPLICIT_CELLS / (nx * ny));
+    nx = Math.max(2, Math.floor(nx * scale));
+    ny = Math.max(2, Math.floor(ny * scale));
+    if (nx * ny > MAX_IMPLICIT_CELLS) {
+      if (nx >= ny) nx = Math.max(2, Math.floor(MAX_IMPLICIT_CELLS / ny));
+      else ny = Math.max(2, Math.floor(MAX_IMPLICIT_CELLS / nx));
+    }
+  }
+  const dx = xSpan / nx;
+  const dy = ySpan / ny;
 
   const rows = ny + 1;
   const cols = nx + 1;
@@ -110,6 +124,7 @@ export function marchingSquares(fn: CompiledFnXY, opts: ImplicitOptions): Implic
           break;
         case 5: {
           const cVal = fn(cx, cy);
+          if (!Number.isFinite(cVal)) break;
           if (cVal > 0) {
             push(eBottom(), eRight());
             push(eLeft(), eTop());
@@ -121,6 +136,7 @@ export function marchingSquares(fn: CompiledFnXY, opts: ImplicitOptions): Implic
         }
         case 10: {
           const cVal = fn(cx, cy);
+          if (!Number.isFinite(cVal)) break;
           if (cVal > 0) {
             push(eBottom(), eLeft());
             push(eRight(), eTop());

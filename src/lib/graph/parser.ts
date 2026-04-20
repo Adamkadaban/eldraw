@@ -256,7 +256,14 @@ function compile(src: string, varIndex: Record<string, number>, allowEquation: b
 export function parseExpression(src: string): ParseResult {
   try {
     const node = compile(src, { x: 0 }, false);
-    return { ok: true, fn: (x) => node([x]) };
+    const buf = [0];
+    return {
+      ok: true,
+      fn: (x) => {
+        buf[0] = x;
+        return node(buf);
+      },
+    };
   } catch (err) {
     if (err instanceof ParseError) return { ok: false, error: err.message };
     throw err;
