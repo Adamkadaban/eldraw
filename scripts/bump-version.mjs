@@ -19,10 +19,14 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 
+const SEMVER =
+  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
 const next = process.argv[2];
-if (!next || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(next)) {
+if (!next || !SEMVER.test(next)) {
   console.error('usage: node scripts/bump-version.mjs <semver>');
   console.error('example: node scripts/bump-version.mjs 0.2.0');
+  console.error('         node scripts/bump-version.mjs 0.2.0-rc.1');
   process.exit(1);
 }
 
