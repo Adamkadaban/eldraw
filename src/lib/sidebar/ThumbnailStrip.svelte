@@ -12,6 +12,8 @@
     onduplicate?: (index: number) => void;
     ondelete?: (index: number) => void;
     maxWidth?: number;
+    /** Stable identifier for the loaded PDF; thumbnail cache is scoped to it. */
+    docKey?: string | null;
   }
 
   const {
@@ -22,13 +24,18 @@
     onduplicate,
     ondelete,
     maxWidth = 140,
+    docKey = null,
   }: Props = $props();
 
   const canDelete = $derived(pages.length > 1);
+  const MAX_CONCURRENT_RENDERS = 3;
 
-  /** Rendered thumbnail URLs keyed by pdfSourceIndex (the stable PDF page slot). */
   let previewUrls = $state(new Map<number, string>());
   const inflight = new Set<number>();
+  const queue: Page[] = [];
+  let activeRenders = 0;
+  let destroyed = false;
+  let cacheKey: string | null = null;
 
   function thumbnailScale(widthPt: number): number {
     if (!widthPt || widthPt <= 0) return 1;
@@ -36,39 +43,104 @@
     return target / widthPt;
   }
 
-  async function ensureThumbnail(page: Page): Promise<void> {
-    if (page.type !== 'pdf') return;
-    const sourceIndex = page.pdfSourceIndex ?? page.pageIndex;
-    if (previewUrls.has(sourceIndex) || inflight.has(sourceIndex)) return;
-    inflight.add(sourceIndex);
+  function sourceKey(page: Page): number {
+    return page.pdfSourceIndex ?? page.pageIndex;
+  }
+
+  function revokeAll() {
+    for (const url of previewUrls.values()) URL.revokeObjectURL(url);
+    previewUrls = new Map();
+    inflight.clear();
+    queue.length = 0;
+    activeRenders = 0;
+  }
+
+  function pumpQueue() {
+    while (!destroyed && activeRenders < MAX_CONCURRENT_RENDERS && queue.length > 0) {
+      const page = queue.shift()!;
+      void renderOne(page);
+    }
+  }
+
+  async function renderOne(page: Page): Promise<void> {
+    const key = sourceKey(page);
+    activeRenders += 1;
     try {
-      const bytes = await renderPage(sourceIndex, thumbnailScale(page.width));
+      const bytes = await renderPage(key, thumbnailScale(page.width));
+      if (destroyed) return;
       const blob = new Blob([bytes], { type: 'image/png' });
       const url = URL.createObjectURL(blob);
-      previewUrls = new Map(previewUrls).set(sourceIndex, url);
+      if (destroyed) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      const next = new Map(previewUrls);
+      const prior = next.get(key);
+      if (prior) URL.revokeObjectURL(prior);
+      next.set(key, url);
+      previewUrls = next;
     } catch {
       // Leave the slot blank on failure; main layer surfaces the error.
     } finally {
-      inflight.delete(sourceIndex);
+      inflight.delete(key);
+      activeRenders -= 1;
+      pumpQueue();
     }
   }
+
+  function enqueue(page: Page) {
+    if (page.type !== 'pdf') return;
+    const key = sourceKey(page);
+    if (previewUrls.has(key) || inflight.has(key)) return;
+    inflight.add(key);
+    queue.push(page);
+  }
+
+  function pruneStaleKeys(snapshot: Page[]) {
+    const live = new Set<number>();
+    for (const p of snapshot) if (p.type === 'pdf') live.add(sourceKey(p));
+    let changed = false;
+    const next = new Map(previewUrls);
+    for (const [key, url] of next) {
+      if (!live.has(key)) {
+        URL.revokeObjectURL(url);
+        next.delete(key);
+        changed = true;
+      }
+    }
+    if (changed) previewUrls = next;
+  }
+
+  $effect(() => {
+    const key = docKey;
+    untrack(() => {
+      if (key !== cacheKey) {
+        revokeAll();
+        cacheKey = key;
+      }
+    });
+  });
 
   $effect(() => {
     const snapshot = pages;
     untrack(() => {
-      for (const p of snapshot) void ensureThumbnail(p);
+      pruneStaleKeys(snapshot);
+      for (const p of snapshot) enqueue(p);
+      pumpQueue();
     });
   });
 
   onDestroy(() => {
+    destroyed = true;
     for (const url of previewUrls.values()) URL.revokeObjectURL(url);
     previewUrls.clear();
+    inflight.clear();
+    queue.length = 0;
   });
 
   function previewFor(page: Page): string | undefined {
     if (page.type !== 'pdf') return undefined;
-    const key = page.pdfSourceIndex ?? page.pageIndex;
-    return previewUrls.get(key);
+    return previewUrls.get(sourceKey(page));
   }
 </script>
 
