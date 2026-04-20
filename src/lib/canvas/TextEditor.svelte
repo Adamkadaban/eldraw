@@ -140,8 +140,8 @@
   .content {
     width: 100%;
     box-sizing: border-box;
-    background: #1b1b1b;
-    color: #eee;
+    background: #fff;
+    color: #111;
     border: 1px solid #3a3a3a;
     border-radius: 4px;
     padding: 6px;

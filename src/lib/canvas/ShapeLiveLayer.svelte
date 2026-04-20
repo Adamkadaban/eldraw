@@ -31,8 +31,8 @@
   let activePointerId: number | null = null;
   let start = { x: 0, y: 0 };
   let end = { x: 0, y: 0 };
-  let currentTool: ToolKind = 'pen';
-  let style: StrokeStyle = { color: '#000', width: 2, dash: 'solid', opacity: 1 };
+  let currentTool: ToolKind = $state('pen');
+  let style: StrokeStyle = $state({ color: '#000', width: 2, dash: 'solid', opacity: 1 });
 
   const unsubTool = toolStore.subscribe((s) => {
     currentTool = s.tool;
