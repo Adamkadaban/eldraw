@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { currentStyle, sidebar } from '$lib/store/sidebar';
+  import { currentStyle, sidebar, styleKeyFor } from '$lib/store/sidebar';
   import type { DashStyle, StrokeStyle, ToolKind } from '$lib/types';
   import ColorPalette from './ColorPalette.svelte';
   import WidthPicker from './WidthPicker.svelte';
@@ -26,6 +26,9 @@
     { id: 'highlighter', label: 'Highlighter', shortcut: 'H', icon: '🖍️' },
     { id: 'eraser', label: 'Eraser', shortcut: 'E', icon: '🧽' },
     { id: 'line', label: 'Line', shortcut: 'L', icon: '／' },
+    { id: 'rect', label: 'Rectangle', shortcut: 'R', icon: '▭' },
+    { id: 'ellipse', label: 'Ellipse', shortcut: 'O', icon: '◯' },
+    { id: 'numberline', label: 'Number line', shortcut: 'N', icon: '↔' },
     { id: 'graph', label: 'Graph (coming soon)', shortcut: 'G', icon: '📈', disabled: true },
     { id: 'laser', label: 'Laser', shortcut: 'X', icon: '🔴' },
     { id: 'temp-ink', label: 'Temp Ink', shortcut: 'Y', icon: '💧' },
@@ -38,9 +41,8 @@
     if (disabled) return;
     sidebar.setTool(tool);
     onToolChange?.(tool);
-    if (tool === 'pen' || tool === 'highlighter' || tool === 'line') {
-      onStyleChange?.(sidebar.snapshot().toolStyles[tool]);
-    }
+    const key = styleKeyFor(tool);
+    if (key) onStyleChange?.(sidebar.snapshot().toolStyles[key]);
   }
 
   function onLaserRadius(e: Event) {

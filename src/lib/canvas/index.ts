@@ -3,5 +3,8 @@ export { default as PdfLayer } from './PdfLayer.svelte';
 export { default as HighlightLayer } from './HighlightLayer.svelte';
 export { default as InkLayer } from './InkLayer.svelte';
 export { default as LiveLayer } from './LiveLayer.svelte';
+export { default as ShapeLayer } from './ShapeLayer.svelte';
+export { default as ShapeLiveLayer } from './ShapeLiveLayer.svelte';
+export { default as NumberLineEditor } from './NumberLineEditor.svelte';
 export { default as LaserLayer } from './LaserLayer.svelte';
 export { default as TempInkLayer } from './TempInkLayer.svelte';

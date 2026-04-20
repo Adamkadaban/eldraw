@@ -1,14 +1,25 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { StrokeObject, StrokeStyle, ToolKind } from '$lib/types';
+  import type {
+    AnyObject,
+    LineObject,
+    NumberLineObject,
+    ShapeObject,
+    StrokeObject,
+    StrokeStyle,
+    ToolKind,
+  } from '$lib/types';
   import HighlightLayer from './HighlightLayer.svelte';
   import InkLayer from './InkLayer.svelte';
   import LiveLayer from './LiveLayer.svelte';
+  import ShapeLayer from './ShapeLayer.svelte';
+  import ShapeLiveLayer from './ShapeLiveLayer.svelte';
   import LaserLayer from './LaserLayer.svelte';
   import TempInkLayer from './TempInkLayer.svelte';
 
   interface Props {
     strokes: StrokeObject[];
+    objects: AnyObject[];
     width: number;
     height: number;
     ptToPx: number;
@@ -17,13 +28,15 @@
     laserRadius?: number;
     tempInkStyle?: StrokeStyle;
     tempInkFadeMs?: number;
-    objects?: Snippet;
+    overlay?: Snippet;
     oncommit?: (stroke: StrokeObject) => void;
     onerase?: (at: { x: number; y: number }) => void;
+    oncommitobject?: (obj: LineObject | ShapeObject | NumberLineObject) => void;
   }
 
   let {
     strokes,
+    objects,
     width,
     height,
     ptToPx,
@@ -32,9 +45,10 @@
     laserRadius = 6,
     tempInkStyle = { color: '#000000', width: 2, dash: 'solid', opacity: 1 },
     tempInkFadeMs = 3000,
-    objects,
+    overlay,
     oncommit,
     onerase,
+    oncommitobject,
   }: Props = $props();
 </script>
 
@@ -43,11 +57,9 @@
     <HighlightLayer {strokes} {width} {height} {ptToPx} />
   </div>
 
-  {#if objects}
-    <div class="layer layer-objects">
-      {@render objects()}
-    </div>
-  {/if}
+  <div class="layer layer-objects">
+    <ShapeLayer {objects} {width} {height} {ptToPx} />
+  </div>
 
   <div class="layer layer-ink">
     <InkLayer {strokes} {width} {height} {ptToPx} />
@@ -55,6 +67,10 @@
 
   <div class="layer layer-live">
     <LiveLayer {width} {height} {ptToPx} {oncommit} {onerase} />
+  </div>
+
+  <div class="layer layer-shape-live">
+    <ShapeLiveLayer {width} {height} {ptToPx} oncommit={oncommitobject} />
   </div>
 
   <div class="layer layer-temp-ink">
@@ -77,6 +93,12 @@
       radius={laserRadius}
     />
   </div>
+
+  {#if overlay}
+    <div class="layer layer-overlay">
+      {@render overlay()}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -96,14 +118,22 @@
   }
   .layer-ink {
     z-index: 3;
+    pointer-events: none;
   }
   .layer-live {
     z-index: 4;
   }
-  .layer-temp-ink {
+  .layer-shape-live {
     z-index: 5;
   }
-  .layer-laser {
+  .layer-temp-ink {
     z-index: 6;
+  }
+  .layer-laser {
+    z-index: 7;
+  }
+  .layer-overlay {
+    z-index: 8;
+    pointer-events: none;
   }
 </style>

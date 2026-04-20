@@ -14,12 +14,24 @@ export type ToolKind =
   | 'highlighter'
   | 'eraser'
   | 'line'
+  | 'rect'
+  | 'ellipse'
+  | 'numberline'
   | 'graph'
   | 'text'
   | 'select'
   | 'pan'
   | 'laser'
   | 'temp-ink';
+
+export type ShapeKind = 'rect' | 'ellipse';
+
+export type NumberLineMarkKind = 'open' | 'closed' | 'arrow-left' | 'arrow-right';
+
+export interface NumberLineMark {
+  value: number;
+  kind: NumberLineMarkKind;
+}
 
 export interface Point {
   x: number;
@@ -57,6 +69,26 @@ export interface LineObject extends ObjectBase {
   arrow: { start: boolean; end: boolean };
 }
 
+export interface ShapeObject extends ObjectBase {
+  type: 'shape';
+  kind: ShapeKind;
+  style: StrokeStyle;
+  fill: string | null;
+  bounds: { x: number; y: number; w: number; h: number };
+}
+
+export interface NumberLineObject extends ObjectBase {
+  type: 'numberline';
+  style: StrokeStyle;
+  from: { x: number; y: number };
+  length: number;
+  min: number;
+  max: number;
+  tickStep: number;
+  labelStep: number;
+  marks: NumberLineMark[];
+}
+
 export interface GraphFunction {
   id: string;
   expr: string;
@@ -86,7 +118,13 @@ export interface TextObject extends ObjectBase {
   color: string;
 }
 
-export type AnyObject = StrokeObject | LineObject | GraphObject | TextObject;
+export type AnyObject =
+  | StrokeObject
+  | LineObject
+  | ShapeObject
+  | NumberLineObject
+  | GraphObject
+  | TextObject;
 
 export type PageKind = 'pdf' | 'blank';
 
