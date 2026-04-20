@@ -32,6 +32,7 @@
     oncommit?: (stroke: StrokeObject) => void;
     onerase?: (at: { x: number; y: number }) => void;
     oncommitobject?: (obj: LineObject | ShapeObject | NumberLineObject) => void;
+    ongraph?: (bounds: { x: number; y: number; w: number; h: number }) => void;
   }
 
   let {
@@ -49,6 +50,7 @@
     oncommit,
     onerase,
     oncommitobject,
+    ongraph,
   }: Props = $props();
 </script>
 
@@ -66,7 +68,7 @@
   </div>
 
   <div class="layer layer-live">
-    <LiveLayer {width} {height} {ptToPx} {oncommit} {onerase} />
+    <LiveLayer {width} {height} {ptToPx} {oncommit} {onerase} {ongraph} />
   </div>
 
   <div class="layer layer-shape-live">

@@ -30,7 +30,7 @@
     { id: 'rect', label: 'Rectangle', shortcut: 'R', icon: '▭' },
     { id: 'ellipse', label: 'Ellipse', shortcut: 'O', icon: '◯' },
     { id: 'numberline', label: 'Number line', shortcut: 'N', icon: '↔' },
-    { id: 'graph', label: 'Graph (coming soon)', shortcut: 'G', icon: '📈', disabled: true },
+    { id: 'graph', label: 'Graph', shortcut: 'G', icon: '📈' },
     { id: 'laser', label: 'Laser', shortcut: 'X', icon: '🔴' },
     { id: 'temp-ink', label: 'Temp Ink', shortcut: 'Y', icon: '💧' },
   ];
