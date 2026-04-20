@@ -31,6 +31,8 @@
     { id: 'ellipse', label: 'Ellipse', shortcut: 'O', icon: '◯' },
     { id: 'numberline', label: 'Number line', shortcut: 'N', icon: '↔' },
     { id: 'graph', label: 'Graph', shortcut: 'G', icon: '📈' },
+    { id: 'protractor', label: 'Protractor', shortcut: 'A', icon: '◠' },
+    { id: 'ruler', label: 'Ruler', shortcut: 'U', icon: '📏' },
     { id: 'laser', label: 'Laser', shortcut: 'X', icon: '🔴' },
     { id: 'temp-ink', label: 'Temp Ink', shortcut: 'Y', icon: '💧' },
   ];

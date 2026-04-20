@@ -5,6 +5,8 @@
     GraphLayer,
     NumberLineEditor,
     PdfLayer,
+    ProtractorOverlay,
+    RulerOverlay,
     TextLayer,
     TextEditor,
   } from '$lib/canvas';
@@ -385,6 +387,16 @@
               />
             </div>
           {/if}
+          {#if sidebarState.activeTool === 'protractor'}
+            <div class="overlay-slot">
+              <ProtractorOverlay ptToPx={size.ptToPx} width={size.width} height={size.height} />
+            </div>
+          {/if}
+          {#if sidebarState.activeTool === 'ruler'}
+            <div class="overlay-slot">
+              <RulerOverlay ptToPx={size.ptToPx} width={size.width} height={size.height} />
+            </div>
+          {/if}
         </div>
       {:else}
         <div class="empty">
@@ -507,6 +519,15 @@
   .graph-editor-slot {
     position: absolute;
     z-index: 20;
+  }
+  .overlay-slot {
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    pointer-events: none;
+  }
+  .overlay-slot :global(svg) {
+    pointer-events: auto;
   }
   .text-slot {
     position: absolute;
