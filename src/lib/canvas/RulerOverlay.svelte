@@ -62,9 +62,16 @@
     drag = null;
   }
 
-  function onClose(e: PointerEvent | MouseEvent) {
+  function onClose(e: Event) {
     overlays.setRulerVisible(false);
     e.stopPropagation();
+  }
+
+  function onCloseKey(e: KeyboardEvent) {
+    if (e.repeat) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    onClose(e);
   }
 
   const bodyHeight = 24;
@@ -152,7 +159,9 @@
       role="button"
       tabindex="0"
       aria-label="Hide ruler"
+      onclick={onClose}
       onpointerdown={onClose}
+      onkeydown={onCloseKey}
     />
     <line
       x1={-closeOffset - 3}

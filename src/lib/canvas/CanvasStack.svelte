@@ -30,6 +30,7 @@
     tempInkStyle?: StrokeStyle;
     tempInkFadeMs?: number;
     rulerSnap?: RulerState | null;
+    rulerSnapThresholdPx?: number;
     overlay?: Snippet;
     oncommit?: (stroke: StrokeObject) => void;
     onerase?: (at: { x: number; y: number }) => void;
@@ -49,6 +50,7 @@
     tempInkStyle = { color: '#000000', width: 2, dash: 'solid', opacity: 1 },
     tempInkFadeMs = 3000,
     rulerSnap = null,
+    rulerSnapThresholdPx,
     overlay,
     oncommit,
     onerase,
@@ -71,7 +73,16 @@
   </div>
 
   <div class="layer layer-live">
-    <LiveLayer {width} {height} {ptToPx} {rulerSnap} {oncommit} {onerase} {ongraph} />
+    <LiveLayer
+      {width}
+      {height}
+      {ptToPx}
+      {rulerSnap}
+      {rulerSnapThresholdPx}
+      {oncommit}
+      {onerase}
+      {ongraph}
+    />
   </div>
 
   <div class="layer layer-shape-live">

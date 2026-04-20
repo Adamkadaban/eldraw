@@ -53,7 +53,7 @@
   const view = $derived($viewportStore);
   const sidebarState = $derived($sidebar);
   const overlaysState = $derived($overlays);
-  const rulerVisible = $derived(overlaysState.rulerVisible || sidebarState.activeTool === 'ruler');
+  const rulerVisible = $derived(overlaysState.rulerVisible);
   const rulerSnapState = $derived(rulerVisible ? overlaysState.ruler : null);
   $effect(() => {
     if (sidebarState.activeTool === 'ruler' && !overlaysState.rulerVisible) {
