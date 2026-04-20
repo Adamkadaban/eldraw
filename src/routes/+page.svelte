@@ -15,7 +15,7 @@
   import { openAndLoadPdf } from '$lib/ipc/pdf';
   import { loadSidecar } from '$lib/ipc';
   import { pdf, clearError } from '$lib/store/pdf';
-  import { sidebar } from '$lib/store/sidebar';
+  import { sidebar, hydrateSidebarFromStorage } from '$lib/store/sidebar';
   import { currentDocument, documentStore, pdfPageIndexAt } from '$lib/store/document';
   import { startAutosave } from '$lib/store/autosave';
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
@@ -304,6 +304,7 @@
   }
 
   onMount(() => {
+    hydrateSidebarFromStorage();
     stopBridge = startToolBridge();
   });
 

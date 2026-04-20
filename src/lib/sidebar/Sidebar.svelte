@@ -4,6 +4,7 @@
   import ColorPalette from './ColorPalette.svelte';
   import WidthPicker from './WidthPicker.svelte';
   import DashStyleToggle from './DashStyleToggle.svelte';
+  import ToolPresets from './ToolPresets.svelte';
 
   interface Props {
     onToolChange?: (tool: ToolKind) => void;
@@ -76,6 +77,22 @@
     sidebar.togglePin();
     onPinChange?.(sidebar.snapshot().pinned);
   }
+
+  function onCapturePreset() {
+    sidebar.capturePreset();
+  }
+
+  function onApplyPreset(id: string) {
+    sidebar.applyPreset(id);
+    const snap = sidebar.snapshot();
+    onToolChange?.(snap.activeTool);
+    const key = styleKeyFor(snap.activeTool);
+    if (key) onStyleChange?.(snap.toolStyles[key]);
+  }
+
+  function onRemovePreset(id: string) {
+    sidebar.removePreset(id);
+  }
 </script>
 
 <aside
@@ -127,6 +144,16 @@
 
   <section class="section" aria-label="Dash">
     <DashStyleToggle value={style.dash} onChange={onDash} />
+  </section>
+
+  <section class="section" aria-label="Presets">
+    <ToolPresets
+      presets={state.presets}
+      activeTool={state.activeTool}
+      onApply={onApplyPreset}
+      onCapture={onCapturePreset}
+      onRemove={onRemovePreset}
+    />
   </section>
 
   {#if state.activeTool === 'laser'}

@@ -1,8 +1,10 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
-import type { ColorPalette, DashStyle, StrokeStyle, ToolKind } from '$lib/types';
+import type { ColorPalette, DashStyle, StrokeStyle, ToolKind, ToolPreset } from '$lib/types';
 import { clampFadeMs, DEFAULT_TEMP_INK_FADE_MS } from '$lib/tools/tempInk';
 
 export type StyledTool = 'pen' | 'highlighter' | 'line';
+
+export const MAX_PRESETS = 9;
 
 export interface LaserStyle {
   color: string;
@@ -43,6 +45,7 @@ export interface SidebarState {
   activeColor: string;
   laser: LaserStyle;
   tempInkFadeMs: number;
+  presets: ToolPreset[];
 }
 
 function initialState(): SidebarState {
@@ -61,7 +64,12 @@ function initialState(): SidebarState {
     activeColor: '#000000',
     laser: { ...DEFAULT_LASER_STYLE },
     tempInkFadeMs: DEFAULT_TEMP_INK_FADE_MS,
+    presets: [],
   };
+}
+
+export function canPresetTool(tool: ToolKind): boolean {
+  return styleKeyFor(tool) !== null;
 }
 
 export function styleKeyFor(tool: ToolKind): StyledTool | null {
@@ -90,6 +98,17 @@ function mapPalette(
 function createSidebarStore() {
   const store = writable<SidebarState>(initialState());
   const { subscribe, update, set } = store;
+
+  function applyPresetValue(preset: ToolPreset) {
+    const key = styleKeyFor(preset.tool);
+    if (!key) return;
+    update((st) => ({
+      ...st,
+      activeTool: preset.tool,
+      activeColor: preset.style.color,
+      toolStyles: { ...st.toolStyles, [key]: { ...preset.style } },
+    }));
+  }
 
   return {
     subscribe,
@@ -195,6 +214,41 @@ function createSidebarStore() {
       update((s) => ({ ...s, tempInkFadeMs: clampFadeMs(ms) }));
     },
 
+    capturePreset(): ToolPreset | null {
+      const s = get(store);
+      const key = styleKeyFor(s.activeTool);
+      if (!key) return null;
+      if (s.presets.length >= MAX_PRESETS) return null;
+      const preset: ToolPreset = {
+        id: crypto.randomUUID(),
+        tool: s.activeTool,
+        style: { ...s.toolStyles[key], color: s.activeColor },
+      };
+      update((st) => ({ ...st, presets: [...st.presets, preset] }));
+      return preset;
+    },
+
+    removePreset(id: string) {
+      update((s) => ({ ...s, presets: s.presets.filter((p) => p.id !== id) }));
+    },
+
+    applyPreset(id: string) {
+      const s = get(store);
+      const preset = s.presets.find((p) => p.id === id);
+      if (!preset) return;
+      applyPresetValue(preset);
+    },
+
+    applyPresetSlot(slot: number) {
+      const s = get(store);
+      const preset = s.presets[slot - 1];
+      if (preset) applyPresetValue(preset);
+    },
+
+    setPresets(presets: ToolPreset[]) {
+      update((s) => ({ ...s, presets: presets.slice(0, MAX_PRESETS) }));
+    },
+
     snapshot(): SidebarState {
       return get(store);
     },
@@ -202,6 +256,50 @@ function createSidebarStore() {
 }
 
 export const sidebar = createSidebarStore();
+
+const PRESETS_STORAGE_KEY = 'eldraw.presets.v1';
+
+function isValidPreset(value: unknown): value is ToolPreset {
+  if (!value || typeof value !== 'object') return false;
+  const p = value as Record<string, unknown>;
+  if (typeof p.id !== 'string' || typeof p.tool !== 'string') return false;
+  const style = p.style as Record<string, unknown> | undefined;
+  if (!style || typeof style !== 'object') return false;
+  return (
+    typeof style.color === 'string' &&
+    typeof style.width === 'number' &&
+    typeof style.dash === 'string' &&
+    typeof style.opacity === 'number'
+  );
+}
+
+function loadPersistedPresets(): ToolPreset[] | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter(isValidPreset).slice(0, MAX_PRESETS);
+  } catch {
+    return null;
+  }
+}
+
+export function hydrateSidebarFromStorage(): void {
+  const presets = loadPersistedPresets();
+  if (presets && presets.length > 0) sidebar.setPresets(presets);
+
+  if (typeof localStorage !== 'undefined') {
+    sidebar.subscribe((s) => {
+      try {
+        localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(s.presets));
+      } catch {
+        // storage full or unavailable; ignore
+      }
+    });
+  }
+}
 
 export const currentStyle: Readable<StrokeStyle> = derived(sidebar, (s) => {
   const key = styleKeyFor(s.activeTool);

@@ -51,6 +51,12 @@ export interface StrokeStyle {
   opacity: number;
 }
 
+export interface ToolPreset {
+  id: string;
+  tool: ToolKind;
+  style: StrokeStyle;
+}
+
 interface ObjectBase {
   id: ObjectId;
   createdAt: number;
