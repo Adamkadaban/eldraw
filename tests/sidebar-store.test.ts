@@ -75,4 +75,54 @@ describe('sidebar store', () => {
     sidebar.togglePin();
     expect(sidebar.snapshot().pinned).toBe(false);
   });
+
+  it('capturePreset stores the current tool + style and caps at 9', () => {
+    sidebar.setTool('pen');
+    sidebar.setActiveColor('#ff00aa');
+    sidebar.setWidth(5);
+    const p = sidebar.capturePreset();
+    expect(p).not.toBeNull();
+    expect(p?.tool).toBe('pen');
+    expect(p?.style.color).toBe('#ff00aa');
+    expect(p?.style.width).toBe(5);
+    expect(sidebar.snapshot().presets).toHaveLength(1);
+
+    for (let i = 0; i < 20; i += 1) sidebar.capturePreset();
+    expect(sidebar.snapshot().presets).toHaveLength(9);
+  });
+
+  it('capturePreset refuses tools without a style key', () => {
+    sidebar.setTool('laser');
+    expect(sidebar.capturePreset()).toBeNull();
+    expect(sidebar.snapshot().presets).toHaveLength(0);
+  });
+
+  it('applyPreset restores tool + style; applyPresetSlot is 1-indexed', () => {
+    sidebar.setTool('pen');
+    sidebar.setActiveColor('#112233');
+    sidebar.setWidth(3);
+    sidebar.capturePreset();
+    sidebar.setTool('highlighter');
+    sidebar.setActiveColor('#fdd835');
+    sidebar.setWidth(20);
+    sidebar.capturePreset();
+
+    sidebar.setTool('pen');
+    sidebar.setActiveColor('#000000');
+    sidebar.setWidth(1);
+
+    sidebar.applyPresetSlot(2);
+    const s = sidebar.snapshot();
+    expect(s.activeTool).toBe('highlighter');
+    expect(s.activeColor).toBe('#fdd835');
+    expect(s.toolStyles.highlighter.width).toBe(20);
+  });
+
+  it('removePreset drops by id', () => {
+    sidebar.setTool('pen');
+    const p = sidebar.capturePreset();
+    expect(sidebar.snapshot().presets).toHaveLength(1);
+    if (p) sidebar.removePreset(p.id);
+    expect(sidebar.snapshot().presets).toHaveLength(0);
+  });
 });

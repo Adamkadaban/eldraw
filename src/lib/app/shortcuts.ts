@@ -96,6 +96,11 @@ export const shortcuts: Action<HTMLElement> = () => {
         documentStore.undo(currentPage());
         return;
       }
+      if (!event.shiftKey && !event.altKey && key >= '1' && key <= '9') {
+        event.preventDefault();
+        sidebar.applyPresetSlot(Number(key));
+        return;
+      }
       return;
     }
 
