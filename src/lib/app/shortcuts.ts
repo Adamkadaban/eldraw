@@ -3,6 +3,7 @@ import { get } from 'svelte/store';
 import { sidebar, styleKeyFor } from '$lib/store/sidebar';
 import { documentStore, currentDocument } from '$lib/store/document';
 import { viewport } from '$lib/store/viewport';
+import { presenter } from '$lib/store/presenter';
 import { isEditableTarget } from './shortcutParser';
 
 /**
@@ -67,8 +68,21 @@ export const shortcuts: Action<HTMLElement> = () => {
   function handleKeyDown(event: KeyboardEvent): void {
     if (isEditableTarget(event.target)) return;
 
-    const ctrlOrMeta = event.ctrlKey || event.metaKey;
     const key = event.key;
+
+    if (key === 'F5') {
+      event.preventDefault();
+      presenter.toggle();
+      return;
+    }
+
+    if (key === 'Escape' && presenter.isActive()) {
+      event.preventDefault();
+      presenter.exit();
+      return;
+    }
+
+    const ctrlOrMeta = event.ctrlKey || event.metaKey;
 
     if (ctrlOrMeta) {
       const lower = key.toLowerCase();

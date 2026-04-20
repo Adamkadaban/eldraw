@@ -11,6 +11,7 @@
     TextEditor,
   } from '$lib/canvas';
   import { Sidebar } from '$lib/sidebar';
+  import { ThumbnailStrip } from '$lib/sidebar';
   import { openAndLoadPdf } from '$lib/ipc/pdf';
   import { loadSidecar } from '$lib/ipc';
   import { pdf } from '$lib/store/pdf';
@@ -18,6 +19,7 @@
   import { currentDocument, documentStore, pdfPageIndexAt } from '$lib/store/document';
   import { startAutosave } from '$lib/store/autosave';
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
+  import { presenterStore } from '$lib/store/presenter';
   import { startToolBridge } from '$lib/app/toolBridge';
   import { shortcuts } from '$lib/app/shortcuts';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
@@ -47,6 +49,13 @@
   const doc = $derived<EldrawDocument | null>($currentDocument);
   const view = $derived($viewportStore);
   const sidebarState = $derived($sidebar);
+  const presenterState = $derived($presenterStore);
+  const isPresenter = $derived(presenterState.active);
+  const pages = $derived(doc?.pages ?? []);
+
+  function onThumbPick(i: number): void {
+    viewport.setPage(i, pages.length);
+  }
 
   const pageCount = $derived(doc?.pages.length ?? meta?.pageCount ?? 0);
   const pageIndex = $derived(Math.min(view.currentPageIndex, Math.max(0, pageCount - 1)));
@@ -275,43 +284,55 @@
 
 <svelte:window />
 
-<main class="app" class:pinned={sidebarState.pinned} use:shortcuts tabindex="-1" role="application">
-  <Sidebar />
+<main
+  class="app"
+  class:pinned={sidebarState.pinned}
+  class:presenter={isPresenter}
+  class:has-thumbs={!isPresenter && pages.length > 0}
+  use:shortcuts
+  tabindex="-1"
+  role="application"
+>
+  {#if !isPresenter}
+    <Sidebar />
+  {/if}
 
   <section class="main">
-    <header class="topbar">
-      <button type="button" class="open" onclick={openFromDialog}>Open PDF…</button>
-      <div class="pager">
-        <button
-          type="button"
-          aria-label="Previous page"
-          disabled={pageIndex <= 0}
-          onclick={() => viewport.prevPage()}
-        >
-          ‹
-        </button>
-        <span class="page-indicator">
-          {#if pageCount > 0}
-            Page {pageIndex + 1} / {pageCount}
-          {:else}
-            No PDF loaded
-          {/if}
-        </span>
-        <button
-          type="button"
-          aria-label="Next page"
-          disabled={pageIndex >= pageCount - 1}
-          onclick={() => viewport.nextPage(pageCount)}
-        >
-          ›
-        </button>
-      </div>
-      <div class="zoom">
-        <button type="button" aria-label="Zoom out" onclick={() => viewport.zoomOut()}>−</button>
-        <span class="zoom-indicator">{Math.round(view.scale * 100)}%</span>
-        <button type="button" aria-label="Zoom in" onclick={() => viewport.zoomIn()}>+</button>
-      </div>
-    </header>
+    {#if !isPresenter}
+      <header class="topbar">
+        <button type="button" class="open" onclick={openFromDialog}>Open PDF…</button>
+        <div class="pager">
+          <button
+            type="button"
+            aria-label="Previous page"
+            disabled={pageIndex <= 0}
+            onclick={() => viewport.prevPage()}
+          >
+            ‹
+          </button>
+          <span class="page-indicator">
+            {#if pageCount > 0}
+              Page {pageIndex + 1} / {pageCount}
+            {:else}
+              No PDF loaded
+            {/if}
+          </span>
+          <button
+            type="button"
+            aria-label="Next page"
+            disabled={pageIndex >= pageCount - 1}
+            onclick={() => viewport.nextPage(pageCount)}
+          >
+            ›
+          </button>
+        </div>
+        <div class="zoom">
+          <button type="button" aria-label="Zoom out" onclick={() => viewport.zoomOut()}>−</button>
+          <span class="zoom-indicator">{Math.round(view.scale * 100)}%</span>
+          <button type="button" aria-label="Zoom in" onclick={() => viewport.zoomIn()}>+</button>
+        </div>
+      </header>
+    {/if}
 
     <div class="canvas-area" onwheel={onWheel}>
       {#if canvasSize()}
@@ -410,6 +431,10 @@
     </div>
   </section>
 
+  {#if !isPresenter && pages.length > 0}
+    <ThumbnailStrip {pages} currentIndex={pageIndex} onpick={onThumbPick} />
+  {/if}
+
   {#if editor && editorInitial}
     <TextEditor
       initialContent={editorInitial.content}
@@ -441,6 +466,19 @@
   }
   .app.pinned {
     grid-template-columns: 220px 1fr;
+  }
+  .app.has-thumbs {
+    grid-template-columns: 1fr 160px;
+  }
+  .app.pinned.has-thumbs {
+    grid-template-columns: 220px 1fr 160px;
+  }
+  .app.presenter {
+    grid-template-columns: 1fr;
+    background: #000;
+  }
+  .app.presenter .canvas-area {
+    background: #000;
   }
   .main {
     display: flex;
