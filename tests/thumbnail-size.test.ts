@@ -28,4 +28,14 @@ describe('thumbnailSize', () => {
     const s = thumbnailSize(10000, 1, 50);
     expect(s.height).toBeGreaterThanOrEqual(1);
   });
+
+  it('sanitizes non-finite or non-positive maxWidth', () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, 0, -5]) {
+      const s = thumbnailSize(100, 200, bad);
+      expect(Number.isFinite(s.width)).toBe(true);
+      expect(Number.isFinite(s.height)).toBe(true);
+      expect(s.width).toBeGreaterThanOrEqual(1);
+      expect(s.height).toBeGreaterThanOrEqual(1);
+    }
+  });
 });

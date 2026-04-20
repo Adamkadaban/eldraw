@@ -46,7 +46,7 @@
     height: 100%;
     overflow-y: auto;
     background: #1a1a1a;
-    border-right: 1px solid #111;
+    border-left: 1px solid #111;
     padding: 8px;
     box-sizing: border-box;
   }

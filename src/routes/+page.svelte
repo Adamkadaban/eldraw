@@ -477,6 +477,9 @@
     grid-template-columns: 1fr;
     background: #000;
   }
+  .app.presenter .canvas-area {
+    background: #000;
+  }
   .main {
     display: flex;
     flex-direction: column;
