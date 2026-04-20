@@ -125,4 +125,29 @@ describe('sidebar store', () => {
     if (p) sidebar.removePreset(p.id);
     expect(sidebar.snapshot().presets).toHaveLength(0);
   });
+
+  it('setFloatingPos accepts finite coords and rejects non-finite', () => {
+    expect(sidebar.snapshot().floatingPos).toBeNull();
+    sidebar.setFloatingPos({ x: 10, y: 20 });
+    expect(sidebar.snapshot().floatingPos).toEqual({ x: 10, y: 20 });
+    sidebar.setFloatingPos({ x: Number.NaN, y: 20 });
+    expect(sidebar.snapshot().floatingPos).toEqual({ x: 10, y: 20 });
+    sidebar.setFloatingPos({ x: 5, y: Number.POSITIVE_INFINITY });
+    expect(sidebar.snapshot().floatingPos).toEqual({ x: 10, y: 20 });
+    sidebar.setFloatingPos({ x: -5, y: 7 });
+    expect(sidebar.snapshot().floatingPos).toEqual({ x: -5, y: 7 });
+  });
+
+  it('resetFloatingPos clears the saved position', () => {
+    sidebar.setFloatingPos({ x: 42, y: 84 });
+    expect(sidebar.snapshot().floatingPos).not.toBeNull();
+    sidebar.resetFloatingPos();
+    expect(sidebar.snapshot().floatingPos).toBeNull();
+  });
+
+  it('setFloatingPos(null) clears the saved position', () => {
+    sidebar.setFloatingPos({ x: 1, y: 2 });
+    sidebar.setFloatingPos(null);
+    expect(sidebar.snapshot().floatingPos).toBeNull();
+  });
 });

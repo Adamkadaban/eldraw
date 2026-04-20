@@ -5,6 +5,7 @@
   import WidthPicker from './WidthPicker.svelte';
   import DashStyleToggle from './DashStyleToggle.svelte';
   import ToolPresets from './ToolPresets.svelte';
+  import { applySnap, clampToViewport } from './snap';
 
   interface Props {
     onToolChange?: (tool: ToolKind) => void;
@@ -38,7 +39,7 @@
     { id: 'temp-ink', label: 'Temp Ink', shortcut: 'Y', icon: '💧' },
   ];
 
-  const state = $derived($sidebar);
+  const sidebarState = $derived($sidebar);
   const style = $derived($currentStyle);
 
   function pickTool(tool: ToolKind, disabled: boolean | undefined) {
@@ -93,25 +94,133 @@
   function onRemovePreset(id: string) {
     sidebar.removePreset(id);
   }
+
+  let asideEl: HTMLElement | null = $state(null);
+  let dragging = $state(false);
+  let dragPointerId: number | null = null;
+  let dragOffset = { x: 0, y: 0 };
+  let dragCachedSize: { width: number; height: number } = { width: 220, height: 400 };
+  let lastClampedPos: { x: number; y: number } | null = null;
+
+  function viewportSize() {
+    return { width: window.innerWidth, height: window.innerHeight };
+  }
+
+  function measureSidebar(): { width: number; height: number } {
+    if (!asideEl) return { width: 220, height: 400 };
+    const r = asideEl.getBoundingClientRect();
+    return { width: r.width, height: r.height };
+  }
+
+  function endDrag(event: PointerEvent) {
+    dragging = false;
+    dragPointerId = null;
+    lastClampedPos = null;
+    const target = event.currentTarget as HTMLElement | null;
+    if (target?.hasPointerCapture(event.pointerId)) {
+      target.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function onHeaderPointerDown(event: PointerEvent) {
+    if (sidebarState.pinned) return;
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest('button')) return;
+    if (!asideEl) return;
+    const rect = asideEl.getBoundingClientRect();
+    dragOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    dragCachedSize = { width: rect.width, height: rect.height };
+    lastClampedPos = { x: rect.left, y: rect.top };
+    dragPointerId = event.pointerId;
+    dragging = true;
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function onHeaderPointerMove(event: PointerEvent) {
+    if (!dragging || event.pointerId !== dragPointerId) return;
+    const raw = { x: event.clientX - dragOffset.x, y: event.clientY - dragOffset.y };
+    const clamped = clampToViewport(raw, dragCachedSize, viewportSize());
+    lastClampedPos = clamped;
+    sidebar.setFloatingPos(clamped);
+  }
+
+  function onHeaderPointerUp(event: PointerEvent) {
+    if (!dragging || event.pointerId !== dragPointerId) return;
+    const base = lastClampedPos ?? {
+      x: event.clientX - dragOffset.x,
+      y: event.clientY - dragOffset.y,
+    };
+    const snapped = applySnap(base, dragCachedSize, viewportSize());
+    sidebar.setFloatingPos(snapped);
+    sidebar.persistFloatingPos();
+    endDrag(event);
+  }
+
+  function onHeaderPointerCancel(event: PointerEvent) {
+    if (!dragging || event.pointerId !== dragPointerId) return;
+    endDrag(event);
+  }
+
+  function reclampToViewport() {
+    if (sidebarState.pinned) return;
+    if (!sidebarState.floatingPos) return;
+    const size = measureSidebar();
+    const clamped = clampToViewport(sidebarState.floatingPos, size, viewportSize());
+    if (clamped.x !== sidebarState.floatingPos.x || clamped.y !== sidebarState.floatingPos.y) {
+      sidebar.setFloatingPos(clamped);
+      sidebar.persistFloatingPos();
+    }
+  }
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const onResize = () => reclampToViewport();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  });
+
+  $effect(() => {
+    // re-run when pin state or floating position changes
+    void sidebarState.pinned;
+    void sidebarState.floatingPos;
+    reclampToViewport();
+  });
+
+  const floatingStyle = $derived.by(() => {
+    if (sidebarState.pinned || !sidebarState.floatingPos) return '';
+    return `left: ${sidebarState.floatingPos.x}px; top: ${sidebarState.floatingPos.y}px;`;
+  });
 </script>
 
 <aside
   class="sidebar"
-  class:pinned={state.pinned}
-  class:floating={!state.pinned}
+  class:pinned={sidebarState.pinned}
+  class:floating={!sidebarState.pinned}
+  class:dragging
+  style={floatingStyle}
+  bind:this={asideEl}
   aria-label="Tool sidebar"
 >
-  <header class="head">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <header
+    class="head"
+    class:grab={!sidebarState.pinned}
+    onpointerdown={onHeaderPointerDown}
+    onpointermove={onHeaderPointerMove}
+    onpointerup={onHeaderPointerUp}
+    onpointercancel={onHeaderPointerCancel}
+  >
     <span class="title">Tools</span>
     <button
       type="button"
       class="pin"
-      aria-pressed={state.pinned}
-      aria-label={state.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
-      title={state.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
+      aria-pressed={sidebarState.pinned}
+      aria-label={sidebarState.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
+      title={sidebarState.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
       onclick={togglePin}
     >
-      <span aria-hidden="true">{state.pinned ? '📌' : '📍'}</span>
+      <span aria-hidden="true">{sidebarState.pinned ? '📌' : '📍'}</span>
     </button>
   </header>
 
@@ -120,10 +229,10 @@
       <button
         type="button"
         class="tool"
-        class:active={state.activeTool === tool.id}
+        class:active={sidebarState.activeTool === tool.id}
         disabled={tool.disabled}
         title={`${tool.label} (${tool.shortcut})`}
-        aria-pressed={state.activeTool === tool.id}
+        aria-pressed={sidebarState.activeTool === tool.id}
         onclick={() => pickTool(tool.id, tool.disabled)}
       >
         <span class="icon" aria-hidden="true">{tool.icon}</span>
@@ -135,7 +244,11 @@
 
   <section class="section" aria-label="Color">
     <h3 class="section-title">Color</h3>
-    <ColorPalette palettes={state.palettes} activeColor={state.activeColor} onChange={onColor} />
+    <ColorPalette
+      palettes={sidebarState.palettes}
+      activeColor={sidebarState.activeColor}
+      onChange={onColor}
+    />
   </section>
 
   <section class="section" aria-label="Width">
@@ -148,15 +261,15 @@
 
   <section class="section" aria-label="Presets">
     <ToolPresets
-      presets={state.presets}
-      activeTool={state.activeTool}
+      presets={sidebarState.presets}
+      activeTool={sidebarState.activeTool}
       onApply={onApplyPreset}
       onCapture={onCapturePreset}
       onRemove={onRemovePreset}
     />
   </section>
 
-  {#if state.activeTool === 'laser'}
+  {#if sidebarState.activeTool === 'laser'}
     <section class="section" aria-label="Laser">
       <h3 class="section-title">Laser radius</h3>
       <input
@@ -164,15 +277,15 @@
         min="2"
         max="24"
         step="1"
-        value={state.laser.radius}
+        value={sidebarState.laser.radius}
         oninput={onLaserRadius}
         aria-label="Laser radius"
       />
-      <span class="value">{state.laser.radius}px</span>
+      <span class="value">{sidebarState.laser.radius}px</span>
     </section>
   {/if}
 
-  {#if state.activeTool === 'temp-ink'}
+  {#if sidebarState.activeTool === 'temp-ink'}
     <section class="section" aria-label="Temp ink fade">
       <h3 class="section-title">Fade (ms)</h3>
       <input
@@ -180,7 +293,7 @@
         min="500"
         max="30000"
         step="100"
-        value={state.tempInkFadeMs}
+        value={sidebarState.tempInkFadeMs}
         oninput={onTempInkFade}
         aria-label="Temp ink fade duration in milliseconds"
       />
@@ -219,12 +332,26 @@
     border: 1px solid #1a1a1a;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     z-index: 10;
+    transition:
+      left 120ms ease-out,
+      top 120ms ease-out;
+  }
+  .sidebar.floating.dragging {
+    transition: none;
+    user-select: none;
   }
 
   .head {
     display: flex;
     justify-content: space-between;
     align-items: center;
+  }
+  .head.grab {
+    cursor: grab;
+    touch-action: none;
+  }
+  .sidebar.dragging .head.grab {
+    cursor: grabbing;
   }
   .title {
     font-weight: 600;

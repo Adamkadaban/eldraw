@@ -46,6 +46,7 @@ export interface SidebarState {
   laser: LaserStyle;
   tempInkFadeMs: number;
   presets: ToolPreset[];
+  floatingPos: { x: number; y: number } | null;
 }
 
 function initialState(): SidebarState {
@@ -65,6 +66,7 @@ function initialState(): SidebarState {
     laser: { ...DEFAULT_LASER_STYLE },
     tempInkFadeMs: DEFAULT_TEMP_INK_FADE_MS,
     presets: [],
+    floatingPos: null,
   };
 }
 
@@ -205,6 +207,26 @@ function createSidebarStore() {
       update((s) => ({ ...s, pinned: !s.pinned }));
     },
 
+    setFloatingPos(pos: { x: number; y: number } | null) {
+      if (pos && (!Number.isFinite(pos.x) || !Number.isFinite(pos.y))) return;
+      update((s) => ({ ...s, floatingPos: pos }));
+    },
+
+    resetFloatingPos() {
+      update((s) => ({ ...s, floatingPos: null }));
+    },
+
+    persistFloatingPos() {
+      if (typeof localStorage === 'undefined') return;
+      const pos = get(store).floatingPos;
+      try {
+        if (pos) localStorage.setItem(FLOATING_POS_STORAGE_KEY, JSON.stringify(pos));
+        else localStorage.removeItem(FLOATING_POS_STORAGE_KEY);
+      } catch {
+        // storage full or unavailable; ignore
+      }
+    },
+
     setLaserRadius(radius: number) {
       const clamped = Math.min(MAX_LASER_RADIUS, Math.max(MIN_LASER_RADIUS, radius));
       update((s) => ({ ...s, laser: { ...s.laser, radius: clamped } }));
@@ -258,6 +280,7 @@ function createSidebarStore() {
 export const sidebar = createSidebarStore();
 
 const PRESETS_STORAGE_KEY = 'eldraw.presets.v1';
+const FLOATING_POS_STORAGE_KEY = 'eldraw.sidebar-pos.v1';
 
 const VALID_TOOLS: ReadonlySet<ToolKind> = new Set<ToolKind>([
   'pen',
@@ -322,6 +345,22 @@ function loadPersistedPresets(): ToolPreset[] | null {
   }
 }
 
+function loadPersistedFloatingPos(): { x: number; y: number } | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(FLOATING_POS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const p = parsed as Record<string, unknown>;
+    if (typeof p.x !== 'number' || typeof p.y !== 'number') return null;
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+    return { x: p.x, y: p.y };
+  } catch {
+    return null;
+  }
+}
+
 let hydrated = false;
 let hydrationUnsubscribe: (() => void) | null = null;
 
@@ -331,6 +370,9 @@ export function hydrateSidebarFromStorage(): () => void {
 
   const presets = loadPersistedPresets();
   if (presets && presets.length > 0) sidebar.setPresets(presets);
+
+  const floatingPos = loadPersistedFloatingPos();
+  if (floatingPos) sidebar.setFloatingPos(floatingPos);
 
   if (typeof localStorage === 'undefined') {
     hydrationUnsubscribe = () => undefined;
