@@ -1,23 +1,30 @@
 /**
- * Recursive-descent parser for real-valued expressions of a single variable x.
+ * Recursive-descent parser for real-valued expressions of one or two
+ * variables.
  *
  * Grammar (precedence low → high):
  *   expr   := term (('+' | '-') term)*
  *   term   := unary (('*' | '/') unary)*
  *   unary  := ('+' | '-') unary | factor
- *   factor := primary ('^' factor)?         // '^' is right-associative and
- *                                           // binds tighter than unary minus
- *                                           // so that `-2^2 == -4`.
+ *   factor := primary ('^' factor)?         // right-associative and tighter
+ *                                           // than unary minus so `-2^2 == -4`.
  *   primary := number | ident | call | '(' expr ')'
  *   call   := ident '(' expr ')'
+ *
+ * `parseExpression` compiles a single-variable expression in `x`.
+ * `parseExpressionXY` compiles a two-variable expression in `x` and `y`;
+ * an optional `lhs = rhs` is normalized to `lhs - rhs` so that the curve
+ * `{ (x,y) : f(x,y) = 0 }` can be traced by marching squares.
  *
  * Scientific notation is intentionally unsupported to avoid clashing with the
  * constant `e`; write `2*10^3` instead of `2e3`.
  */
 
 export type CompiledFn = (x: number) => number;
+export type CompiledFnXY = (x: number, y: number) => number;
 
 export type ParseResult = { ok: true; fn: CompiledFn } | { ok: false; error: string };
+export type ParseResultXY = { ok: true; fn: CompiledFnXY } | { ok: false; error: string };
 
 type BinOp = '+' | '-' | '*' | '/' | '^';
 
@@ -25,8 +32,11 @@ type Tok =
   | { k: 'num'; v: number; pos: number }
   | { k: 'ident'; v: string; pos: number }
   | { k: 'op'; v: BinOp; pos: number }
+  | { k: 'eq'; pos: number }
   | { k: 'lp'; pos: number }
   | { k: 'rp'; pos: number };
+
+type NodeFn = (vars: number[]) => number;
 
 const FUNCTIONS: Record<string, (n: number) => number> = {
   sin: Math.sin,
@@ -103,6 +113,11 @@ function tokenize(src: string): Tok[] {
       i += 1;
       continue;
     }
+    if (c === '=') {
+      tokens.push({ k: 'eq', pos: i });
+      i += 1;
+      continue;
+    }
     if (c === '(') {
       tokens.push({ k: 'lp', pos: i });
       i += 1;
@@ -121,6 +136,7 @@ function tokenize(src: string): Tok[] {
 interface Cursor {
   toks: Tok[];
   pos: number;
+  varIndex: Record<string, number>;
 }
 
 function peek(c: Cursor): Tok | undefined {
@@ -134,7 +150,7 @@ function consume(c: Cursor): Tok {
   return t;
 }
 
-function parseExpr(c: Cursor): CompiledFn {
+function parseExpr(c: Cursor): NodeFn {
   let left = parseTerm(c);
   while (true) {
     const t = peek(c);
@@ -143,12 +159,12 @@ function parseExpr(c: Cursor): CompiledFn {
     const right = parseTerm(c);
     const op = t.v;
     const l = left;
-    left = op === '+' ? (x) => l(x) + right(x) : (x) => l(x) - right(x);
+    left = op === '+' ? (v) => l(v) + right(v) : (v) => l(v) - right(v);
   }
   return left;
 }
 
-function parseTerm(c: Cursor): CompiledFn {
+function parseTerm(c: Cursor): NodeFn {
   let left = parseUnary(c);
   while (true) {
     const t = peek(c);
@@ -157,33 +173,33 @@ function parseTerm(c: Cursor): CompiledFn {
     const right = parseUnary(c);
     const op = t.v;
     const l = left;
-    left = op === '*' ? (x) => l(x) * right(x) : (x) => l(x) / right(x);
+    left = op === '*' ? (v) => l(v) * right(v) : (v) => l(v) / right(v);
   }
   return left;
 }
 
-function parseUnary(c: Cursor): CompiledFn {
+function parseUnary(c: Cursor): NodeFn {
   const t = peek(c);
   if (t && t.k === 'op' && (t.v === '+' || t.v === '-')) {
     consume(c);
     const inner = parseUnary(c);
-    return t.v === '-' ? (x) => -inner(x) : inner;
+    return t.v === '-' ? (v) => -inner(v) : inner;
   }
   return parseFactor(c);
 }
 
-function parseFactor(c: Cursor): CompiledFn {
+function parseFactor(c: Cursor): NodeFn {
   const base = parsePrimary(c);
   const t = peek(c);
   if (t && t.k === 'op' && t.v === '^') {
     consume(c);
     const exp = parseFactor(c);
-    return (x) => Math.pow(base(x), exp(x));
+    return (v) => Math.pow(base(v), exp(v));
   }
   return base;
 }
 
-function parsePrimary(c: Cursor): CompiledFn {
+function parsePrimary(c: Cursor): NodeFn {
   const t = consume(c);
   if (t.k === 'num') {
     const v = t.v;
@@ -205,9 +221,10 @@ function parsePrimary(c: Cursor): CompiledFn {
       if (close.k !== 'rp') throw new ParseError("expected ')'");
       const fn = FUNCTIONS[name];
       if (!fn) throw new ParseError(`unknown function '${name}'`);
-      return (x) => fn(arg(x));
+      return (v) => fn(arg(v));
     }
-    if (name === 'x') return (x) => x;
+    const idx = c.varIndex[name];
+    if (idx !== undefined) return (v) => v[idx];
     const constant = CONSTANTS[name];
     if (constant !== undefined) return () => constant;
     throw new ParseError(`unknown identifier '${name}'`);
@@ -215,18 +232,49 @@ function parsePrimary(c: Cursor): CompiledFn {
   throw new ParseError('unexpected token');
 }
 
+function compile(src: string, varIndex: Record<string, number>, allowEquation: boolean): NodeFn {
+  const trimmed = src.trim();
+  if (trimmed.length === 0) throw new ParseError('empty expression');
+  const toks = tokenize(trimmed);
+  const cursor: Cursor = { toks, pos: 0, varIndex };
+  const lhs = parseExpr(cursor);
+  let root = lhs;
+  const eqTok = peek(cursor);
+  if (eqTok && eqTok.k === 'eq') {
+    if (!allowEquation) throw new ParseError(`unexpected '=' at position ${eqTok.pos}`);
+    consume(cursor);
+    const rhs = parseExpr(cursor);
+    root = (v) => lhs(v) - rhs(v);
+  }
+  if (cursor.pos !== toks.length) {
+    const charPos = toks[cursor.pos].pos;
+    throw new ParseError(`unexpected token at position ${charPos}`);
+  }
+  return root;
+}
+
 export function parseExpression(src: string): ParseResult {
   try {
-    const trimmed = src.trim();
-    if (trimmed.length === 0) return { ok: false, error: 'empty expression' };
-    const toks = tokenize(trimmed);
-    const cursor: Cursor = { toks, pos: 0 };
-    const fn = parseExpr(cursor);
-    if (cursor.pos !== toks.length) {
-      const charPos = toks[cursor.pos].pos;
-      return { ok: false, error: `unexpected token at position ${charPos}` };
-    }
-    return { ok: true, fn };
+    const node = compile(src, { x: 0 }, false);
+    return { ok: true, fn: (x) => node([x]) };
+  } catch (err) {
+    if (err instanceof ParseError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+export function parseExpressionXY(src: string): ParseResultXY {
+  try {
+    const node = compile(src, { x: 0, y: 1 }, true);
+    const buf = [0, 0];
+    return {
+      ok: true,
+      fn: (x, y) => {
+        buf[0] = x;
+        buf[1] = y;
+        return node(buf);
+      },
+    };
   } catch (err) {
     if (err instanceof ParseError) return { ok: false, error: err.message };
     throw err;

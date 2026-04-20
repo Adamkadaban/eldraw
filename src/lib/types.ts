@@ -91,9 +91,12 @@ export interface NumberLineObject extends ObjectBase {
   marks: NumberLineMark[];
 }
 
+export type GraphFunctionKind = 'explicit' | 'implicit';
+
 export interface GraphFunction {
   id: string;
   expr: string;
+  kind: GraphFunctionKind;
   color: string;
   width: number;
   dash: DashStyle;
