@@ -26,7 +26,7 @@
     { id: 'highlighter', label: 'Highlighter', shortcut: 'H', icon: '🖍️' },
     { id: 'eraser', label: 'Eraser', shortcut: 'E', icon: '🧽' },
     { id: 'line', label: 'Line', shortcut: 'L', icon: '／' },
-    { id: 'graph', label: 'Graph (coming soon)', shortcut: 'G', icon: '📈', disabled: true },
+    { id: 'graph', label: 'Graph', shortcut: 'G', icon: '📈' },
   ];
 
   const state = $derived($sidebar);

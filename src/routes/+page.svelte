@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { CanvasStack, PdfLayer } from '$lib/canvas';
+  import { CanvasStack, GraphLayer, PdfLayer } from '$lib/canvas';
   import { Sidebar } from '$lib/sidebar';
   import { openAndLoadPdf } from '$lib/ipc/pdf';
   import { loadSidecar } from '$lib/ipc';
@@ -13,7 +13,10 @@
   import { shortcuts } from '$lib/app/shortcuts';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
   import { hitTestStrokes } from '$lib/tools/eraser';
-  import type { AnyObject, EldrawDocument, PdfMeta, StrokeObject } from '$lib/types';
+  import { activeGraph, clearActiveGraph, setActiveGraph } from '$lib/store/activeGraph';
+  import { createGraphObject } from '$lib/graph/graphObject';
+  import GraphEditor from '$lib/graph/GraphEditor.svelte';
+  import type { AnyObject, EldrawDocument, GraphObject, PdfMeta, StrokeObject } from '$lib/types';
 
   const ERASER_RADIUS = 4;
 
@@ -33,6 +36,15 @@
   const pageObjects = $derived<AnyObject[]>(currentPage?.objects ?? []);
   const pageStrokes = $derived<StrokeObject[]>(
     pageObjects.filter((o): o is StrokeObject => o.type === 'stroke'),
+  );
+  const pageGraphs = $derived<GraphObject[]>(
+    pageObjects.filter((o): o is GraphObject => o.type === 'graph'),
+  );
+  const activeGraphRef = $derived($activeGraph);
+  const editingGraph = $derived<GraphObject | null>(
+    activeGraphRef && activeGraphRef.pageIndex === pageIndex
+      ? (pageGraphs.find((g) => g.id === activeGraphRef.objectId) ?? null)
+      : null,
   );
 
   const pageDimsPt = $derived(() => {
@@ -111,6 +123,23 @@
     for (const s of hits) {
       documentStore.removeObject(pageIndex, s.id);
     }
+  }
+
+  function onCommitGraph(bounds: { x: number; y: number; w: number; h: number }): void {
+    const graph = createGraphObject(bounds);
+    documentStore.addObject(pageIndex, graph);
+    setActiveGraph({ pageIndex, objectId: graph.id });
+  }
+
+  function onUpdateGraph(patch: Partial<GraphObject>): void {
+    if (!editingGraph) return;
+    documentStore.updateObject(pageIndex, editingGraph.id, patch);
+  }
+
+  function onDeleteGraph(): void {
+    if (!editingGraph) return;
+    documentStore.removeObject(pageIndex, editingGraph.id);
+    clearActiveGraph();
   }
 
   function onWheel(event: WheelEvent): void {
@@ -192,8 +221,34 @@
               ptToPx={size.ptToPx}
               oncommit={onCommitStroke}
               onerase={onEraseAt}
-            />
+              ongraph={onCommitGraph}
+            >
+              {#snippet objects()}
+                <GraphLayer
+                  graphs={pageGraphs}
+                  width={size.width}
+                  height={size.height}
+                  ptToPx={size.ptToPx}
+                />
+              {/snippet}
+            </CanvasStack>
           </div>
+          {#if editingGraph}
+            <div
+              class="graph-editor-slot"
+              style="left: {editingGraph.bounds.x * size.ptToPx}px; top: {(editingGraph.bounds.y +
+                editingGraph.bounds.h) *
+                size.ptToPx +
+                8}px;"
+            >
+              <GraphEditor
+                graph={editingGraph}
+                onUpdate={onUpdateGraph}
+                onDelete={onDeleteGraph}
+                onClose={clearActiveGraph}
+              />
+            </div>
+          {/if}
         </div>
       {:else}
         <div class="empty">
@@ -299,6 +354,10 @@
   .stack-slot {
     position: absolute;
     inset: 0;
+  }
+  .graph-editor-slot {
+    position: absolute;
+    z-index: 20;
   }
   .blank-slot {
     background: #fff;

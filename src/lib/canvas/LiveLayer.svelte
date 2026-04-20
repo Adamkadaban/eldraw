@@ -11,9 +11,14 @@
     ptToPx: number;
     oncommit?: (stroke: StrokeObject) => void;
     onerase?: (at: { x: number; y: number }) => void;
+    ongraph?: (bounds: { x: number; y: number; w: number; h: number }) => void;
   }
 
-  let { width, height, ptToPx, oncommit, onerase }: Props = $props();
+  let { width, height, ptToPx, oncommit, onerase, ongraph }: Props = $props();
+
+  let graphStart: { x: number; y: number } | null = null;
+  let graphEnd: { x: number; y: number } | null = null;
+  const MIN_GRAPH_SIZE_PT = 8;
 
   let canvas: HTMLCanvasElement;
   let activePointerId: number | null = null;
@@ -53,6 +58,8 @@
     }
     activePointerId = null;
     points = [];
+    graphStart = null;
+    graphEnd = null;
     clear();
   }
 
@@ -79,12 +86,35 @@
     } else if (currentTool === 'pen') {
       c.globalCompositeOperation = 'source-over';
       drawLiveStroke(c, points, currentStyle, 'pen', ptToPx);
+    } else if (currentTool === 'graph' && graphStart && graphEnd) {
+      drawGraphRect(c);
     }
+  }
+
+  function drawGraphRect(c: CanvasRenderingContext2D) {
+    if (!graphStart || !graphEnd) return;
+    const x = Math.min(graphStart.x, graphEnd.x) * ptToPx;
+    const y = Math.min(graphStart.y, graphEnd.y) * ptToPx;
+    const w = Math.abs(graphEnd.x - graphStart.x) * ptToPx;
+    const h = Math.abs(graphEnd.y - graphStart.y) * ptToPx;
+    c.globalCompositeOperation = 'source-over';
+    c.strokeStyle = '#1e88e5';
+    c.fillStyle = 'rgba(30, 136, 229, 0.08)';
+    c.lineWidth = 1;
+    c.setLineDash([6, 4]);
+    c.fillRect(x, y, w, h);
+    c.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    c.setLineDash([]);
   }
 
   function onPointerDown(e: PointerEvent) {
     if (e.pointerType === 'touch') return;
-    if (currentTool !== 'pen' && currentTool !== 'highlighter' && currentTool !== 'eraser') {
+    if (
+      currentTool !== 'pen' &&
+      currentTool !== 'highlighter' &&
+      currentTool !== 'eraser' &&
+      currentTool !== 'graph'
+    ) {
       return;
     }
     canvas.setPointerCapture(e.pointerId);
@@ -94,6 +124,15 @@
     if (currentTool === 'eraser') {
       const p = toPoint(e);
       onerase?.({ x: p.x, y: p.y });
+      return;
+    }
+
+    if (currentTool === 'graph') {
+      const p = toPoint(e);
+      graphStart = { x: p.x, y: p.y };
+      graphEnd = { x: p.x, y: p.y };
+      redrawLive();
+      e.preventDefault();
       return;
     }
 
@@ -107,6 +146,13 @@
     if (currentTool === 'eraser') {
       const p = toPoint(e);
       onerase?.({ x: p.x, y: p.y });
+      return;
+    }
+    if (currentTool === 'graph') {
+      const p = toPoint(e);
+      graphEnd = { x: p.x, y: p.y };
+      redrawLive();
+      e.preventDefault();
       return;
     }
     if (currentTool !== 'pen' && currentTool !== 'highlighter') return;
@@ -128,7 +174,18 @@
       const stroke = strokeFromInput(points, currentStyle, currentTool);
       oncommit?.(stroke);
     }
+    if (commit && currentTool === 'graph' && graphStart && graphEnd) {
+      const x = Math.min(graphStart.x, graphEnd.x);
+      const y = Math.min(graphStart.y, graphEnd.y);
+      const w = Math.abs(graphEnd.x - graphStart.x);
+      const h = Math.abs(graphEnd.y - graphStart.y);
+      if (w >= MIN_GRAPH_SIZE_PT && h >= MIN_GRAPH_SIZE_PT) {
+        ongraph?.({ x, y, w, h });
+      }
+    }
     points = [];
+    graphStart = null;
+    graphEnd = null;
     clear();
   }
 

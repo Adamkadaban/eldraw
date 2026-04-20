@@ -13,9 +13,10 @@
     objects?: Snippet;
     oncommit?: (stroke: StrokeObject) => void;
     onerase?: (at: { x: number; y: number }) => void;
+    ongraph?: (bounds: { x: number; y: number; w: number; h: number }) => void;
   }
 
-  let { strokes, width, height, ptToPx, objects, oncommit, onerase }: Props = $props();
+  let { strokes, width, height, ptToPx, objects, oncommit, onerase, ongraph }: Props = $props();
 </script>
 
 <div class="stack" style="width: {width}px; height: {height}px;">
@@ -34,7 +35,7 @@
   </div>
 
   <div class="layer layer-live">
-    <LiveLayer {width} {height} {ptToPx} {oncommit} {onerase} />
+    <LiveLayer {width} {height} {ptToPx} {oncommit} {onerase} {ongraph} />
   </div>
 </div>
 
