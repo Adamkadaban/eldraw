@@ -16,15 +16,15 @@ function createZen() {
     },
 
     enter(): void {
-      update((s) => (s.active ? s : { active: true }));
+      update((s) => (s.active ? s : { ...s, active: true }));
     },
 
     exit(): void {
-      update((s) => (s.active ? { active: false } : s));
+      update((s) => (s.active ? { ...s, active: false } : s));
     },
 
     toggle(): void {
-      update((s) => ({ active: !s.active }));
+      update((s) => ({ ...s, active: !s.active }));
     },
 
     reset(): void {

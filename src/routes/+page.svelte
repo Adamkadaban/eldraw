@@ -56,6 +56,19 @@
   const zenState = $derived($zenStore);
   const isZen = $derived(zenState.active);
   const chromeHidden = $derived(isPresenter || isZen);
+
+  let zenHintVisible = $state(false);
+  $effect(() => {
+    if (!isZen) {
+      zenHintVisible = false;
+      return;
+    }
+    zenHintVisible = true;
+    const timer = window.setTimeout(() => {
+      zenHintVisible = false;
+    }, 2400);
+    return () => window.clearTimeout(timer);
+  });
   const pages = $derived(doc?.pages ?? []);
 
   function onThumbPick(i: number): void {
@@ -500,7 +513,7 @@
     />
   {/if}
 
-  {#if isZen}
+  {#if isZen && zenHintVisible}
     <div class="zen-hint" role="status">Zen mode — Shift+Z or Esc to exit</div>
   {/if}
 
