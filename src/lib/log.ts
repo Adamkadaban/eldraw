@@ -1,9 +1,7 @@
 /**
- * Toggleable debug logger. Enable with `localStorage.ELDRAW_DEBUG=1` or
- * `?eldrawDebug=1` in the URL. Off by default so production is quiet.
- *
- * Output goes to the webview console; in a Tauri build the user can open
- * devtools (Ctrl+Shift+I) or pipe logs through `tauri-plugin-log` later.
+ * Toggleable debug logger. Enable with `localStorage.ELDRAW_DEBUG=1`,
+ * `?eldrawDebug=1`, or `window.eldrawDebug(true)` at runtime. Off by default
+ * so production is quiet; `warn()` is also gated.
  */
 
 type Scope = 'tool' | 'live' | 'shape' | 'temp-ink' | 'laser' | 'render' | 'page' | 'doc' | 'ipc';
@@ -22,18 +20,20 @@ function detect(): boolean {
 }
 
 export function initDebugLogger(): void {
+  if (typeof window === 'undefined') return;
   enabled = detect();
-  if (enabled && typeof window !== 'undefined') {
-    // Expose a runtime toggle so the user can flip it in devtools.
-    (window as unknown as { eldrawDebug: (on: boolean) => void }).eldrawDebug = (on: boolean) => {
-      enabled = on;
-      try {
-        window.localStorage.setItem('ELDRAW_DEBUG', on ? '1' : '0');
-      } catch {
-        // ignore
-      }
-      console.info(`[eldraw] debug logging ${on ? 'ON' : 'OFF'}`);
-    };
+
+  (window as unknown as { eldrawDebug: (on: boolean) => void }).eldrawDebug = (on: boolean) => {
+    enabled = on;
+    try {
+      window.localStorage.setItem('ELDRAW_DEBUG', on ? '1' : '0');
+    } catch {
+      // ignore
+    }
+    console.info(`[eldraw] debug logging ${on ? 'ON' : 'OFF'}`);
+  };
+
+  if (enabled) {
     console.info('[eldraw] debug logging ON (set window.eldrawDebug(false) to stop)');
   }
 }
@@ -48,6 +48,7 @@ export function log(scope: Scope, message: string, data?: unknown): void {
 }
 
 export function warn(scope: Scope, message: string, data?: unknown): void {
+  if (!enabled) return;
   if (data === undefined) {
     console.warn(`[eldraw:${scope}] ${message}`);
   } else {
