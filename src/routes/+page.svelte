@@ -60,11 +60,11 @@
       const o = editor.obj;
       return { content: o.content, latex: o.latex, fontSize: o.fontSize, color: o.color };
     }
-    return { content: '', latex: false, fontSize: 16, color: '#000000' };
+    return { content: '', latex: false, fontSize: 16, color: sidebarState.activeColor };
   });
 
   function newId(): string {
-    return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    return `t_${crypto.randomUUID()}`;
   }
 
   function onTextEmptyClick(at: { x: number; y: number }, screen: { x: number; y: number }): void {
@@ -101,12 +101,16 @@
       };
       documentStore.addObject(pageIndex, obj);
     } else {
-      documentStore.updateObject(pageIndex, editor.obj.id, {
-        content: result.content,
-        latex: result.latex,
-        fontSize: result.fontSize,
-        color: result.color,
-      });
+      if (result.content.trim().length === 0) {
+        documentStore.removeObject(pageIndex, editor.obj.id);
+      } else {
+        documentStore.updateObject(pageIndex, editor.obj.id, {
+          content: result.content,
+          latex: result.latex,
+          fontSize: result.fontSize,
+          color: result.color,
+        });
+      }
     }
     editor = null;
   }

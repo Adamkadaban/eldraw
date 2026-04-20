@@ -129,8 +129,8 @@
   }
   .text-button {
     background: transparent;
-    border: 1px dashed transparent;
-    padding: 0 2px;
+    border: none;
+    padding: 0;
     margin: 0;
     font: inherit;
     text-align: left;
@@ -138,11 +138,12 @@
     cursor: pointer;
     pointer-events: auto;
     z-index: 1;
+    outline: 1px dashed transparent;
+    outline-offset: 1px;
   }
   .text-button:hover,
   .text-button:focus-visible {
-    border-color: #7ab7ff;
-    outline: none;
+    outline-color: #7ab7ff;
   }
   .text-obj.errored {
     color: #c0392b;

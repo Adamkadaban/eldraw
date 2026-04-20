@@ -71,10 +71,18 @@
     class="content"
     rows="3"
     placeholder={latex ? 'e.g. x^2 + y^2 = r^2' : 'Enter text…'}
+    style="font-size: {fontSize}px; color: {color};"
   ></textarea>
 
   {#if latex && preview}
-    <div class="preview" class:errored={!preview.ok} aria-live="polite">
+    <div
+      class="preview"
+      class:errored={!preview.ok}
+      aria-live="polite"
+      style={preview.ok
+        ? `font-size: ${fontSize}px; color: ${color};`
+        : `font-size: ${fontSize}px;`}
+    >
       {#if preview.ok}
         <!-- eslint-disable-next-line svelte/no-at-html-tags -->
         <span>{@html preview.html}</span>

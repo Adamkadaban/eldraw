@@ -26,7 +26,7 @@ export function renderLatex(
       displayMode: opts.displayMode ?? false,
       throwOnError: true,
       strict: 'ignore',
-      output: 'html',
+      output: 'htmlAndMathml',
     });
     return { ok: true, html };
   } catch (err) {
