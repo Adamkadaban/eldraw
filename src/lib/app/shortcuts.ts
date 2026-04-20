@@ -107,6 +107,18 @@ export const shortcuts: Action<HTMLElement> = () => {
       case 'L':
         sidebar.setTool('line');
         return;
+      case 'r':
+      case 'R':
+        sidebar.setTool('rect');
+        return;
+      case 'o':
+      case 'O':
+        sidebar.setTool('ellipse');
+        return;
+      case 'n':
+      case 'N':
+        sidebar.setTool('numberline');
+        return;
       case 'g':
       case 'G':
         sidebar.setTool('graph');

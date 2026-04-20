@@ -1,21 +1,41 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { StrokeObject } from '$lib/types';
+  import type {
+    AnyObject,
+    LineObject,
+    NumberLineObject,
+    ShapeObject,
+    StrokeObject,
+  } from '$lib/types';
   import HighlightLayer from './HighlightLayer.svelte';
   import InkLayer from './InkLayer.svelte';
   import LiveLayer from './LiveLayer.svelte';
+  import ShapeLayer from './ShapeLayer.svelte';
+  import ShapeLiveLayer from './ShapeLiveLayer.svelte';
 
   interface Props {
     strokes: StrokeObject[];
+    objects: AnyObject[];
     width: number;
     height: number;
     ptToPx: number;
-    objects?: Snippet;
+    overlay?: Snippet;
     oncommit?: (stroke: StrokeObject) => void;
     onerase?: (at: { x: number; y: number }) => void;
+    oncommitobject?: (obj: LineObject | ShapeObject | NumberLineObject) => void;
   }
 
-  let { strokes, width, height, ptToPx, objects, oncommit, onerase }: Props = $props();
+  let {
+    strokes,
+    objects,
+    width,
+    height,
+    ptToPx,
+    overlay,
+    oncommit,
+    onerase,
+    oncommitobject,
+  }: Props = $props();
 </script>
 
 <div class="stack" style="width: {width}px; height: {height}px;">
@@ -23,11 +43,9 @@
     <HighlightLayer {strokes} {width} {height} {ptToPx} />
   </div>
 
-  {#if objects}
-    <div class="layer layer-objects">
-      {@render objects()}
-    </div>
-  {/if}
+  <div class="layer layer-objects">
+    <ShapeLayer {objects} {width} {height} {ptToPx} />
+  </div>
 
   <div class="layer layer-ink">
     <InkLayer {strokes} {width} {height} {ptToPx} />
@@ -36,6 +54,16 @@
   <div class="layer layer-live">
     <LiveLayer {width} {height} {ptToPx} {oncommit} {onerase} />
   </div>
+
+  <div class="layer layer-shape-live">
+    <ShapeLiveLayer {width} {height} {ptToPx} oncommit={oncommitobject} />
+  </div>
+
+  {#if overlay}
+    <div class="layer layer-overlay">
+      {@render overlay()}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -55,8 +83,16 @@
   }
   .layer-ink {
     z-index: 3;
+    pointer-events: none;
   }
   .layer-live {
     z-index: 4;
+  }
+  .layer-shape-live {
+    z-index: 5;
+  }
+  .layer-overlay {
+    z-index: 6;
+    pointer-events: none;
   }
 </style>
