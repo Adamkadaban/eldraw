@@ -84,6 +84,23 @@ function reindex(pages: Page[]): Page[] {
   return pages.map((p, i) => (p.pageIndex === i ? p : { ...p, pageIndex: i }));
 }
 
+/**
+ * After a structural op (move/duplicate/delete), each blank page's
+ * `insertedAfterPdfPage` may disagree with its new neighbors. Rebind each
+ * blank to the PDF page that now immediately precedes it, or null if no
+ * PDF page precedes it.
+ */
+function recomputeBlankAnchors(pages: Page[]): Page[] {
+  let lastPdf: number | null = null;
+  return pages.map((p) => {
+    if (p.type === 'pdf') {
+      if (typeof p.pdfSourceIndex === 'number') lastPdf = p.pdfSourceIndex;
+      return p;
+    }
+    return p.insertedAfterPdfPage === lastPdf ? p : { ...p, insertedAfterPdfPage: lastPdf };
+  });
+}
+
 function cloneObjectWithNewId<T extends AnyObject>(o: T): T {
   return { ...o, id: crypto.randomUUID() };
 }
@@ -181,7 +198,7 @@ export function createDocumentStore(): DocumentStore {
         const [moved] = pages.splice(from, 1);
         pages.splice(clamped, 0, moved);
         history.onPageMove(from, clamped);
-        return { ...doc, pages: reindex(pages) };
+        return { ...doc, pages: reindex(recomputeBlankAnchors(pages)) };
       });
     },
 
@@ -194,7 +211,7 @@ export function createDocumentStore(): DocumentStore {
         const pages = [...doc.pages];
         pages.splice(index + 1, 0, copy);
         history.shiftPageIndicesFrom(index + 1);
-        return { ...doc, pages: reindex(pages) };
+        return { ...doc, pages: reindex(recomputeBlankAnchors(pages)) };
       });
     },
 
@@ -206,7 +223,7 @@ export function createDocumentStore(): DocumentStore {
         const pages = [...doc.pages];
         pages.splice(index, 1);
         history.onPageDelete(index);
-        return { ...doc, pages: reindex(pages) };
+        return { ...doc, pages: reindex(recomputeBlankAnchors(pages)) };
       });
     },
 

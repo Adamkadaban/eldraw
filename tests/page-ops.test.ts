@@ -162,4 +162,26 @@ describe('documentStore page ops', () => {
     store.undo(1);
     expect(get(store)!.pages[1].objects).toHaveLength(0);
   });
+
+  it('recomputes blank insertedAfterPdfPage after move', () => {
+    const store = createDocumentStore();
+    const blank = blankPage(1);
+    blank.insertedAfterPdfPage = 0;
+    store.load(docWithPages([pdfPage(0), blank, pdfPage(2)]));
+    store.movePage(1, 2);
+    const doc = get(store)!;
+    const movedBlank = doc.pages.find((p) => p.type === 'blank')!;
+    expect(movedBlank.insertedAfterPdfPage).toBe(2);
+  });
+
+  it('recomputes blank insertedAfterPdfPage after delete removes anchor pdf', () => {
+    const store = createDocumentStore();
+    const blank = blankPage(1);
+    blank.insertedAfterPdfPage = 0;
+    store.load(docWithPages([pdfPage(0), blank, pdfPage(2)]));
+    store.deletePage(0);
+    const doc = get(store)!;
+    const remainingBlank = doc.pages.find((p) => p.type === 'blank')!;
+    expect(remainingBlank.insertedAfterPdfPage).toBeNull();
+  });
 });

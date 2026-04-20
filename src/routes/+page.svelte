@@ -58,9 +58,17 @@
   }
 
   function onThumbMove(from: number, to: number): void {
-    documentStore.movePage(from, to);
     const snap = viewport.snapshot();
-    if (snap.currentPageIndex === from) viewport.setPage(to, pages.length);
+    const current = snap.currentPageIndex;
+    const clampedTo = Math.max(0, Math.min(to, pages.length - 1));
+    documentStore.movePage(from, to);
+    if (current === from) {
+      viewport.setPage(clampedTo, pages.length);
+    } else if (from < current && current <= clampedTo) {
+      viewport.setPage(Math.max(0, current - 1), pages.length);
+    } else if (clampedTo <= current && current < from) {
+      viewport.setPage(Math.min(pages.length - 1, current + 1), pages.length);
+    }
   }
 
   function onThumbDuplicate(i: number): void {
