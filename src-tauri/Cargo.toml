@@ -1,6 +1,6 @@
 [package]
 name = "eldraw"
-version = "0.1.0-rc.5"
+version = "0.1.0-rc.6"
 description = "PDF annotation tool for live math teaching"
 authors = ["Adam"]
 edition = "2021"
