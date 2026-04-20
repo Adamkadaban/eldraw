@@ -12,6 +12,9 @@ export interface DocumentStore {
   updateObject(pageIndex: number, id: ObjectId, patch: Partial<AnyObject>): void;
 
   insertBlankPageAfter(afterArrayIndex: number, width: number, height: number): void;
+  movePage(from: number, to: number): void;
+  duplicatePage(index: number): void;
+  deletePage(index: number): void;
 
   undo(pageIndex: number): void;
   redo(pageIndex: number): void;
@@ -35,11 +38,15 @@ function replacePage(doc: EldrawDocument, pageIndex: number, next: Page): Eldraw
 
 /**
  * Return the stable underlying PDF page index for the page at the given
- * array position. Returns null for blank pages (which have no PDF to render).
+ * array position. Honors the explicit `pdfSourceIndex` field when present
+ * (so reordered/duplicated pages keep rendering the original PDF page);
+ * falls back to counting preceding pdf slots for sidecars written before
+ * the field was introduced.
  */
 export function pdfPageIndexAt(pages: readonly Page[], arrayIndex: number): number | null {
   const page = pages[arrayIndex];
   if (!page || page.type !== 'pdf') return null;
+  if (typeof page.pdfSourceIndex === 'number') return page.pdfSourceIndex;
   let count = 0;
   for (let i = 0; i < arrayIndex; i += 1) {
     if (pages[i].type === 'pdf') count += 1;
@@ -47,17 +54,62 @@ export function pdfPageIndexAt(pages: readonly Page[], arrayIndex: number): numb
   return count;
 }
 
-/**
- * Return the PDF page index that the page at arrayIndex follows. For a pdf
- * page this is its own PDF index; for a blank page it is the last PDF page
- * at or before it (or null if no PDF page precedes it).
- */
 function lastPdfIndexAtOrBefore(pages: readonly Page[], arrayIndex: number): number | null {
-  let count = -1;
+  let last: number | null = null;
   for (let i = 0; i <= arrayIndex && i < pages.length; i += 1) {
-    if (pages[i].type === 'pdf') count += 1;
+    const idx = pdfPageIndexAt(pages, i);
+    if (idx !== null) last = idx;
   }
-  return count < 0 ? null : count;
+  return last;
+}
+
+function normalizeLoaded(doc: EldrawDocument): EldrawDocument {
+  let nextDerived = 0;
+  const pages = doc.pages.map((p, i) => {
+    const base = p.pageIndex === i ? p : { ...p, pageIndex: i };
+    if (base.type === 'pdf' && typeof base.pdfSourceIndex !== 'number') {
+      const withSource = { ...base, pdfSourceIndex: nextDerived };
+      nextDerived += 1;
+      return withSource;
+    }
+    if (base.type === 'pdf' && typeof base.pdfSourceIndex === 'number') {
+      nextDerived = Math.max(nextDerived, base.pdfSourceIndex + 1);
+    }
+    return base;
+  });
+  return { ...doc, pages };
+}
+
+function reindex(pages: Page[]): Page[] {
+  return pages.map((p, i) => (p.pageIndex === i ? p : { ...p, pageIndex: i }));
+}
+
+/**
+ * After a structural op (move/duplicate/delete), each blank page's
+ * `insertedAfterPdfPage` may disagree with its new neighbors. Rebind each
+ * blank to the PDF page that now immediately precedes it, or null if no
+ * PDF page precedes it.
+ */
+function recomputeBlankAnchors(pages: Page[]): Page[] {
+  let lastPdf: number | null = null;
+  return pages.map((p) => {
+    if (p.type === 'pdf') {
+      if (typeof p.pdfSourceIndex === 'number') lastPdf = p.pdfSourceIndex;
+      return p;
+    }
+    return p.insertedAfterPdfPage === lastPdf ? p : { ...p, insertedAfterPdfPage: lastPdf };
+  });
+}
+
+function cloneObjectWithNewId<T extends AnyObject>(o: T): T {
+  return { ...o, id: crypto.randomUUID() };
+}
+
+function clonePageForDuplicate(p: Page): Page {
+  return {
+    ...p,
+    objects: p.objects.map(cloneObjectWithNewId),
+  };
 }
 
 export function createDocumentStore(): DocumentStore {
@@ -82,7 +134,7 @@ export function createDocumentStore(): DocumentStore {
     subscribe: state.subscribe,
 
     load(doc) {
-      state.set(doc);
+      state.set(normalizeLoaded(doc));
       history.clear();
     },
 
@@ -131,9 +183,47 @@ export function createDocumentStore(): DocumentStore {
         };
         const pages = [...doc.pages];
         pages.splice(insertIdx, 0, blank);
-        const reindexed = pages.map((p, i) => ({ ...p, pageIndex: i }));
         history.shiftPageIndicesFrom(insertIdx);
-        return { ...doc, pages: reindexed };
+        return { ...doc, pages: reindex(pages) };
+      });
+    },
+
+    movePage(from, to) {
+      state.update((doc) => {
+        if (!doc) return doc;
+        const pages = [...doc.pages];
+        if (from < 0 || from >= pages.length) return doc;
+        const clamped = Math.max(0, Math.min(pages.length - 1, to));
+        if (clamped === from) return doc;
+        const [moved] = pages.splice(from, 1);
+        pages.splice(clamped, 0, moved);
+        history.onPageMove(from, clamped);
+        return { ...doc, pages: reindex(recomputeBlankAnchors(pages)) };
+      });
+    },
+
+    duplicatePage(index) {
+      state.update((doc) => {
+        if (!doc) return doc;
+        const src = doc.pages[index];
+        if (!src) return doc;
+        const copy = clonePageForDuplicate(src);
+        const pages = [...doc.pages];
+        pages.splice(index + 1, 0, copy);
+        history.shiftPageIndicesFrom(index + 1);
+        return { ...doc, pages: reindex(recomputeBlankAnchors(pages)) };
+      });
+    },
+
+    deletePage(index) {
+      state.update((doc) => {
+        if (!doc) return doc;
+        if (doc.pages.length <= 1) return doc;
+        if (index < 0 || index >= doc.pages.length) return doc;
+        const pages = [...doc.pages];
+        pages.splice(index, 1);
+        history.onPageDelete(index);
+        return { ...doc, pages: reindex(recomputeBlankAnchors(pages)) };
       });
     },
 

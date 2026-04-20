@@ -60,6 +60,10 @@ export interface History {
   /** Shift all page stacks at index >= `from` up by one to keep them
    *  aligned with document pages after an insert at `from`. */
   shiftPageIndicesFrom(from: number): void;
+  /** Drop the stack at `index` and shift stacks at higher indices down by one. */
+  onPageDelete(index: number): void;
+  /** Move the stack at `from` to `to`, preserving relative order of the others. */
+  onPageMove(from: number, to: number): void;
   clear(): void;
   /** For tests. */
   _stacks: Readable<Record<number, PageStack>>;
@@ -129,6 +133,41 @@ export function createHistory(): History {
           const idx = Number(k);
           next[idx >= from ? idx + 1 : idx] = v;
         }
+        return next;
+      });
+    },
+
+    onPageDelete(index) {
+      stacks.update((all) => {
+        const next: Record<number, PageStack> = {};
+        for (const [k, v] of Object.entries(all)) {
+          const idx = Number(k);
+          if (idx === index) continue;
+          next[idx > index ? idx - 1 : idx] = v;
+        }
+        return next;
+      });
+    },
+
+    onPageMove(from, to) {
+      if (from === to) return;
+      stacks.update((all) => {
+        const moved = all[from];
+        const next: Record<number, PageStack> = {};
+        const lo = Math.min(from, to);
+        const hi = Math.max(from, to);
+        for (const [k, v] of Object.entries(all)) {
+          const idx = Number(k);
+          if (idx === from) continue;
+          if (idx < lo || idx > hi) {
+            next[idx] = v;
+          } else if (from < to) {
+            next[idx - 1] = v;
+          } else {
+            next[idx + 1] = v;
+          }
+        }
+        if (moved) next[to] = moved;
         return next;
       });
     },

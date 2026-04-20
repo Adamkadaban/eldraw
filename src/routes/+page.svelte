@@ -57,6 +57,35 @@
     viewport.setPage(i, pages.length);
   }
 
+  function onThumbMove(from: number, to: number): void {
+    const snap = viewport.snapshot();
+    const current = snap.currentPageIndex;
+    const clampedTo = Math.max(0, Math.min(to, pages.length - 1));
+    documentStore.movePage(from, to);
+    if (current === from) {
+      viewport.setPage(clampedTo, pages.length);
+    } else if (from < current && current <= clampedTo) {
+      viewport.setPage(Math.max(0, current - 1), pages.length);
+    } else if (clampedTo <= current && current < from) {
+      viewport.setPage(Math.min(pages.length - 1, current + 1), pages.length);
+    }
+  }
+
+  function onThumbDuplicate(i: number): void {
+    documentStore.duplicatePage(i);
+    viewport.setPage(i + 1, pages.length + 1);
+  }
+
+  function onThumbDelete(i: number): void {
+    if (pages.length <= 1) return;
+    documentStore.deletePage(i);
+    const nextTotal = pages.length - 1;
+    const snap = viewport.snapshot();
+    if (snap.currentPageIndex >= i) {
+      viewport.setPage(Math.max(0, snap.currentPageIndex - 1), nextTotal);
+    }
+  }
+
   const pageCount = $derived(doc?.pages.length ?? meta?.pageCount ?? 0);
   const pageIndex = $derived(Math.min(view.currentPageIndex, Math.max(0, pageCount - 1)));
   const currentPage = $derived(doc?.pages[pageIndex] ?? null);
@@ -432,7 +461,14 @@
   </section>
 
   {#if !isPresenter && pages.length > 0}
-    <ThumbnailStrip {pages} currentIndex={pageIndex} onpick={onThumbPick} />
+    <ThumbnailStrip
+      {pages}
+      currentIndex={pageIndex}
+      onpick={onThumbPick}
+      onmove={onThumbMove}
+      onduplicate={onThumbDuplicate}
+      ondelete={onThumbDelete}
+    />
   {/if}
 
   {#if editor && editorInitial}
