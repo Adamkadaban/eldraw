@@ -6,17 +6,29 @@
   import { drawLiveStroke } from './strokeRenderer';
   import { cursorForTool } from './cursors';
   import { log } from '$lib/log';
+  import { snapPointToRuler, snapStrokeToRuler, type RulerState } from '$lib/geometry/ruler';
 
   interface Props {
     width: number;
     height: number;
     ptToPx: number;
+    rulerSnap?: RulerState | null;
+    rulerSnapThresholdPx?: number;
     oncommit?: (stroke: StrokeObject) => void;
     onerase?: (at: { x: number; y: number }) => void;
     ongraph?: (bounds: { x: number; y: number; w: number; h: number }) => void;
   }
 
-  let { width, height, ptToPx, oncommit, onerase, ongraph }: Props = $props();
+  let {
+    width,
+    height,
+    ptToPx,
+    rulerSnap = null,
+    rulerSnapThresholdPx = 12,
+    oncommit,
+    onerase,
+    ongraph,
+  }: Props = $props();
 
   let graphStart: { x: number; y: number } | null = null;
   let graphEnd: { x: number; y: number } | null = null;
@@ -77,6 +89,15 @@
       pressure,
       t: performance.now() - startTime,
     };
+  }
+
+  function maybeSnap(p: Point): Point {
+    if (!rulerSnap) return p;
+    if (currentTool !== 'pen' && currentTool !== 'highlighter') return p;
+    const thresholdPt = rulerSnapThresholdPx / ptToPx;
+    const res = snapPointToRuler(p, rulerSnap, thresholdPt);
+    if (!res.snapped) return p;
+    return { ...p, x: res.point.x, y: res.point.y };
   }
 
   function redrawLive() {
@@ -140,7 +161,7 @@
       return;
     }
 
-    points = [toPoint(e)];
+    points = [maybeSnap(toPoint(e))];
     redrawLive();
     e.preventDefault();
   }
@@ -160,7 +181,7 @@
       return;
     }
     if (currentTool !== 'pen' && currentTool !== 'highlighter') return;
-    points.push(toPoint(e));
+    points.push(maybeSnap(toPoint(e)));
     redrawLive();
     e.preventDefault();
   }
@@ -175,7 +196,10 @@
     activePointerId = null;
 
     if (commit && (currentTool === 'pen' || currentTool === 'highlighter') && points.length > 0) {
-      const stroke = strokeFromInput(points, currentStyle, currentTool);
+      const finalPoints = rulerSnap
+        ? snapStrokeToRuler(points, rulerSnap, rulerSnapThresholdPx / ptToPx)
+        : points;
+      const stroke = strokeFromInput(finalPoints, currentStyle, currentTool);
       log('live', `commit ${currentTool} stroke points=${points.length}`);
       oncommit?.(stroke);
     }
