@@ -117,18 +117,33 @@ Rules:
 3. `presenter-view` — multi-monitor, thumbnail sidebar
 4. `page-ops` — reorder, duplicate, blank page polish
 
-## Releases (plan — not yet implemented)
+## Releases
 
-Set up in Phase 4:
+Implemented in Phase 4 (`.github/workflows/release.yml`):
 
-- GitHub Actions matrix build on tag push (`v*`):
-  - Windows: `.msi` + portable `.exe`
+- Push a `v*` git tag to trigger the matrix build:
+  - Windows: `.msi` + NSIS `.exe`
   - Linux: `.AppImage` + `.deb`
-- Artifacts attached to a GitHub Release.
-- Conventional Commit history feeds an auto-generated changelog
-  (e.g. `git-cliff`).
-- Version bumping via `npm version` + matching Cargo version; single source
-  of truth is the git tag.
+- `git-cliff` (`cliff.toml`) generates release notes from Conventional Commit
+  history.
+- Artifacts land on a draft GitHub Release, then the `publish` job flips the
+  draft to published with the generated notes.
+- Version is bumped in lockstep across `package.json`,
+  `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` via
+  `pnpm bump <semver>`. Source of truth is the git tag.
+
+Typical release flow:
+
+```sh
+pnpm bump 0.2.0
+cargo check --manifest-path src-tauri/Cargo.toml   # refresh Cargo.lock
+git commit -am "chore(release): v0.2.0"
+git tag v0.2.0
+git push origin main v0.2.0
+```
+
+Code signing (macOS notarization, Windows Authenticode) is a follow-up once
+certificates exist.
 
 ## Security & Hygiene
 
