@@ -124,15 +124,19 @@
   }
   .layer-live {
     z-index: 4;
+    pointer-events: none;
   }
   .layer-shape-live {
     z-index: 5;
+    pointer-events: none;
   }
   .layer-temp-ink {
     z-index: 6;
+    pointer-events: none;
   }
   .layer-laser {
     z-index: 7;
+    pointer-events: none;
   }
   .layer-overlay {
     z-index: 8;
