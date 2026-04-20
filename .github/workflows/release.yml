@@ -51,17 +51,21 @@ jobs:
         id: bundles
         shell: bash
         run: |
-          is_prerelease=${{ contains(github.ref_name, '-') }}
-          case "${{ matrix.platform }}" in
-            ubuntu-latest)
+          is_prerelease="${{ contains(github.ref_name, '-') }}"
+          case "${{ runner.os }}" in
+            Linux)
               list="deb,appimage"
               ;;
-            windows-latest)
+            Windows)
               if [ "$is_prerelease" = "true" ]; then
                 list="nsis"
               else
                 list="msi,nsis"
               fi
+              ;;
+            *)
+              echo "Unsupported runner.os for bundle resolution: ${{ runner.os }}" >&2
+              exit 1
               ;;
           esac
           echo "list=$list" >> "$GITHUB_OUTPUT"
