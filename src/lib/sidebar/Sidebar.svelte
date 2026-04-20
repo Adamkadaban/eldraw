@@ -99,15 +99,27 @@
   let dragging = $state(false);
   let dragPointerId: number | null = null;
   let dragOffset = { x: 0, y: 0 };
+  let dragCachedSize: { width: number; height: number } = { width: 220, height: 400 };
+  let lastClampedPos: { x: number; y: number } | null = null;
 
   function viewportSize() {
     return { width: window.innerWidth, height: window.innerHeight };
   }
 
-  function sidebarSize() {
+  function measureSidebar(): { width: number; height: number } {
     if (!asideEl) return { width: 220, height: 400 };
     const r = asideEl.getBoundingClientRect();
     return { width: r.width, height: r.height };
+  }
+
+  function endDrag(event: PointerEvent) {
+    dragging = false;
+    dragPointerId = null;
+    lastClampedPos = null;
+    const target = event.currentTarget as HTMLElement | null;
+    if (target?.hasPointerCapture(event.pointerId)) {
+      target.releasePointerCapture(event.pointerId);
+    }
   }
 
   function onHeaderPointerDown(event: PointerEvent) {
@@ -117,6 +129,8 @@
     if (!asideEl) return;
     const rect = asideEl.getBoundingClientRect();
     dragOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    dragCachedSize = { width: rect.width, height: rect.height };
+    lastClampedPos = { x: rect.left, y: rect.top };
     dragPointerId = event.pointerId;
     dragging = true;
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
@@ -126,19 +140,52 @@
   function onHeaderPointerMove(event: PointerEvent) {
     if (!dragging || event.pointerId !== dragPointerId) return;
     const raw = { x: event.clientX - dragOffset.x, y: event.clientY - dragOffset.y };
-    const clamped = clampToViewport(raw, sidebarSize(), viewportSize());
+    const clamped = clampToViewport(raw, dragCachedSize, viewportSize());
+    lastClampedPos = clamped;
     sidebar.setFloatingPos(clamped);
   }
 
   function onHeaderPointerUp(event: PointerEvent) {
     if (!dragging || event.pointerId !== dragPointerId) return;
-    const raw = { x: event.clientX - dragOffset.x, y: event.clientY - dragOffset.y };
-    const snapped = applySnap(raw, sidebarSize(), viewportSize());
+    const base = lastClampedPos ?? {
+      x: event.clientX - dragOffset.x,
+      y: event.clientY - dragOffset.y,
+    };
+    const snapped = applySnap(base, dragCachedSize, viewportSize());
     sidebar.setFloatingPos(snapped);
-    dragging = false;
-    dragPointerId = null;
-    (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+    sidebar.persistFloatingPos();
+    endDrag(event);
   }
+
+  function onHeaderPointerCancel(event: PointerEvent) {
+    if (!dragging || event.pointerId !== dragPointerId) return;
+    endDrag(event);
+  }
+
+  function reclampToViewport() {
+    if (sidebarState.pinned) return;
+    if (!sidebarState.floatingPos) return;
+    const size = measureSidebar();
+    const clamped = clampToViewport(sidebarState.floatingPos, size, viewportSize());
+    if (clamped.x !== sidebarState.floatingPos.x || clamped.y !== sidebarState.floatingPos.y) {
+      sidebar.setFloatingPos(clamped);
+      sidebar.persistFloatingPos();
+    }
+  }
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const onResize = () => reclampToViewport();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  });
+
+  $effect(() => {
+    // re-run when pin state or floating position changes
+    void sidebarState.pinned;
+    void sidebarState.floatingPos;
+    reclampToViewport();
+  });
 
   const floatingStyle = $derived.by(() => {
     if (sidebarState.pinned || !sidebarState.floatingPos) return '';
@@ -155,16 +202,14 @@
   bind:this={asideEl}
   aria-label="Tool sidebar"
 >
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <header
     class="head"
     class:grab={!sidebarState.pinned}
-    role="toolbar"
-    aria-label="Sidebar header"
-    tabindex="-1"
     onpointerdown={onHeaderPointerDown}
     onpointermove={onHeaderPointerMove}
     onpointerup={onHeaderPointerUp}
-    onpointercancel={onHeaderPointerUp}
+    onpointercancel={onHeaderPointerCancel}
   >
     <span class="title">Tools</span>
     <button

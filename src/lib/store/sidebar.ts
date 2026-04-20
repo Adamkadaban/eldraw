@@ -216,6 +216,17 @@ function createSidebarStore() {
       update((s) => ({ ...s, floatingPos: null }));
     },
 
+    persistFloatingPos() {
+      if (typeof localStorage === 'undefined') return;
+      const pos = get(store).floatingPos;
+      try {
+        if (pos) localStorage.setItem(FLOATING_POS_STORAGE_KEY, JSON.stringify(pos));
+        else localStorage.removeItem(FLOATING_POS_STORAGE_KEY);
+      } catch {
+        // storage full or unavailable; ignore
+      }
+    },
+
     setLaserRadius(radius: number) {
       const clamped = Math.min(MAX_LASER_RADIUS, Math.max(MIN_LASER_RADIUS, radius));
       update((s) => ({ ...s, laser: { ...s.laser, radius: clamped } }));
@@ -371,11 +382,6 @@ export function hydrateSidebarFromStorage(): () => void {
   const unsubscribe = sidebar.subscribe((s) => {
     try {
       localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(s.presets));
-      if (s.floatingPos) {
-        localStorage.setItem(FLOATING_POS_STORAGE_KEY, JSON.stringify(s.floatingPos));
-      } else {
-        localStorage.removeItem(FLOATING_POS_STORAGE_KEY);
-      }
     } catch {
       // storage full or unavailable; ignore
     }
