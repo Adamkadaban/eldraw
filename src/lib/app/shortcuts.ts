@@ -132,6 +132,14 @@ export const shortcuts: Action<HTMLElement> = () => {
       case 'Y':
         sidebar.setTool('temp-ink');
         return;
+      case 'a':
+      case 'A':
+        sidebar.setTool('protractor');
+        return;
+      case 'u':
+      case 'U':
+        sidebar.setTool('ruler');
+        return;
       case 'd':
       case 'D':
         sidebar.cycleDash();

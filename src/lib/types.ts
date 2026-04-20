@@ -22,7 +22,9 @@ export type ToolKind =
   | 'select'
   | 'pan'
   | 'laser'
-  | 'temp-ink';
+  | 'temp-ink'
+  | 'protractor'
+  | 'ruler';
 
 export type ShapeKind = 'rect' | 'ellipse';
 
