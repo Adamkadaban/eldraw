@@ -20,6 +20,7 @@
   import { startAutosave } from '$lib/store/autosave';
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
   import { presenterStore } from '$lib/store/presenter';
+  import { zenStore } from '$lib/store/zen';
   import { startToolBridge } from '$lib/app/toolBridge';
   import { shortcuts } from '$lib/app/shortcuts';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
@@ -52,6 +53,9 @@
   const sidebarState = $derived($sidebar);
   const presenterState = $derived($presenterStore);
   const isPresenter = $derived(presenterState.active);
+  const zenState = $derived($zenStore);
+  const isZen = $derived(zenState.active);
+  const chromeHidden = $derived(isPresenter || isZen);
   const pages = $derived(doc?.pages ?? []);
 
   function onThumbPick(i: number): void {
@@ -330,17 +334,18 @@
   class="app"
   class:pinned={sidebarState.pinned}
   class:presenter={isPresenter}
-  class:has-thumbs={!isPresenter && pages.length > 0}
+  class:zen={isZen}
+  class:has-thumbs={!chromeHidden && pages.length > 0}
   use:shortcuts
   tabindex="-1"
   role="application"
 >
-  {#if !isPresenter}
+  {#if !chromeHidden}
     <Sidebar />
   {/if}
 
   <section class="main">
-    {#if !isPresenter}
+    {#if !chromeHidden}
       <header class="topbar">
         <button type="button" class="topbar-btn" onclick={openFromDialog}>Open PDF…</button>
         <div class="pager">
@@ -483,7 +488,7 @@
     </div>
   </section>
 
-  {#if !isPresenter && pages.length > 0}
+  {#if !chromeHidden && pages.length > 0}
     <ThumbnailStrip
       {pages}
       currentIndex={pageIndex}
@@ -493,6 +498,10 @@
       onduplicate={onThumbDuplicate}
       ondelete={onThumbDelete}
     />
+  {/if}
+
+  {#if isZen}
+    <div class="zen-hint" role="status">Zen mode — Shift+Z or Esc to exit</div>
   {/if}
 
   {#if editor && editorInitial}
@@ -548,6 +557,37 @@
   }
   .app.presenter .canvas-area {
     background: #000;
+  }
+  .app.zen {
+    grid-template-columns: 1fr;
+  }
+  .zen-hint {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 20, 20, 0.85);
+    color: #ddd;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    pointer-events: none;
+    animation: zen-hint-fade 2.4s ease-out forwards;
+    z-index: 1000;
+  }
+  @keyframes zen-hint-fade {
+    0% {
+      opacity: 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    70% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
   }
   .main {
     display: flex;

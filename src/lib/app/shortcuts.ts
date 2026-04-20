@@ -4,6 +4,7 @@ import { sidebar, styleKeyFor } from '$lib/store/sidebar';
 import { documentStore, currentDocument } from '$lib/store/document';
 import { viewport } from '$lib/store/viewport';
 import { presenter } from '$lib/store/presenter';
+import { zen } from '$lib/store/zen';
 import { isEditableTarget } from './shortcutParser';
 
 /**
@@ -79,6 +80,24 @@ export const shortcuts: Action<HTMLElement> = () => {
     if (key === 'Escape' && presenter.isActive()) {
       event.preventDefault();
       presenter.exit();
+      return;
+    }
+
+    if (key === 'Escape' && zen.isActive()) {
+      event.preventDefault();
+      zen.exit();
+      return;
+    }
+
+    if (
+      event.shiftKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      (key === 'Z' || key === 'z')
+    ) {
+      event.preventDefault();
+      zen.toggle();
       return;
     }
 
