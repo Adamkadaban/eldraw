@@ -27,6 +27,7 @@ pdfium-render = { version = "0.9", default-features = false, features = [
   "thread_safe",
 ] }
 image = "0.25"
+tauri-plugin-dialog = "2.7.0"
 
 [dev-dependencies]
 tempfile = "3"

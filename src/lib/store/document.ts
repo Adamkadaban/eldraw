@@ -11,7 +11,7 @@ export interface DocumentStore {
   removeObject(pageIndex: number, id: ObjectId): void;
   updateObject(pageIndex: number, id: ObjectId, patch: Partial<AnyObject>): void;
 
-  insertBlankPageAfter(pdfPageIndex: number, width: number, height: number): void;
+  insertBlankPageAfter(afterArrayIndex: number, width: number, height: number): void;
 
   undo(pageIndex: number): void;
   redo(pageIndex: number): void;
@@ -31,6 +31,33 @@ function replacePage(doc: EldrawDocument, pageIndex: number, next: Page): Eldraw
     ...doc,
     pages: doc.pages.map((p, i) => (i === pageIndex ? next : p)),
   };
+}
+
+/**
+ * Return the stable underlying PDF page index for the page at the given
+ * array position. Returns null for blank pages (which have no PDF to render).
+ */
+export function pdfPageIndexAt(pages: readonly Page[], arrayIndex: number): number | null {
+  const page = pages[arrayIndex];
+  if (!page || page.type !== 'pdf') return null;
+  let count = 0;
+  for (let i = 0; i < arrayIndex; i += 1) {
+    if (pages[i].type === 'pdf') count += 1;
+  }
+  return count;
+}
+
+/**
+ * Return the PDF page index that the page at arrayIndex follows. For a pdf
+ * page this is its own PDF index; for a blank page it is the last PDF page
+ * at or before it (or null if no PDF page precedes it).
+ */
+function lastPdfIndexAtOrBefore(pages: readonly Page[], arrayIndex: number): number | null {
+  let count = -1;
+  for (let i = 0; i <= arrayIndex && i < pages.length; i += 1) {
+    if (pages[i].type === 'pdf') count += 1;
+  }
+  return count < 0 ? null : count;
 }
 
 export function createDocumentStore(): DocumentStore {
@@ -89,14 +116,15 @@ export function createDocumentStore(): DocumentStore {
       pushAndApply(pageIndex, { type: 'update', objectId: id, before, after });
     },
 
-    insertBlankPageAfter(pdfPageIndex, width, height) {
+    insertBlankPageAfter(afterArrayIndex, width, height) {
       state.update((doc) => {
         if (!doc) return doc;
-        const insertIdx = pdfPageIndex + 1;
+        const insertIdx = afterArrayIndex + 1;
+        const insertedAfterPdfPage = lastPdfIndexAtOrBefore(doc.pages, afterArrayIndex);
         const blank: Page = {
           pageIndex: insertIdx,
           type: 'blank',
-          insertedAfterPdfPage: pdfPageIndex,
+          insertedAfterPdfPage,
           width,
           height,
           objects: [],
