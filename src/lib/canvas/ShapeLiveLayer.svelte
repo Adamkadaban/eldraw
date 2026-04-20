@@ -115,11 +115,7 @@
   function commit(): void {
     const obj = previewObject();
     if (!obj) return;
-    const id = (
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `obj-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    ) as string;
+    const id = crypto.randomUUID();
     if (obj.type === 'shape' && (obj.bounds.w < 1 || obj.bounds.h < 1)) return;
     if (obj.type === 'line') {
       const dx = obj.to.x - obj.from.x;

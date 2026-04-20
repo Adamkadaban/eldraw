@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { currentStyle, sidebar } from '$lib/store/sidebar';
+  import { currentStyle, sidebar, styleKeyFor } from '$lib/store/sidebar';
   import type { DashStyle, StrokeStyle, ToolKind } from '$lib/types';
   import ColorPalette from './ColorPalette.svelte';
   import WidthPicker from './WidthPicker.svelte';
@@ -41,9 +41,8 @@
     if (disabled) return;
     sidebar.setTool(tool);
     onToolChange?.(tool);
-    if (tool === 'pen' || tool === 'highlighter' || tool === 'line') {
-      onStyleChange?.(sidebar.snapshot().toolStyles[tool]);
-    }
+    const key = styleKeyFor(tool);
+    if (key) onStyleChange?.(sidebar.snapshot().toolStyles[key]);
   }
 
   function onLaserRadius(e: Event) {

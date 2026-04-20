@@ -82,7 +82,7 @@ export function drawShape(ctx: CanvasRenderingContext2D, shape: ShapeObject, ptT
   } else {
     ctx.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2);
   }
-  if (shape.fill) {
+  if (shape.fill !== null) {
     ctx.fillStyle = shape.fill;
     ctx.fill();
   }

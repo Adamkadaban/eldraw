@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { AnyObject, LineObject, NumberLineObject, ShapeObject } from '$lib/types';
+  import type { AnyObject } from '$lib/types';
   import { drawLine, drawNumberLine, drawShape } from './objectRenderer';
 
   interface Props {
@@ -20,9 +20,9 @@
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const o of objects) {
-      if (o.type === 'line') drawLine(ctx, o as LineObject, ptToPx);
-      else if (o.type === 'shape') drawShape(ctx, o as ShapeObject, ptToPx);
-      else if (o.type === 'numberline') drawNumberLine(ctx, o as NumberLineObject, ptToPx);
+      if (o.type === 'line') drawLine(ctx, o, ptToPx);
+      else if (o.type === 'shape') drawShape(ctx, o, ptToPx);
+      else if (o.type === 'numberline') drawNumberLine(ctx, o, ptToPx);
     }
   }
 
