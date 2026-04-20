@@ -42,7 +42,7 @@
         aria-pressed={style === value}
         onclick={() => select(style)}
       >
-        <svg viewBox="0 0 60 12" width="60" height="12" aria-hidden="true">
+        <svg viewBox="0 0 60 12" preserveAspectRatio="none" class="dash-svg" aria-hidden="true">
           <line
             x1="2"
             y1="6"
@@ -97,6 +97,14 @@
     cursor: pointer;
     display: grid;
     place-items: center;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .dash-svg {
+    display: block;
+    width: 100%;
+    height: 12px;
+    max-width: 60px;
   }
   .option:hover {
     border-color: #555;
