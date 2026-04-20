@@ -110,7 +110,8 @@
   }
 
   function onPointerMove(e: PointerEvent) {
-    if (!active || activePointerId !== e.pointerId) return;
+    if (!active) return;
+    if (activePointerId !== null && activePointerId !== e.pointerId) return;
     pushPoint(e);
     e.preventDefault();
   }
@@ -132,6 +133,12 @@
       rafId = null;
     }
     clear();
+  }
+
+  function onPointerLeave(e: PointerEvent) {
+    if (!active) return;
+    if (activePointerId !== null && activePointerId !== e.pointerId) return;
+    reset();
   }
 
   $effect(() => {
@@ -164,6 +171,7 @@
   onpointermove={onPointerMove}
   onpointerup={onPointerUp}
   onpointercancel={onPointerUp}
+  onpointerleave={onPointerLeave}
 ></canvas>
 
 <style>
