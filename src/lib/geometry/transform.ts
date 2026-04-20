@@ -27,7 +27,7 @@ export function distance(a: Vec2, b: Vec2): number {
 
 /**
  * Screen-space angle in degrees from `origin` to `p`, measured CCW from the
- * positive x-axis. Result is in (-180, 180].
+ * positive x-axis. Result is in [-180, 180].
  */
 export function angleDeg(origin: Vec2, p: Vec2): number {
   return (Math.atan2(p.y - origin.y, p.x - origin.x) * 180) / Math.PI;

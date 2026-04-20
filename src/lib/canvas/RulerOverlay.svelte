@@ -49,12 +49,11 @@
     if (drag.kind === 'move') {
       overlays.moveRuler({ x: p.x - drag.offset.x, y: p.y - drag.offset.y });
     } else {
-      const startAngle = Math.atan2(
-        drag.startPointer.y - ruler.from.y,
-        drag.startPointer.x - ruler.from.x,
-      );
-      const currentAngle = Math.atan2(p.y - ruler.from.y, p.x - ruler.from.x);
-      const delta = ((currentAngle - startAngle) * 180) / Math.PI;
+      const ax = drag.startPointer.x - ruler.from.x;
+      const ay = drag.startPointer.y - ruler.from.y;
+      const bx = p.x - ruler.from.x;
+      const by = p.y - ruler.from.y;
+      const delta = (Math.atan2(ax * by - ay * bx, ax * bx + ay * by) * 180) / Math.PI;
       overlays.rotateRuler(drag.startRotation + delta);
     }
   }
@@ -94,22 +93,29 @@
       aria-label="Move ruler"
       onpointerdown={onBodyPointerDown}
     />
-    {#each ticks as t (t.along)}
-      <line
-        x1={t.along * ptToPx}
-        y1={0}
-        x2={t.along * ptToPx}
-        y2={(t.isMajor ? 10 : 4) * (ptToPx / 72) * 72 * 0.5}
-        stroke="#1e88e5"
-        stroke-width={t.isMajor ? 1.2 : 0.6}
-      />
-      {#if t.label}
-        <text x={t.along * ptToPx} y={18} font-size="9" fill="#1565c0" text-anchor="middle">
-          {t.label}
-        </text>
-      {/if}
-    {/each}
   </g>
+
+  {#each ticks as t (t.along)}
+    <line
+      x1={t.root.x * ptToPx}
+      y1={t.root.y * ptToPx}
+      x2={t.tip.x * ptToPx}
+      y2={t.tip.y * ptToPx}
+      stroke="#1e88e5"
+      stroke-width={t.isMajor ? 1.2 : 0.6}
+    />
+    {#if t.label}
+      <text
+        x={t.tip.x * ptToPx}
+        y={t.tip.y * ptToPx + 10}
+        font-size="9"
+        fill="#1565c0"
+        text-anchor="middle"
+      >
+        {t.label}
+      </text>
+    {/if}
+  {/each}
 
   <circle
     class="end-handle"

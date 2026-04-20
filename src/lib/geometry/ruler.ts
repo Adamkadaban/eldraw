@@ -52,13 +52,13 @@ function defaultOptsFor(unit: RulerUnit): RulerTickOptions {
 export function rulerTicks(state: RulerState, opts: Partial<RulerTickOptions> = {}): RulerTick[] {
   const base = defaultOptsFor(state.unit);
   const o = { ...base, ...opts };
-  const pxPerUnit = ptPerUnit(state.unit);
-  const totalUnits = state.length / pxPerUnit;
+  const ptPerUnitValue = ptPerUnit(state.unit);
+  const totalUnits = state.length / ptPerUnitValue;
   const ticks: RulerTick[] = [];
   const majorStep = Math.round(o.major / o.minor);
   const count = Math.floor(totalUnits / o.minor);
   for (let i = 0; i <= count; i += 1) {
-    const along = i * o.minor * pxPerUnit;
+    const along = i * o.minor * ptPerUnitValue;
     const isMajor = majorStep > 0 && i % majorStep === 0;
     const len = isMajor ? o.majorLen : o.minorLen;
     const root = rotate({ x: state.from.x + along, y: state.from.y }, state.rotation, state.from);
@@ -80,7 +80,6 @@ export function rulerTicks(state: RulerState, opts: Partial<RulerTickOptions> = 
 
 function formatMajorLabel(valueInUnit: number, unit: RulerUnit): string {
   if (unit === 'pt') return String(Math.round(valueInUnit));
-  if (unit === 'cm') return `${Math.round(valueInUnit / 10)}`;
   return `${Math.round(valueInUnit)}`;
 }
 

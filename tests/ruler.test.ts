@@ -40,7 +40,7 @@ describe('rulerTicks', () => {
     const ticks = rulerTicks(base);
     const majors = ticks.filter((t) => t.isMajor);
     expect(majors[0].label).toBe('0');
-    expect(majors.at(-1)?.label).toBe('1');
+    expect(majors.at(-1)?.label).toBe('10');
   });
 
   it('rotation shifts tick root positions', () => {

@@ -53,12 +53,11 @@
         y: p.y - drag.offset.y,
       });
     } else {
-      const startAngle = Math.atan2(
-        drag.startPointer.y - proto.center.y,
-        drag.startPointer.x - proto.center.x,
-      );
-      const currentAngle = Math.atan2(p.y - proto.center.y, p.x - proto.center.x);
-      const delta = ((currentAngle - startAngle) * 180) / Math.PI;
+      const ax = drag.startPointer.x - proto.center.x;
+      const ay = drag.startPointer.y - proto.center.y;
+      const bx = p.x - proto.center.x;
+      const by = p.y - proto.center.y;
+      const delta = (Math.atan2(ax * by - ay * bx, ax * bx + ay * by) * 180) / Math.PI;
       overlays.rotateProtractor(drag.startRotation + delta);
     }
   }
