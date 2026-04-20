@@ -110,7 +110,7 @@
   }
 
   function onPointerMove(e: PointerEvent) {
-    if (!active || activePointerId !== e.pointerId) return;
+    if (!active) return;
     pushPoint(e);
     e.preventDefault();
   }
@@ -123,6 +123,16 @@
       // not captured; ignore
     }
     activePointerId = null;
+  }
+
+  function onPointerLeave() {
+    if (!active) return;
+    trail = [];
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    clear();
   }
 
   function reset() {
@@ -164,6 +174,7 @@
   onpointermove={onPointerMove}
   onpointerup={onPointerUp}
   onpointercancel={onPointerUp}
+  onpointerleave={onPointerLeave}
 ></canvas>
 
 <style>
