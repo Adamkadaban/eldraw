@@ -111,6 +111,7 @@
 
   function onPointerMove(e: PointerEvent) {
     if (!active) return;
+    if (activePointerId !== null && activePointerId !== e.pointerId) return;
     pushPoint(e);
     e.preventDefault();
   }
@@ -125,8 +126,7 @@
     activePointerId = null;
   }
 
-  function onPointerLeave() {
-    if (!active) return;
+  function reset() {
     trail = [];
     if (rafId !== null) {
       cancelAnimationFrame(rafId);
@@ -135,13 +135,10 @@
     clear();
   }
 
-  function reset() {
-    trail = [];
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-    }
-    clear();
+  function onPointerLeave(e: PointerEvent) {
+    if (!active) return;
+    if (activePointerId !== null && activePointerId !== e.pointerId) return;
+    reset();
   }
 
   $effect(() => {
