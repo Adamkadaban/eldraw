@@ -1,6 +1,6 @@
 {
   "name": "eldraw",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0-rc.2",
   "description": "PDF annotation tool for live math teaching",
   "type": "module",
   "scripts": {
