@@ -30,6 +30,8 @@
     { id: 'ellipse', label: 'Ellipse', shortcut: 'O', icon: '◯' },
     { id: 'numberline', label: 'Number line', shortcut: 'N', icon: '↔' },
     { id: 'graph', label: 'Graph (coming soon)', shortcut: 'G', icon: '📈', disabled: true },
+    { id: 'laser', label: 'Laser', shortcut: 'X', icon: '🔴' },
+    { id: 'temp-ink', label: 'Temp Ink', shortcut: 'Y', icon: '💧' },
   ];
 
   const state = $derived($sidebar);
@@ -42,6 +44,16 @@
     if (tool === 'pen' || tool === 'highlighter' || tool === 'line') {
       onStyleChange?.(sidebar.snapshot().toolStyles[tool]);
     }
+  }
+
+  function onLaserRadius(e: Event) {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (Number.isFinite(v)) sidebar.setLaserRadius(v);
+  }
+
+  function onTempInkFade(e: Event) {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (Number.isFinite(v)) sidebar.setTempInkFadeMs(v);
   }
 
   function onColor(color: string) {
@@ -114,6 +126,37 @@
   <section class="section" aria-label="Dash">
     <DashStyleToggle value={style.dash} onChange={onDash} />
   </section>
+
+  {#if state.activeTool === 'laser'}
+    <section class="section" aria-label="Laser">
+      <h3 class="section-title">Laser radius</h3>
+      <input
+        type="range"
+        min="2"
+        max="24"
+        step="1"
+        value={state.laser.radius}
+        oninput={onLaserRadius}
+        aria-label="Laser radius"
+      />
+      <span class="value">{state.laser.radius}px</span>
+    </section>
+  {/if}
+
+  {#if state.activeTool === 'temp-ink'}
+    <section class="section" aria-label="Temp ink fade">
+      <h3 class="section-title">Fade (ms)</h3>
+      <input
+        type="number"
+        min="500"
+        max="30000"
+        step="100"
+        value={state.tempInkFadeMs}
+        oninput={onTempInkFade}
+        aria-label="Temp ink fade duration in milliseconds"
+      />
+    </section>
+  {/if}
 </aside>
 
 <style>
@@ -230,5 +273,17 @@
     color: #bbb;
     margin: 0;
     font-weight: 500;
+  }
+  .value {
+    font-size: 11px;
+    color: #aaa;
+  }
+  input[type='number'] {
+    background: #1b1b1b;
+    border: 1px solid #333;
+    color: #ddd;
+    border-radius: 4px;
+    padding: 4px 6px;
+    font: inherit;
   }
 </style>

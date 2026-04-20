@@ -6,12 +6,16 @@
     NumberLineObject,
     ShapeObject,
     StrokeObject,
+    StrokeStyle,
+    ToolKind,
   } from '$lib/types';
   import HighlightLayer from './HighlightLayer.svelte';
   import InkLayer from './InkLayer.svelte';
   import LiveLayer from './LiveLayer.svelte';
   import ShapeLayer from './ShapeLayer.svelte';
   import ShapeLiveLayer from './ShapeLiveLayer.svelte';
+  import LaserLayer from './LaserLayer.svelte';
+  import TempInkLayer from './TempInkLayer.svelte';
 
   interface Props {
     strokes: StrokeObject[];
@@ -19,6 +23,11 @@
     width: number;
     height: number;
     ptToPx: number;
+    activeTool?: ToolKind;
+    laserColor?: string;
+    laserRadius?: number;
+    tempInkStyle?: StrokeStyle;
+    tempInkFadeMs?: number;
     overlay?: Snippet;
     oncommit?: (stroke: StrokeObject) => void;
     onerase?: (at: { x: number; y: number }) => void;
@@ -31,6 +40,11 @@
     width,
     height,
     ptToPx,
+    activeTool = 'pen',
+    laserColor = '#ff2d2d',
+    laserRadius = 6,
+    tempInkStyle = { color: '#000000', width: 2, dash: 'solid', opacity: 1 },
+    tempInkFadeMs = 3000,
     overlay,
     oncommit,
     onerase,
@@ -57,6 +71,27 @@
 
   <div class="layer layer-shape-live">
     <ShapeLiveLayer {width} {height} {ptToPx} oncommit={oncommitobject} />
+  </div>
+
+  <div class="layer layer-temp-ink">
+    <TempInkLayer
+      {width}
+      {height}
+      {ptToPx}
+      active={activeTool === 'temp-ink'}
+      style={tempInkStyle}
+      fadeMs={tempInkFadeMs}
+    />
+  </div>
+
+  <div class="layer layer-laser">
+    <LaserLayer
+      {width}
+      {height}
+      active={activeTool === 'laser'}
+      color={laserColor}
+      radius={laserRadius}
+    />
   </div>
 
   {#if overlay}
@@ -91,8 +126,14 @@
   .layer-shape-live {
     z-index: 5;
   }
-  .layer-overlay {
+  .layer-temp-ink {
     z-index: 6;
+  }
+  .layer-laser {
+    z-index: 7;
+  }
+  .layer-overlay {
+    z-index: 8;
     pointer-events: none;
   }
 </style>

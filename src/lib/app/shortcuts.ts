@@ -123,6 +123,14 @@ export const shortcuts: Action<HTMLElement> = () => {
       case 'G':
         sidebar.setTool('graph');
         return;
+      case 'x':
+      case 'X':
+        sidebar.setTool('laser');
+        return;
+      case 'y':
+      case 'Y':
+        sidebar.setTool('temp-ink');
+        return;
       case 'd':
       case 'D':
         sidebar.cycleDash();
