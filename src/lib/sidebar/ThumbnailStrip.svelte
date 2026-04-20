@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { onDestroy, untrack } from 'svelte';
   import type { Page } from '$lib/types';
+  import { renderPage } from '$lib/ipc';
   import { thumbnailSize } from './thumbnailSize';
 
   interface Props {
@@ -23,12 +25,58 @@
   }: Props = $props();
 
   const canDelete = $derived(pages.length > 1);
+
+  /** Rendered thumbnail URLs keyed by pdfSourceIndex (the stable PDF page slot). */
+  let previewUrls = $state(new Map<number, string>());
+  const inflight = new Set<number>();
+
+  function thumbnailScale(widthPt: number): number {
+    if (!widthPt || widthPt <= 0) return 1;
+    const target = Math.max(64, Math.min(maxWidth, 220));
+    return target / widthPt;
+  }
+
+  async function ensureThumbnail(page: Page): Promise<void> {
+    if (page.type !== 'pdf') return;
+    const sourceIndex = page.pdfSourceIndex ?? page.pageIndex;
+    if (previewUrls.has(sourceIndex) || inflight.has(sourceIndex)) return;
+    inflight.add(sourceIndex);
+    try {
+      const bytes = await renderPage(sourceIndex, thumbnailScale(page.width));
+      const blob = new Blob([bytes], { type: 'image/png' });
+      const url = URL.createObjectURL(blob);
+      previewUrls = new Map(previewUrls).set(sourceIndex, url);
+    } catch {
+      // Leave the slot blank on failure; main layer surfaces the error.
+    } finally {
+      inflight.delete(sourceIndex);
+    }
+  }
+
+  $effect(() => {
+    const snapshot = pages;
+    untrack(() => {
+      for (const p of snapshot) void ensureThumbnail(p);
+    });
+  });
+
+  onDestroy(() => {
+    for (const url of previewUrls.values()) URL.revokeObjectURL(url);
+    previewUrls.clear();
+  });
+
+  function previewFor(page: Page): string | undefined {
+    if (page.type !== 'pdf') return undefined;
+    const key = page.pdfSourceIndex ?? page.pageIndex;
+    return previewUrls.get(key);
+  }
 </script>
 
 <aside class="strip" aria-label="Page thumbnails">
   <ul>
     {#each pages as page, i (page.pageIndex)}
       {@const size = thumbnailSize(page.width, page.height, maxWidth)}
+      {@const url = previewFor(page)}
       <li class="row" class:active={i === currentIndex}>
         <button
           type="button"
@@ -40,7 +88,9 @@
           <span
             class="preview"
             class:blank={page.type === 'blank'}
-            style="width: {size.width}px; height: {size.height}px;"
+            style="width: {size.width}px; height: {size.height}px; {url
+              ? `background-image: url('${url}');`
+              : ''}"
           ></span>
           <span class="label">{i + 1}</span>
         </button>
@@ -133,11 +183,14 @@
   }
   .preview {
     display: block;
-    background: #fff;
+    background-color: #fff;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   }
   .preview.blank {
-    background: #fafafa;
+    background-color: #fafafa;
   }
   .label {
     font-size: 11px;
