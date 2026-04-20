@@ -9,6 +9,8 @@
  * Pure logic is exported separately so it can be unit-tested without a DOM.
  */
 
+import { isSafeHexColor } from '$lib/color';
+
 const DOMINANT_FRACTION = 0.5;
 const QUANTIZE_STEP = 16;
 
@@ -95,15 +97,78 @@ export function sampleBackgroundFromPixels(
  * Sample the dominant color from a 2D canvas. Returns `null` when the
  * canvas is unreadable (e.g., tainted by a cross-origin image) or the
  * content is too varied to pick a clear background.
+ *
+ * Reads only the ~9 sample points rather than the whole canvas to keep
+ * large bitmaps cheap.
  */
 export function sampleCanvasBackground(canvas: HTMLCanvasElement): string | null {
-  if (canvas.width === 0 || canvas.height === 0) return null;
+  const { width, height } = canvas;
+  if (width === 0 || height === 0) return null;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return null;
+  const points = pickSamplePoints(width, height);
+  if (points.length === 0) return null;
+
+  const pixels = new Uint8ClampedArray(points.length * 4);
   try {
-    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    return sampleBackgroundFromPixels(data.data, data.width, data.height);
+    for (let i = 0; i < points.length; i += 1) {
+      const { x, y } = points[i];
+      const sample = ctx.getImageData(x, y, 1, 1).data;
+      pixels[i * 4] = sample[0];
+      pixels[i * 4 + 1] = sample[1];
+      pixels[i * 4 + 2] = sample[2];
+      pixels[i * 4 + 3] = sample[3];
+    }
   } catch {
     return null;
   }
+
+  const color = sampleBackgroundFromContiguousPixels(pixels, points.length);
+  return isSafeHexColor(color) ? color : null;
+}
+
+/**
+ * Dominant-color pick over a small packed RGBA buffer of exactly
+ * `sampleCount` pixels (one per sample point). Kept private; the exported
+ * {@link sampleBackgroundFromPixels} continues to accept a full 2D buffer
+ * for unit tests that operate on synthesized images.
+ */
+function sampleBackgroundFromContiguousPixels(
+  pixels: Uint8ClampedArray,
+  sampleCount: number,
+): string | null {
+  const buckets = new Map<number, { count: number; r: number; g: number; b: number }>();
+  let total = 0;
+
+  for (let i = 0; i < sampleCount; i += 1) {
+    const off = i * 4;
+    const r = pixels[off];
+    const g = pixels[off + 1];
+    const b = pixels[off + 2];
+    const a = pixels[off + 3];
+    if (a < 128) continue;
+    const qr = Math.round(r / QUANTIZE_STEP);
+    const qg = Math.round(g / QUANTIZE_STEP);
+    const qb = Math.round(b / QUANTIZE_STEP);
+    const key = (qr << 16) | (qg << 8) | qb;
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.r += r;
+      existing.g += g;
+      existing.b += b;
+    } else {
+      buckets.set(key, { count: 1, r, g, b });
+    }
+    total += 1;
+  }
+
+  if (total === 0) return null;
+  let best: { count: number; r: number; g: number; b: number } | null = null;
+  for (const bucket of buckets.values()) {
+    if (!best || bucket.count > best.count) best = bucket;
+  }
+  if (!best) return null;
+  if (best.count / total < DOMINANT_FRACTION) return null;
+  return toHex(best.r / best.count, best.g / best.count, best.b / best.count);
 }

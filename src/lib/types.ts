@@ -157,7 +157,11 @@ export interface Page {
   /**
    * Fill color for blank pages, sampled from the preceding PDF page when
    * available. Optional for back-compat and for pdf pages (which ignore it).
-   * Any CSS color string; sampler emits `#rrggbb`.
+   *
+   * Invariant: strictly `#rrggbb` (6-digit hex). Any other value is rejected
+   * at the load/insert boundary (see `isSafeHexColor`). This is a trust
+   * boundary — sidecars are untrusted input and this field is interpolated
+   * into CSS at render time.
    */
   background?: string;
   objects: AnyObject[];

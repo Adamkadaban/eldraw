@@ -141,4 +141,53 @@ describe('documentStore', () => {
     store.addObject(0, stroke('a'));
     expect(get(derivedStore).map((o) => o.id)).toEqual(['a']);
   });
+
+  it('load strips non-hex background values from sidecar blank pages', () => {
+    const store = createDocumentStore();
+    const malicious: Page = {
+      pageIndex: 0,
+      type: 'blank',
+      insertedAfterPdfPage: null,
+      width: 500,
+      height: 700,
+      background: 'red; background-image: url(x)',
+      objects: [],
+    };
+    store.load(docWithPages([malicious]));
+    const doc = get(store)!;
+    expect(doc.pages[0].background).toBeUndefined();
+  });
+
+  it('load preserves valid #rrggbb backgrounds', () => {
+    const store = createDocumentStore();
+    const page: Page = {
+      pageIndex: 0,
+      type: 'blank',
+      insertedAfterPdfPage: null,
+      width: 500,
+      height: 700,
+      background: '#abcdef',
+      objects: [],
+    };
+    store.load(docWithPages([page]));
+    const doc = get(store)!;
+    expect(doc.pages[0].background).toBe('#abcdef');
+  });
+
+  it('insertBlankPageAfter ignores non-hex background params', () => {
+    const store = createDocumentStore();
+    store.load(docWithPages([pdfPage(0)]));
+    store.insertBlankPageAfter(0, 500, 700, 'red; background-image: url(x)');
+    const doc = get(store)!;
+    expect(doc.pages[1].type).toBe('blank');
+    expect(doc.pages[1].background).toBeUndefined();
+  });
+
+  it('insertBlankPageAfter accepts valid #rrggbb background params', () => {
+    const store = createDocumentStore();
+    store.load(docWithPages([pdfPage(0)]));
+    store.insertBlankPageAfter(0, 500, 700, '#123456');
+    const doc = get(store)!;
+    expect(doc.pages[1].background).toBe('#123456');
+  });
 });

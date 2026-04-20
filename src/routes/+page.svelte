@@ -418,8 +418,8 @@
           {:else if currentPage?.type === 'blank'}
             <div
               class="blank-slot"
-              style="width: {size.width}px; height: {size.height}px; background: {currentPage.background ??
-                '#fff'};"
+              style="width: {size.width}px; height: {size.height}px;"
+              style:background-color={currentPage.background ?? '#fff'}
             ></div>
           {/if}
           <div class="stack-slot">

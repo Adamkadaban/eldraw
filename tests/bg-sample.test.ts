@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { pickSamplePoints, sampleBackgroundFromPixels } from '$lib/canvas/bgSample';
+import {
+  pickSamplePoints,
+  sampleBackgroundFromPixels,
+  sampleCanvasBackground,
+} from '$lib/canvas/bgSample';
+import { isSafeHexColor } from '$lib/color';
 
 function solidImage(
   width: number,
@@ -83,5 +88,72 @@ describe('sampleBackgroundFromPixels', () => {
   it('ignores fully transparent pixels', () => {
     const pixels = new Uint8ClampedArray(20 * 20 * 4);
     expect(sampleBackgroundFromPixels(pixels, 20, 20)).toBeNull();
+  });
+});
+
+describe('isSafeHexColor', () => {
+  it('accepts strict 6-digit hex', () => {
+    expect(isSafeHexColor('#ffffff')).toBe(true);
+    expect(isSafeHexColor('#000000')).toBe(true);
+    expect(isSafeHexColor('#AaBbCc')).toBe(true);
+  });
+
+  it('rejects short hex, non-hex, and injection payloads', () => {
+    expect(isSafeHexColor('#fff')).toBe(false);
+    expect(isSafeHexColor('red')).toBe(false);
+    expect(isSafeHexColor('rgb(0,0,0)')).toBe(false);
+    expect(isSafeHexColor('#ggggggg')).toBe(false);
+    expect(isSafeHexColor('#ffffff ')).toBe(false);
+    expect(isSafeHexColor('red; background-image: url(x)')).toBe(false);
+    expect(isSafeHexColor('#ffffff; background-image: url(x)')).toBe(false);
+    expect(isSafeHexColor(undefined)).toBe(false);
+    expect(isSafeHexColor(null)).toBe(false);
+    expect(isSafeHexColor(123)).toBe(false);
+  });
+});
+
+describe('sampleCanvasBackground', () => {
+  function fakeCanvas(width: number, height: number, rgba: [number, number, number, number]) {
+    return {
+      width,
+      height,
+      getContext: () => ({
+        getImageData: (_x: number, _y: number, w: number, h: number) => ({
+          data: new Uint8ClampedArray([...rgba]),
+          width: w,
+          height: h,
+        }),
+      }),
+    } as unknown as HTMLCanvasElement;
+  }
+
+  it('samples at most 9 pixels (one per sample point)', () => {
+    let calls = 0;
+    const canvas = {
+      width: 1000,
+      height: 1000,
+      getContext: () => ({
+        getImageData: (_x: number, _y: number, w: number, h: number) => {
+          calls += 1;
+          expect(w).toBe(1);
+          expect(h).toBe(1);
+          return { data: new Uint8ClampedArray([240, 240, 240, 255]), width: 1, height: 1 };
+        },
+      }),
+    } as unknown as HTMLCanvasElement;
+    const color = sampleCanvasBackground(canvas);
+    expect(calls).toBe(9);
+    expect(color).toBe('#f0f0f0');
+  });
+
+  it('returns a valid #rrggbb string', () => {
+    const canvas = fakeCanvas(50, 50, [255, 255, 255, 255]);
+    const color = sampleCanvasBackground(canvas);
+    expect(color).toBe('#ffffff');
+    expect(isSafeHexColor(color!)).toBe(true);
+  });
+
+  it('returns null for zero-size canvases', () => {
+    expect(sampleCanvasBackground(fakeCanvas(0, 100, [0, 0, 0, 255]))).toBeNull();
   });
 });
