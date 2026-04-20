@@ -5,7 +5,7 @@ export async function openPdf(path: string): Promise<PdfMeta> {
   return invoke('open_pdf', { path });
 }
 
-export async function renderPage(pageIndex: number, scale: number): Promise<Uint8Array> {
+export async function renderPage(pageIndex: number, scale: number): Promise<ArrayBuffer> {
   return invoke('render_page', { pageIndex, scale });
 }
 
