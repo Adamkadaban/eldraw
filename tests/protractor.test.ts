@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { get } from 'svelte/store';
 import { angleAtPoint, protractorTicks, type ProtractorState } from '$lib/geometry/protractor';
+import { overlays } from '$lib/store/overlays';
 
 const baseState: ProtractorState = {
   center: { x: 0, y: 0 },
@@ -14,9 +16,13 @@ describe('protractor ticks', () => {
     expect(ticks.length).toBe(181);
   });
 
-  it('full protractor has 361 minor ticks', () => {
+  it('full protractor has 360 minor ticks (no duplicate 0/360)', () => {
     const ticks = protractorTicks({ ...baseState, shape: 'full' });
-    expect(ticks.length).toBe(361);
+    expect(ticks.length).toBe(360);
+    expect(ticks.some((t) => t.angle === 360)).toBe(false);
+    const labels = ticks.filter((t) => t.label !== null).map((t) => t.label);
+    expect(labels.filter((l) => l === '0').length).toBe(1);
+    expect(labels).not.toContain('360');
   });
 
   it('major ticks carry labels every 10°', () => {
@@ -25,6 +31,24 @@ describe('protractor ticks', () => {
     expect(labelled.length).toBe(19);
     expect(labelled[0].label).toBe('0');
     expect(labelled.at(-1)?.label).toBe('180');
+  });
+
+  it('full protractor labels every 10° include 0..350', () => {
+    const ticks = protractorTicks({ ...baseState, shape: 'full' });
+    const labels = ticks.filter((t) => t.label !== null).map((t) => t.label);
+    expect(labels).toContain('0');
+    expect(labels).toContain('90');
+    expect(labels).toContain('180');
+    expect(labels).toContain('270');
+    expect(labels).toContain('350');
+  });
+
+  it('full protractor sweeps all four quadrants', () => {
+    const ticks = protractorTicks({ ...baseState, shape: 'full' });
+    const byAngle = (a: number) => ticks.find((t) => t.angle === a)!;
+    expect(byAngle(90).outer.y).toBeCloseTo(100);
+    expect(byAngle(180).outer.x).toBeCloseTo(-100);
+    expect(byAngle(270).outer.y).toBeCloseTo(-100);
   });
 
   it('0° tick sits on +x at outer radius', () => {
@@ -58,5 +82,16 @@ describe('angleAtPoint', () => {
     const a = angleAtPoint(baseState, { x: -10, y: -10 });
     expect(a).toBeGreaterThanOrEqual(0);
     expect(a).toBeLessThan(360);
+  });
+});
+
+describe('protractor shape toggle', () => {
+  it('setProtractorShape flips between semi and full', () => {
+    overlays.reset();
+    expect(get(overlays).protractor.shape).toBe('semi');
+    overlays.setProtractorShape('full');
+    expect(get(overlays).protractor.shape).toBe('full');
+    overlays.setProtractorShape('semi');
+    expect(get(overlays).protractor.shape).toBe('semi');
   });
 });

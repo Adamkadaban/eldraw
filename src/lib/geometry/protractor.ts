@@ -42,6 +42,7 @@ export function protractorTicks(
   const sweep = state.shape === 'semi' ? 180 : 360;
   const ticks: ProtractorTick[] = [];
   for (let a = 0; a <= sweep; a += o.minor) {
+    if (state.shape === 'full' && a === sweep) break;
     const isMajor = a % o.major === 0;
     const innerR = state.radius * (isMajor ? o.majorInner : o.minorInner);
     const outer = rotate(
@@ -60,7 +61,6 @@ export function protractorTicks(
       inner,
       label: isMajor ? String(a) : null,
     });
-    if (a === sweep && state.shape === 'full') break;
   }
   return ticks;
 }

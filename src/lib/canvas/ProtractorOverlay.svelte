@@ -66,6 +66,20 @@
     drag = null;
   }
 
+  function onToggleShape(e: MouseEvent) {
+    e.stopPropagation();
+    overlays.setProtractorShape(proto.shape === 'semi' ? 'full' : 'semi');
+  }
+
+  function onToggleKey(e: KeyboardEvent) {
+    if (e.repeat) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      overlays.setProtractorShape(proto.shape === 'semi' ? 'full' : 'semi');
+    }
+  }
+
   const cx = $derived(proto.center.x * ptToPx);
   const cy = $derived(proto.center.y * ptToPx);
   const r = $derived(proto.radius * ptToPx);
@@ -155,6 +169,29 @@
       {cursorAngle.toFixed(1)}°
     </text>
   {/if}
+
+  <g
+    class="shape-toggle"
+    role="button"
+    tabindex="0"
+    aria-label={proto.shape === 'semi' ? 'Switch to full circle' : 'Switch to half circle'}
+    aria-pressed={proto.shape === 'full'}
+    transform={`translate(${cx + 16}, ${cy - 10})`}
+    onclick={onToggleShape}
+    onkeydown={onToggleKey}
+  >
+    <rect width="36" height="20" rx="4" fill="#fff" stroke="#b38600" stroke-width="1" />
+    <text
+      x="18"
+      y="10"
+      font-size="10"
+      fill="#8a6600"
+      text-anchor="middle"
+      dominant-baseline="middle"
+    >
+      {proto.shape === 'semi' ? '180°' : '360°'}
+    </text>
+  </g>
 </svg>
 
 <style>
@@ -170,5 +207,11 @@
   }
   .center {
     cursor: grab;
+  }
+  .shape-toggle {
+    cursor: pointer;
+  }
+  .shape-toggle:hover rect {
+    fill: #fff6dc;
   }
 </style>
