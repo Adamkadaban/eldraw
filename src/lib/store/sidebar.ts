@@ -259,18 +259,54 @@ export const sidebar = createSidebarStore();
 
 const PRESETS_STORAGE_KEY = 'eldraw.presets.v1';
 
+const VALID_TOOLS: ReadonlySet<ToolKind> = new Set<ToolKind>([
+  'pen',
+  'highlighter',
+  'eraser',
+  'line',
+  'rect',
+  'ellipse',
+  'numberline',
+  'graph',
+  'text',
+  'select',
+  'pan',
+  'laser',
+  'temp-ink',
+  'protractor',
+  'ruler',
+]);
+
+const VALID_DASH: ReadonlySet<DashStyle> = new Set<DashStyle>(['solid', 'dashed', 'dotted']);
+
+function clamp(n: number, lo: number, hi: number): number {
+  if (!Number.isFinite(n)) return lo;
+  return Math.max(lo, Math.min(hi, n));
+}
+
 function isValidPreset(value: unknown): value is ToolPreset {
   if (!value || typeof value !== 'object') return false;
   const p = value as Record<string, unknown>;
-  if (typeof p.id !== 'string' || typeof p.tool !== 'string') return false;
+  if (typeof p.id !== 'string') return false;
+  if (typeof p.tool !== 'string' || !VALID_TOOLS.has(p.tool as ToolKind)) return false;
   const style = p.style as Record<string, unknown> | undefined;
   if (!style || typeof style !== 'object') return false;
-  return (
-    typeof style.color === 'string' &&
-    typeof style.width === 'number' &&
-    typeof style.dash === 'string' &&
-    typeof style.opacity === 'number'
-  );
+  if (typeof style.color !== 'string') return false;
+  if (typeof style.dash !== 'string' || !VALID_DASH.has(style.dash as DashStyle)) return false;
+  if (typeof style.width !== 'number' || !Number.isFinite(style.width)) return false;
+  if (typeof style.opacity !== 'number' || !Number.isFinite(style.opacity)) return false;
+  return true;
+}
+
+function sanitizePreset(p: ToolPreset): ToolPreset {
+  return {
+    ...p,
+    style: {
+      ...p.style,
+      width: clamp(p.style.width, 0.25, 64),
+      opacity: clamp(p.style.opacity, 0, 1),
+    },
+  };
 }
 
 function loadPersistedPresets(): ToolPreset[] | null {
@@ -280,25 +316,40 @@ function loadPersistedPresets(): ToolPreset[] | null {
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
-    return parsed.filter(isValidPreset).slice(0, MAX_PRESETS);
+    return parsed.filter(isValidPreset).map(sanitizePreset).slice(0, MAX_PRESETS);
   } catch {
     return null;
   }
 }
 
-export function hydrateSidebarFromStorage(): void {
+let hydrated = false;
+let hydrationUnsubscribe: (() => void) | null = null;
+
+export function hydrateSidebarFromStorage(): () => void {
+  if (hydrated) return hydrationUnsubscribe ?? (() => undefined);
+  hydrated = true;
+
   const presets = loadPersistedPresets();
   if (presets && presets.length > 0) sidebar.setPresets(presets);
 
-  if (typeof localStorage !== 'undefined') {
-    sidebar.subscribe((s) => {
-      try {
-        localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(s.presets));
-      } catch {
-        // storage full or unavailable; ignore
-      }
-    });
+  if (typeof localStorage === 'undefined') {
+    hydrationUnsubscribe = () => undefined;
+    return hydrationUnsubscribe;
   }
+
+  const unsubscribe = sidebar.subscribe((s) => {
+    try {
+      localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(s.presets));
+    } catch {
+      // storage full or unavailable; ignore
+    }
+  });
+  hydrationUnsubscribe = () => {
+    unsubscribe();
+    hydrated = false;
+    hydrationUnsubscribe = null;
+  };
+  return hydrationUnsubscribe;
 }
 
 export const currentStyle: Readable<StrokeStyle> = derived(sidebar, (s) => {

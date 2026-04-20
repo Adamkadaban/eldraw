@@ -303,14 +303,17 @@
     else if (event.deltaY > 0) viewport.zoomOut();
   }
 
+  let stopHydration: (() => void) | null = null;
+
   onMount(() => {
-    hydrateSidebarFromStorage();
+    stopHydration = hydrateSidebarFromStorage();
     stopBridge = startToolBridge();
   });
 
   onDestroy(() => {
     stopBridge?.();
     stopAutosave?.();
+    stopHydration?.();
   });
 </script>
 

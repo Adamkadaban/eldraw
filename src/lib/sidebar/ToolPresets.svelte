@@ -42,7 +42,7 @@
   </div>
   {#if presets.length === 0}
     <p class="empty">
-      Configure a tool, then press <kbd>+</kbd> to save it. Recall with <kbd>Ctrl</kbd>+<kbd
+      Configure a tool, then click <kbd>+</kbd> to save it. Recall with <kbd>Ctrl</kbd>+<kbd
         >1-9</kbd
       >.
     </p>
@@ -188,7 +188,8 @@
     display: none;
     padding: 0;
   }
-  .slot:hover .remove {
+  .slot:hover .remove,
+  .slot:focus-within .remove {
     display: block;
   }
   .remove:hover {
