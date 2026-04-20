@@ -52,27 +52,30 @@ export function drawStroke(
   const widthPx = stroke.style.width * ptToPx;
   const input = inputToPx(stroke.points, ptToPx);
 
-  const outline = getStroke(input, {
-    size: widthPx * 2,
-    thinning: 0.6,
-    smoothing: 0.5,
-    streamline: 0.5,
-    simulatePressure: opts.simulatePressure ?? false,
-    last: true,
-  });
+  const outline =
+    stroke.style.dash === 'solid'
+      ? getStroke(input, {
+          size: widthPx * 2,
+          thinning: 0.6,
+          smoothing: 0.5,
+          streamline: 0.5,
+          simulatePressure: opts.simulatePressure ?? false,
+          last: true,
+        })
+      : [];
 
   ctx.save();
   ctx.globalAlpha = stroke.style.opacity;
-  ctx.fillStyle = stroke.style.color;
 
-  if (outline.length > 0) {
-    const path = new Path2D(toSvgPath(outline));
-    ctx.fill(path);
-  }
-
-  if (stroke.style.dash !== 'solid' && input.length > 1) {
+  if (stroke.style.dash === 'solid') {
+    ctx.fillStyle = stroke.style.color;
+    if (outline.length > 0) {
+      const path = new Path2D(toSvgPath(outline));
+      ctx.fill(path);
+    }
+  } else if (input.length > 1) {
     ctx.strokeStyle = stroke.style.color;
-    ctx.lineWidth = Math.max(1, widthPx * 0.6);
+    ctx.lineWidth = Math.max(0.5, widthPx);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.setLineDash(dashPattern(stroke.style.dash, widthPx));
@@ -83,6 +86,11 @@ export function drawStroke(
     }
     ctx.stroke();
     ctx.setLineDash([]);
+  } else if (input.length === 1) {
+    ctx.fillStyle = stroke.style.color;
+    ctx.beginPath();
+    ctx.arc(input[0][0], input[0][1], Math.max(0.5, widthPx / 2), 0, Math.PI * 2);
+    ctx.fill();
   }
 
   ctx.restore();
