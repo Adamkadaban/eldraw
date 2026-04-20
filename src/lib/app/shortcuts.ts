@@ -111,6 +111,10 @@ export const shortcuts: Action<HTMLElement> = () => {
       case 'G':
         sidebar.setTool('graph');
         return;
+      case 't':
+      case 'T':
+        sidebar.setTool('text');
+        return;
       case 'd':
       case 'D':
         sidebar.cycleDash();

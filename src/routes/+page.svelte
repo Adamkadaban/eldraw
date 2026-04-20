@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { CanvasStack, PdfLayer } from '$lib/canvas';
+  import { CanvasStack, PdfLayer, TextLayer, TextEditor } from '$lib/canvas';
   import { Sidebar } from '$lib/sidebar';
   import { openAndLoadPdf } from '$lib/ipc/pdf';
   import { loadSidecar } from '$lib/ipc';
@@ -13,7 +13,7 @@
   import { shortcuts } from '$lib/app/shortcuts';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
   import { hitTestStrokes } from '$lib/tools/eraser';
-  import type { AnyObject, EldrawDocument, PdfMeta, StrokeObject } from '$lib/types';
+  import type { AnyObject, EldrawDocument, PdfMeta, StrokeObject, TextObject } from '$lib/types';
 
   const ERASER_RADIUS = 4;
 
@@ -34,6 +34,77 @@
   const pageStrokes = $derived<StrokeObject[]>(
     pageObjects.filter((o): o is StrokeObject => o.type === 'stroke'),
   );
+  const pageTextObjects = $derived<TextObject[]>(
+    pageObjects.filter((o): o is TextObject => o.type === 'text'),
+  );
+  const isTextTool = $derived(sidebarState.activeTool === 'text');
+
+  type EditorState =
+    | { mode: 'create'; at: { x: number; y: number }; screen: { x: number; y: number } }
+    | { mode: 'edit'; obj: TextObject; screen: { x: number; y: number } };
+
+  let editor: EditorState | null = $state(null);
+
+  const editorInitial = $derived.by(() => {
+    if (!editor) return null;
+    if (editor.mode === 'edit') {
+      const o = editor.obj;
+      return { content: o.content, latex: o.latex, fontSize: o.fontSize, color: o.color };
+    }
+    return { content: '', latex: false, fontSize: 16, color: '#000000' };
+  });
+
+  function newId(): string {
+    return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function onTextEmptyClick(at: { x: number; y: number }, screen: { x: number; y: number }): void {
+    if (!isTextTool) return;
+    editor = { mode: 'create', at, screen };
+  }
+
+  function onTextPick(obj: TextObject, screen: { x: number; y: number }): void {
+    if (!isTextTool) return;
+    editor = { mode: 'edit', obj, screen };
+  }
+
+  function onEditorOk(result: {
+    content: string;
+    latex: boolean;
+    fontSize: number;
+    color: string;
+  }): void {
+    if (!editor) return;
+    if (editor.mode === 'create') {
+      if (result.content.trim().length === 0) {
+        editor = null;
+        return;
+      }
+      const obj: TextObject = {
+        id: newId(),
+        createdAt: Date.now(),
+        type: 'text',
+        at: editor.at,
+        content: result.content,
+        latex: result.latex,
+        fontSize: result.fontSize,
+        color: result.color,
+      };
+      documentStore.addObject(pageIndex, obj);
+    } else {
+      documentStore.updateObject(pageIndex, editor.obj.id, {
+        content: result.content,
+        latex: result.latex,
+        fontSize: result.fontSize,
+        color: result.color,
+      });
+    }
+    editor = null;
+  }
+
+  function onEditorCancel(): void {
+    editor = null;
+  }
 
   const pageDimsPt = $derived(() => {
     if (currentPage) return { width: currentPage.width, height: currentPage.height };
@@ -194,6 +265,15 @@
               onerase={onEraseAt}
             />
           </div>
+          <div class="text-slot" class:capture={isTextTool}>
+            <TextLayer
+              objects={pageTextObjects}
+              ptToPx={size.ptToPx}
+              interactive={isTextTool}
+              onemptyclick={onTextEmptyClick}
+              onpick={onTextPick}
+            />
+          </div>
         </div>
       {:else}
         <div class="empty">
@@ -206,6 +286,19 @@
       {/if}
     </div>
   </section>
+
+  {#if editor && editorInitial}
+    <TextEditor
+      initialContent={editorInitial.content}
+      initialLatex={editorInitial.latex}
+      initialFontSize={editorInitial.fontSize}
+      initialColor={editorInitial.color}
+      screenX={editor.screen.x}
+      screenY={editor.screen.y}
+      onok={onEditorOk}
+      oncancel={onEditorCancel}
+    />
+  {/if}
 </main>
 
 <style>
@@ -299,6 +392,15 @@
   .stack-slot {
     position: absolute;
     inset: 0;
+  }
+  .text-slot {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .text-slot.capture {
+    pointer-events: auto;
   }
   .blank-slot {
     background: #fff;

@@ -26,6 +26,7 @@
     { id: 'highlighter', label: 'Highlighter', shortcut: 'H', icon: '🖍️' },
     { id: 'eraser', label: 'Eraser', shortcut: 'E', icon: '🧽' },
     { id: 'line', label: 'Line', shortcut: 'L', icon: '／' },
+    { id: 'text', label: 'Text', shortcut: 'T', icon: '𝐓' },
     { id: 'graph', label: 'Graph (coming soon)', shortcut: 'G', icon: '📈', disabled: true },
   ];
 
