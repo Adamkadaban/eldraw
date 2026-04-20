@@ -95,6 +95,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Fetch pdfium
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            Linux)   ./scripts/fetch-pdfium.sh linux ;;
+            Windows) ./scripts/fetch-pdfium.sh windows ;;
+          esac
+
       - uses: tauri-apps/tauri-action@action-v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

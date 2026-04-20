@@ -1,9 +1,10 @@
 //! PDF ingest & raster pipeline.
 //!
 //! Rendering uses pdfium-render. The native pdfium library is resolved at
-//! runtime by [`crate::state::pdfium`]: system loader first, then a binary
-//! placed next to the executable. Distributions should ship the matching
-//! `libpdfium.so` / `pdfium.dll` / `libpdfium.dylib` in the app bundle.
+//! runtime by [`crate::state::pdfium`]: bundled resource dir first, then a
+//! binary next to the executable, then the system loader. Installers ship
+//! the matching `libpdfium.so` / `pdfium.dll` / `libpdfium.dylib` inside the
+//! app's resource directory under `pdfium/`.
 
 use std::io::Cursor;
 use std::path::PathBuf;
@@ -11,7 +12,7 @@ use std::path::PathBuf;
 use image::ImageFormat;
 use pdfium_render::prelude::{PdfRenderConfig, Pdfium};
 use sha2::{Digest, Sha256};
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::error::{AppError, AppResult};
 use crate::model::{PageDims, PdfMeta};
@@ -54,12 +55,16 @@ fn load_document<'a>(
 }
 
 #[tauri::command]
-pub async fn open_pdf(path: String, state: State<'_, AppState>) -> AppResult<PdfMeta> {
+pub async fn open_pdf(
+    app: AppHandle,
+    path: String,
+    state: State<'_, AppState>,
+) -> AppResult<PdfMeta> {
     let pdf_path = PathBuf::from(&path);
     let bytes = std::fs::read(&pdf_path)?;
     let hash = hash_bytes(&bytes);
 
-    let pdfium = pdfium()?;
+    let pdfium = pdfium(&app)?;
     let doc = load_document(pdfium, &bytes)?;
 
     let mut pages = Vec::with_capacity(usize::try_from(doc.pages().len()).unwrap_or(0));
@@ -89,6 +94,7 @@ const MAX_PIXEL_AREA: u64 = 64 * 1024 * 1024;
 
 #[tauri::command]
 pub async fn render_page(
+    app: AppHandle,
     page_index: u32,
     scale: f32,
     state: State<'_, AppState>,
@@ -97,7 +103,7 @@ pub async fn render_page(
         return Err(AppError::Pdf(format!("invalid scale: {scale}")));
     }
     state.with_open(|open| {
-        let pdfium = pdfium()?;
+        let pdfium = pdfium(&app)?;
         let doc = load_document(pdfium, &open.bytes)?;
         let page = doc
             .pages()

@@ -14,7 +14,7 @@
   import { ThumbnailStrip } from '$lib/sidebar';
   import { openAndLoadPdf } from '$lib/ipc/pdf';
   import { loadSidecar } from '$lib/ipc';
-  import { pdf } from '$lib/store/pdf';
+  import { pdf, clearError } from '$lib/store/pdf';
   import { sidebar } from '$lib/store/sidebar';
   import { currentDocument, documentStore, pdfPageIndexAt } from '$lib/store/document';
   import { startAutosave } from '$lib/store/autosave';
@@ -483,6 +483,15 @@
       oncancel={onEditorCancel}
     />
   {/if}
+
+  {#if pdfState.error}
+    <div class="error-banner" role="alert">
+      <span class="error-msg">{pdfState.error}</span>
+      <button type="button" class="error-dismiss" aria-label="Dismiss error" onclick={clearError}
+        >×</button
+      >
+    </div>
+  {/if}
 </main>
 
 <style>
@@ -647,5 +656,40 @@
     border: 1px solid #3a3a3a;
     padding: 1px 6px;
     border-radius: 3px;
+  }
+  .error-banner {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(720px, calc(100vw - 32px));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #4a1b1b;
+    border: 1px solid #7a2a2a;
+    border-radius: 6px;
+    color: #fdd;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    font-size: 13px;
+    z-index: 100;
+  }
+  .error-msg {
+    flex: 1 1 auto;
+    word-break: break-word;
+  }
+  .error-dismiss {
+    flex: 0 0 auto;
+    background: transparent;
+    border: none;
+    color: #fdd;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+  }
+  .error-dismiss:hover {
+    color: #fff;
   }
 </style>
