@@ -88,6 +88,13 @@
     }
   }
 
+  function clearCurrentPage(): void {
+    if (pageObjects.length === 0) return;
+    const ok = window.confirm('Clear all annotations on this page? This can be undone.');
+    if (!ok) return;
+    documentStore.clearPage(pageIndex);
+  }
+
   const pageCount = $derived(doc?.pages.length ?? meta?.pageCount ?? 0);
   const pageIndex = $derived(Math.min(view.currentPageIndex, Math.max(0, pageCount - 1)));
   const currentPage = $derived(doc?.pages[pageIndex] ?? null);
@@ -362,6 +369,16 @@
           <span class="zoom-indicator">{Math.round(view.scale * 100)}%</span>
           <button type="button" aria-label="Zoom in" onclick={() => viewport.zoomIn()}>+</button>
         </div>
+        <button
+          type="button"
+          class="clear-page"
+          aria-label="Clear annotations on this page"
+          title="Clear annotations on this page"
+          disabled={pageObjects.length === 0 && pageStrokes.length === 0}
+          onclick={clearCurrentPage}
+        >
+          Clear page
+        </button>
       </header>
     {/if}
 
@@ -584,6 +601,22 @@
   }
   .zoom {
     margin-left: auto;
+  }
+  .clear-page {
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    color: #ddd;
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+  }
+  .clear-page:hover:not(:disabled) {
+    border-color: #a33;
+    color: #f7b;
+  }
+  .clear-page:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
   .canvas-area {
     position: relative;

@@ -4,7 +4,9 @@ import type { AnyObject, ObjectId, Page } from '$lib/types';
 export type Command =
   | { type: 'add'; object: AnyObject }
   | { type: 'remove'; object: AnyObject }
-  | { type: 'update'; objectId: ObjectId; before: AnyObject; after: AnyObject };
+  | { type: 'update'; objectId: ObjectId; before: AnyObject; after: AnyObject }
+  | { type: 'clearPage'; objects: AnyObject[] }
+  | { type: 'restorePage'; objects: AnyObject[] };
 
 export const HISTORY_LIMIT = 200;
 
@@ -19,6 +21,10 @@ export function applyCommand(page: Page, cmd: Command): Page {
         ...page,
         objects: page.objects.map((o) => (o.id === cmd.objectId ? cmd.after : o)),
       };
+    case 'clearPage':
+      return { ...page, objects: [] };
+    case 'restorePage':
+      return { ...page, objects: [...cmd.objects] };
   }
 }
 
@@ -35,6 +41,10 @@ export function invertCommand(cmd: Command): Command {
         before: cmd.after,
         after: cmd.before,
       };
+    case 'clearPage':
+      return { type: 'restorePage', objects: cmd.objects };
+    case 'restorePage':
+      return { type: 'clearPage', objects: cmd.objects };
   }
 }
 
