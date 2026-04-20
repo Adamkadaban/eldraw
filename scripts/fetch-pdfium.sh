@@ -57,7 +57,15 @@ trap 'rm -rf "$tmp"' EXIT
 echo "Fetching $url"
 curl --proto '=https' --tlsv1.2 -fL --retry 3 -o "$tmp/$asset" "$url"
 
-actual="$(shasum -a 256 "$tmp/$asset" | awk '{print $1}')"
+actual=""
+if command -v sha256sum >/dev/null 2>&1; then
+  actual="$(sha256sum "$tmp/$asset" | awk '{print $1}')"
+elif command -v shasum >/dev/null 2>&1; then
+  actual="$(shasum -a 256 "$tmp/$asset" | awk '{print $1}')"
+else
+  echo "Neither sha256sum nor shasum is available for checksum verification" >&2
+  exit 1
+fi
 if [ "$actual" != "$expected" ]; then
   echo "pdfium checksum mismatch for $asset" >&2
   echo "  expected: $expected" >&2
