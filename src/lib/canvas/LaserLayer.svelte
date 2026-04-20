@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import {
     appendPoint,
+    clampTrailMs,
     DEFAULT_LASER_TRAIL_MS,
     pruneTrail,
     trailAlpha,
@@ -18,6 +19,9 @@
   }
 
   let { width, height, active, color, radius, trailMs = DEFAULT_LASER_TRAIL_MS }: Props = $props();
+
+  const safeTrailMs = $derived(clampTrailMs(trailMs));
+  const safeRadius = $derived(Number.isFinite(radius) && radius > 0 ? radius : 6);
 
   let canvas: HTMLCanvasElement;
   let trail: LaserPoint[] = [];
@@ -38,7 +42,7 @@
     const c = ctx();
     if (!c || !canvas) return;
     const now = performance.now();
-    trail = pruneTrail(trail, now, trailMs);
+    trail = pruneTrail(trail, now, safeTrailMs);
     clear();
     if (trail.length === 0) {
       rafId = null;
@@ -48,9 +52,9 @@
     c.save();
     c.globalCompositeOperation = 'lighter';
     for (const p of trail) {
-      const a = trailAlpha(p, now, trailMs);
+      const a = trailAlpha(p, now, safeTrailMs);
       if (a <= 0) continue;
-      const r = radius * (0.4 + 0.6 * a);
+      const r = safeRadius * (0.4 + 0.6 * a);
       const grad = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3);
       grad.addColorStop(0, withAlpha(color, a));
       grad.addColorStop(0.4, withAlpha(color, a * 0.4));
@@ -64,7 +68,7 @@
     c.globalCompositeOperation = 'source-over';
     c.fillStyle = color;
     c.beginPath();
-    c.arc(head.x, head.y, radius, 0, Math.PI * 2);
+    c.arc(head.x, head.y, safeRadius, 0, Math.PI * 2);
     c.fill();
     c.restore();
 
@@ -93,7 +97,7 @@
 
   function pushPoint(e: PointerEvent) {
     const { x, y } = localPoint(e);
-    trail = appendPoint(trail, { x, y, t: performance.now() }, trailMs);
+    trail = appendPoint(trail, { x, y, t: performance.now() }, safeTrailMs);
     ensureRaf();
   }
 
