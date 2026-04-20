@@ -26,6 +26,7 @@
     { id: 'highlighter', label: 'Highlighter', shortcut: 'H', icon: '🖍️' },
     { id: 'eraser', label: 'Eraser', shortcut: 'E', icon: '🧽' },
     { id: 'line', label: 'Line', shortcut: 'L', icon: '／' },
+    { id: 'text', label: 'Text', shortcut: 'T', icon: '𝐓' },
     { id: 'rect', label: 'Rectangle', shortcut: 'R', icon: '▭' },
     { id: 'ellipse', label: 'Ellipse', shortcut: 'O', icon: '◯' },
     { id: 'numberline', label: 'Number line', shortcut: 'N', icon: '↔' },
