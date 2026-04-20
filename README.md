@@ -38,6 +38,8 @@ Grab a prebuilt installer from the
 | Windows  | `.msi`, NSIS `.exe` |
 | Linux    | `.AppImage`, `.deb` |
 
+Prereleases ship NSIS `.exe` only; `.msi` is stable-only.
+
 ## Shortcuts
 
 A few favorites — the sidebar lists the rest.
