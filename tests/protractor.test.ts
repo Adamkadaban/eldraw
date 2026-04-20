@@ -16,9 +16,13 @@ describe('protractor ticks', () => {
     expect(ticks.length).toBe(181);
   });
 
-  it('full protractor has 361 minor ticks', () => {
+  it('full protractor has 360 minor ticks (no duplicate 0/360)', () => {
     const ticks = protractorTicks({ ...baseState, shape: 'full' });
-    expect(ticks.length).toBe(361);
+    expect(ticks.length).toBe(360);
+    expect(ticks.some((t) => t.angle === 360)).toBe(false);
+    const labels = ticks.filter((t) => t.label !== null).map((t) => t.label);
+    expect(labels.filter((l) => l === '0').length).toBe(1);
+    expect(labels).not.toContain('360');
   });
 
   it('major ticks carry labels every 10°', () => {

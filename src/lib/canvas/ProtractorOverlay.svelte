@@ -72,6 +72,7 @@
   }
 
   function onToggleKey(e: KeyboardEvent) {
+    if (e.repeat) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       e.stopPropagation();
