@@ -1,7 +1,17 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
 import type { ColorPalette, DashStyle, StrokeStyle, ToolKind } from '$lib/types';
+import { clampFadeMs, DEFAULT_TEMP_INK_FADE_MS } from '$lib/tools/tempInk';
 
 export type StyledTool = 'pen' | 'highlighter' | 'line';
+
+export interface LaserStyle {
+  color: string;
+  radius: number;
+}
+
+export const DEFAULT_LASER_STYLE: LaserStyle = { color: '#ff2d2d', radius: 6 };
+export const MIN_LASER_RADIUS = 2;
+export const MAX_LASER_RADIUS = 24;
 
 export const PRESET_COLORS: readonly string[] = [
   '#000000',
@@ -31,6 +41,8 @@ export interface SidebarState {
   toolStyles: Record<StyledTool, StrokeStyle>;
   palettes: ColorPalette[];
   activeColor: string;
+  laser: LaserStyle;
+  tempInkFadeMs: number;
 }
 
 function initialState(): SidebarState {
@@ -47,11 +59,15 @@ function initialState(): SidebarState {
       { id: 'custom', name: 'Custom', colors: [] },
     ],
     activeColor: '#000000',
+    laser: { ...DEFAULT_LASER_STYLE },
+    tempInkFadeMs: DEFAULT_TEMP_INK_FADE_MS,
   };
 }
 
-function isStyledTool(tool: ToolKind): tool is StyledTool {
-  return tool === 'pen' || tool === 'highlighter' || tool === 'line';
+export function styleKeyFor(tool: ToolKind): StyledTool | null {
+  if (tool === 'pen' || tool === 'highlighter' || tool === 'line') return tool;
+  if (tool === 'rect' || tool === 'ellipse' || tool === 'numberline') return 'line';
+  return null;
 }
 
 function nextDash(current: DashStyle): DashStyle {
@@ -84,8 +100,11 @@ function createSidebarStore() {
       update((s) => {
         if (s.activeTool === tool) return s;
         const next: SidebarState = { ...s, activeTool: tool };
-        if (isStyledTool(tool)) {
-          next.activeColor = s.toolStyles[tool].color;
+        const key = styleKeyFor(tool);
+        if (key) {
+          next.activeColor = s.toolStyles[key].color;
+        } else if (tool === 'laser') {
+          next.activeColor = s.laser.color;
         }
         return next;
       });
@@ -94,11 +113,14 @@ function createSidebarStore() {
     setActiveColor(color: string) {
       update((s) => {
         const next: SidebarState = { ...s, activeColor: color };
-        if (isStyledTool(s.activeTool)) {
+        const key = styleKeyFor(s.activeTool);
+        if (key) {
           next.toolStyles = {
             ...s.toolStyles,
-            [s.activeTool]: { ...s.toolStyles[s.activeTool], color },
+            [key]: { ...s.toolStyles[key], color },
           };
+        } else if (s.activeTool === 'laser') {
+          next.laser = { ...s.laser, color };
         }
         return next;
       });
@@ -119,12 +141,13 @@ function createSidebarStore() {
 
     setWidth(width: number) {
       update((s) => {
-        if (!isStyledTool(s.activeTool)) return s;
+        const key = styleKeyFor(s.activeTool);
+        if (!key) return s;
         return {
           ...s,
           toolStyles: {
             ...s.toolStyles,
-            [s.activeTool]: { ...s.toolStyles[s.activeTool], width },
+            [key]: { ...s.toolStyles[key], width },
           },
         };
       });
@@ -132,12 +155,13 @@ function createSidebarStore() {
 
     setDash(dash: DashStyle) {
       update((s) => {
-        if (!isStyledTool(s.activeTool)) return s;
+        const key = styleKeyFor(s.activeTool);
+        if (!key) return s;
         return {
           ...s,
           toolStyles: {
             ...s.toolStyles,
-            [s.activeTool]: { ...s.toolStyles[s.activeTool], dash },
+            [key]: { ...s.toolStyles[key], dash },
           },
         };
       });
@@ -145,13 +169,14 @@ function createSidebarStore() {
 
     cycleDash() {
       update((s) => {
-        if (!isStyledTool(s.activeTool)) return s;
-        const current = s.toolStyles[s.activeTool];
+        const key = styleKeyFor(s.activeTool);
+        if (!key) return s;
+        const current = s.toolStyles[key];
         return {
           ...s,
           toolStyles: {
             ...s.toolStyles,
-            [s.activeTool]: { ...current, dash: nextDash(current.dash) },
+            [key]: { ...current, dash: nextDash(current.dash) },
           },
         };
       });
@@ -159,6 +184,15 @@ function createSidebarStore() {
 
     togglePin() {
       update((s) => ({ ...s, pinned: !s.pinned }));
+    },
+
+    setLaserRadius(radius: number) {
+      const clamped = Math.min(MAX_LASER_RADIUS, Math.max(MIN_LASER_RADIUS, radius));
+      update((s) => ({ ...s, laser: { ...s.laser, radius: clamped } }));
+    },
+
+    setTempInkFadeMs(ms: number) {
+      update((s) => ({ ...s, tempInkFadeMs: clampFadeMs(ms) }));
     },
 
     snapshot(): SidebarState {
@@ -170,8 +204,9 @@ function createSidebarStore() {
 export const sidebar = createSidebarStore();
 
 export const currentStyle: Readable<StrokeStyle> = derived(sidebar, (s) => {
-  const base = isStyledTool(s.activeTool)
-    ? s.toolStyles[s.activeTool]
+  const key = styleKeyFor(s.activeTool);
+  const base = key
+    ? s.toolStyles[key]
     : { color: s.activeColor, width: 2, dash: 'solid' as DashStyle, opacity: 1 };
   return { ...base, color: s.activeColor };
 });

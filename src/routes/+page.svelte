@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { CanvasStack, PdfLayer, TextLayer, TextEditor } from '$lib/canvas';
+  import { CanvasStack, NumberLineEditor, PdfLayer, TextLayer, TextEditor } from '$lib/canvas';
   import { Sidebar } from '$lib/sidebar';
   import { openAndLoadPdf } from '$lib/ipc/pdf';
   import { loadSidecar } from '$lib/ipc';
@@ -13,7 +13,16 @@
   import { shortcuts } from '$lib/app/shortcuts';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
   import { hitTestStrokes } from '$lib/tools/eraser';
-  import type { AnyObject, EldrawDocument, PdfMeta, StrokeObject, TextObject } from '$lib/types';
+  import type {
+    AnyObject,
+    EldrawDocument,
+    LineObject,
+    NumberLineObject,
+    PdfMeta,
+    ShapeObject,
+    StrokeObject,
+    TextObject,
+  } from '$lib/types';
 
   const ERASER_RADIUS = 4;
 
@@ -177,6 +186,26 @@
     documentStore.addObject(pageIndex, stroke);
   }
 
+  let editingNumberLineId = $state<string | null>(null);
+
+  function onCommitObject(obj: LineObject | ShapeObject | NumberLineObject): void {
+    documentStore.addObject(pageIndex, obj);
+    if (obj.type === 'numberline') editingNumberLineId = obj.id;
+  }
+
+  const editingNumberLine = $derived<NumberLineObject | null>(
+    editingNumberLineId
+      ? (pageObjects.find(
+          (o): o is NumberLineObject => o.type === 'numberline' && o.id === editingNumberLineId,
+        ) ?? null)
+      : null,
+  );
+
+  function patchEditingNumberLine(patch: Partial<NumberLineObject>): void {
+    if (!editingNumberLineId) return;
+    documentStore.updateObject(pageIndex, editingNumberLineId, patch);
+  }
+
   function onEraseAt(at: { x: number; y: number }): void {
     const hits = hitTestStrokes(pageStrokes, at, ERASER_RADIUS);
     for (const s of hits) {
@@ -258,12 +287,30 @@
           <div class="stack-slot">
             <CanvasStack
               strokes={pageStrokes}
+              objects={pageObjects}
               width={size.width}
               height={size.height}
               ptToPx={size.ptToPx}
+              activeTool={sidebarState.activeTool}
+              laserColor={sidebarState.laser.color}
+              laserRadius={sidebarState.laser.radius}
+              tempInkStyle={sidebarState.toolStyles.pen}
+              tempInkFadeMs={sidebarState.tempInkFadeMs}
               oncommit={onCommitStroke}
               onerase={onEraseAt}
-            />
+              oncommitobject={onCommitObject}
+            >
+              {#snippet overlay()}
+                {#if editingNumberLine}
+                  <NumberLineEditor
+                    nl={editingNumberLine}
+                    ptToPx={size.ptToPx}
+                    onchange={patchEditingNumberLine}
+                    onclose={() => (editingNumberLineId = null)}
+                  />
+                {/if}
+              {/snippet}
+            </CanvasStack>
           </div>
           <div class="text-slot" class:capture={isTextTool}>
             <TextLayer

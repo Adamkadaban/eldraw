@@ -1,6 +1,6 @@
 import type { Action } from 'svelte/action';
 import { get } from 'svelte/store';
-import { sidebar } from '$lib/store/sidebar';
+import { sidebar, styleKeyFor } from '$lib/store/sidebar';
 import { documentStore, currentDocument } from '$lib/store/document';
 import { viewport } from '$lib/store/viewport';
 import { isEditableTarget } from './shortcutParser';
@@ -26,11 +26,8 @@ export const shortcuts: Action<HTMLElement> = () => {
 
   function currentWidth(): number | null {
     const snap = sidebar.snapshot();
-    const tool = snap.activeTool;
-    if (tool === 'pen' || tool === 'highlighter' || tool === 'line') {
-      return snap.toolStyles[tool].width;
-    }
-    return null;
+    const key = styleKeyFor(snap.activeTool);
+    return key ? snap.toolStyles[key].width : null;
   }
 
   function adjustWidth(delta: number): void {
@@ -107,6 +104,18 @@ export const shortcuts: Action<HTMLElement> = () => {
       case 'L':
         sidebar.setTool('line');
         return;
+      case 'r':
+      case 'R':
+        sidebar.setTool('rect');
+        return;
+      case 'o':
+      case 'O':
+        sidebar.setTool('ellipse');
+        return;
+      case 'n':
+      case 'N':
+        sidebar.setTool('numberline');
+        return;
       case 'g':
       case 'G':
         sidebar.setTool('graph');
@@ -114,6 +123,14 @@ export const shortcuts: Action<HTMLElement> = () => {
       case 't':
       case 'T':
         sidebar.setTool('text');
+        return;
+      case 'x':
+      case 'X':
+        sidebar.setTool('laser');
+        return;
+      case 'y':
+      case 'Y':
+        sidebar.setTool('temp-ink');
         return;
       case 'd':
       case 'D':
