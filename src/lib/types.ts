@@ -138,6 +138,13 @@ export interface Page {
   type: PageKind;
   /** For inserted blank pages: the PDF page they follow. Null for pure PDF pages. */
   insertedAfterPdfPage: number | null;
+  /**
+   * For pdf pages: the stable pdfium page index this slot renders. Remains
+   * correct after reorder/duplicate/delete. Omitted on blank pages. Optional
+   * for back-compat with older sidecars; derived from position on load when
+   * missing.
+   */
+  pdfSourceIndex?: number;
   /** Page dimensions in PDF points. */
   width: number;
   height: number;
