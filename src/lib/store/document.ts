@@ -15,6 +15,7 @@ export interface DocumentStore {
   movePage(from: number, to: number): void;
   duplicatePage(index: number): void;
   deletePage(index: number): void;
+  clearPage(pageIndex: number): void;
 
   undo(pageIndex: number): void;
   redo(pageIndex: number): void;
@@ -225,6 +226,14 @@ export function createDocumentStore(): DocumentStore {
         history.onPageDelete(index);
         return { ...doc, pages: reindex(recomputeBlankAnchors(pages)) };
       });
+    },
+
+    clearPage(pageIndex) {
+      const doc = get(state);
+      if (!doc) return;
+      const page = doc.pages[pageIndex];
+      if (!page || page.objects.length === 0) return;
+      pushAndApply(pageIndex, { type: 'clearPage', objects: [...page.objects] });
     },
 
     undo(pageIndex) {

@@ -88,6 +88,13 @@
     }
   }
 
+  function clearCurrentPage(): void {
+    if (pageObjects.length === 0) return;
+    const ok = window.confirm('Clear all annotations on this page? This can be undone.');
+    if (!ok) return;
+    documentStore.clearPage(pageIndex);
+  }
+
   const pageCount = $derived(doc?.pages.length ?? meta?.pageCount ?? 0);
   const pageIndex = $derived(Math.min(view.currentPageIndex, Math.max(0, pageCount - 1)));
   const currentPage = $derived(doc?.pages[pageIndex] ?? null);
@@ -331,7 +338,7 @@
   <section class="main">
     {#if !isPresenter}
       <header class="topbar">
-        <button type="button" class="open" onclick={openFromDialog}>Open PDF…</button>
+        <button type="button" class="topbar-btn" onclick={openFromDialog}>Open PDF…</button>
         <div class="pager">
           <button
             type="button"
@@ -362,6 +369,16 @@
           <span class="zoom-indicator">{Math.round(view.scale * 100)}%</span>
           <button type="button" aria-label="Zoom in" onclick={() => viewport.zoomIn()}>+</button>
         </div>
+        <button
+          type="button"
+          class="topbar-btn"
+          aria-label="Clear annotations on this page"
+          title="Clear annotations on this page"
+          disabled={pageObjects.length === 0}
+          onclick={clearCurrentPage}
+        >
+          Clear page
+        </button>
       </header>
     {/if}
 
@@ -544,7 +561,7 @@
     border-bottom: 1px solid #111;
     font-size: 12px;
   }
-  .open {
+  .topbar-btn {
     background: #2a2a2a;
     border: 1px solid #3a3a3a;
     color: #ddd;
@@ -552,8 +569,12 @@
     padding: 4px 10px;
     cursor: pointer;
   }
-  .open:hover {
+  .topbar-btn:hover:not(:disabled) {
     border-color: #666;
+  }
+  .topbar-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
   .pager,
   .zoom {

@@ -184,4 +184,24 @@ describe('documentStore page ops', () => {
     const remainingBlank = doc.pages.find((p) => p.type === 'blank')!;
     expect(remainingBlank.insertedAfterPdfPage).toBeNull();
   });
+
+  it('clearPage empties the page and undo restores the objects', () => {
+    const store = createDocumentStore();
+    store.load(docWithPages([pdfPage(0), pdfPage(1)]));
+    store.addObject(0, stroke('a'));
+    store.addObject(0, stroke('b'));
+    store.clearPage(0);
+    expect(get(store)!.pages[0].objects).toHaveLength(0);
+    store.undo(0);
+    const ids = get(store)!.pages[0].objects.map((o) => o.id);
+    expect(ids).toEqual(['a', 'b']);
+  });
+
+  it('clearPage is a no-op on an already-empty page', () => {
+    const store = createDocumentStore();
+    store.load(docWithPages([pdfPage(0)]));
+    store.clearPage(0);
+    store.undo(0);
+    expect(get(store)!.pages[0].objects).toHaveLength(0);
+  });
 });
