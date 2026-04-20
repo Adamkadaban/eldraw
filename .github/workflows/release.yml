@@ -39,15 +39,36 @@ jobs:
         include:
           - platform: ubuntu-latest
             rust-target: x86_64-unknown-linux-gnu
-            tauri-args: --bundles deb,appimage
           - platform: windows-latest
             rust-target: x86_64-pc-windows-msvc
-            tauri-args: --bundles msi,nsis
 
     runs-on: ${{ matrix.platform }}
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve bundle list
+        id: bundles
+        shell: bash
+        run: |
+          is_prerelease="${{ contains(github.ref_name, '-') }}"
+          case "${{ runner.os }}" in
+            Linux)
+              list="deb,appimage"
+              ;;
+            Windows)
+              if [ "$is_prerelease" = "true" ]; then
+                list="nsis"
+              else
+                list="msi,nsis"
+              fi
+              ;;
+            *)
+              echo "Unsupported runner.os for bundle resolution: ${{ runner.os }}" >&2
+              exit 1
+              ;;
+          esac
+          echo "list=$list" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -83,7 +104,7 @@ jobs:
           releaseBody: ${{ needs.changelog.outputs.body }}
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          args: ${{ matrix.tauri-args }}
+          args: --bundles ${{ steps.bundles.outputs.list }}
 
   publish:
     needs: [build, changelog]
