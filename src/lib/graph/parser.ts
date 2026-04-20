@@ -22,11 +22,11 @@ export type ParseResult = { ok: true; fn: CompiledFn } | { ok: false; error: str
 type BinOp = '+' | '-' | '*' | '/' | '^';
 
 type Tok =
-  | { k: 'num'; v: number }
-  | { k: 'ident'; v: string }
-  | { k: 'op'; v: BinOp }
-  | { k: 'lp' }
-  | { k: 'rp' };
+  | { k: 'num'; v: number; pos: number }
+  | { k: 'ident'; v: string; pos: number }
+  | { k: 'op'; v: BinOp; pos: number }
+  | { k: 'lp'; pos: number }
+  | { k: 'rp'; pos: number };
 
 const FUNCTIONS: Record<string, (n: number) => number> = {
   sin: Math.sin,
@@ -87,29 +87,29 @@ function tokenize(src: string): Tok[] {
       }
       const v = Number(src.slice(i, j));
       if (!Number.isFinite(v)) throw new ParseError(`invalid number at position ${i}`);
-      tokens.push({ k: 'num', v });
+      tokens.push({ k: 'num', v, pos: i });
       i = j;
       continue;
     }
     if (isAlpha(c)) {
       let j = i;
       while (j < src.length && isAlphaNum(src[j])) j += 1;
-      tokens.push({ k: 'ident', v: src.slice(i, j) });
+      tokens.push({ k: 'ident', v: src.slice(i, j), pos: i });
       i = j;
       continue;
     }
     if (c === '+' || c === '-' || c === '*' || c === '/' || c === '^') {
-      tokens.push({ k: 'op', v: c });
+      tokens.push({ k: 'op', v: c, pos: i });
       i += 1;
       continue;
     }
     if (c === '(') {
-      tokens.push({ k: 'lp' });
+      tokens.push({ k: 'lp', pos: i });
       i += 1;
       continue;
     }
     if (c === ')') {
-      tokens.push({ k: 'rp' });
+      tokens.push({ k: 'rp', pos: i });
       i += 1;
       continue;
     }
@@ -223,7 +223,8 @@ export function parseExpression(src: string): ParseResult {
     const cursor: Cursor = { toks, pos: 0 };
     const fn = parseExpr(cursor);
     if (cursor.pos !== toks.length) {
-      return { ok: false, error: `unexpected token at position ${cursor.pos}` };
+      const charPos = toks[cursor.pos].pos;
+      return { ok: false, error: `unexpected token at position ${charPos}` };
     }
     return { ok: true, fn };
   } catch (err) {

@@ -17,6 +17,7 @@
   const AXIS_COLOR = '#444';
   const GRID_COLOR = '#d8d8d8';
   const FRAME_COLOR = '#888';
+  const MAX_SAMPLES = 2048;
 
   function dashFor(d: 'solid' | 'dashed' | 'dotted', strokeWidth: number): number[] {
     if (d === 'dashed') return [strokeWidth * 4, strokeWidth * 3];
@@ -75,19 +76,19 @@
       ctx.lineWidth = 1.25;
       ctx.beginPath();
       if (y0 <= 0 && y1 >= 0) {
-        const ax = yToPx(0);
-        ctx.moveTo(px, ax);
-        ctx.lineTo(px + pw, ax);
+        const axisY = yToPx(0);
+        ctx.moveTo(px, axisY);
+        ctx.lineTo(px + pw, axisY);
       }
       if (x0 <= 0 && x1 >= 0) {
-        const ay = xToPx(0);
-        ctx.moveTo(ay, py);
-        ctx.lineTo(ay, py + ph);
+        const axisX = xToPx(0);
+        ctx.moveTo(axisX, py);
+        ctx.lineTo(axisX, py + ph);
       }
       ctx.stroke();
     }
 
-    const samples = Math.max(64, Math.ceil(pw));
+    const samples = Math.min(MAX_SAMPLES, Math.max(64, Math.ceil(pw)));
     for (const fn of g.functions) {
       const result = parseExpression(fn.expr);
       if (!result.ok) continue;

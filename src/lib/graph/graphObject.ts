@@ -1,10 +1,7 @@
 import type { GraphFunction, GraphObject } from '$lib/types';
 
-let counter = 0;
-
 function uid(prefix: string): string {
-  counter += 1;
-  return `${prefix}_${Date.now().toString(36)}_${counter.toString(36)}`;
+  return `${prefix}_${crypto.randomUUID()}`;
 }
 
 export function createGraphObject(bounds: {
