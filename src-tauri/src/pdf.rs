@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use image::ImageFormat;
 use pdfium_render::prelude::{PdfRenderConfig, Pdfium};
 use sha2::{Digest, Sha256};
+use tauri::ipc::Response;
 use tauri::{AppHandle, State};
 
 use crate::error::{AppError, AppResult};
@@ -98,11 +99,11 @@ pub async fn render_page(
     page_index: u32,
     scale: f32,
     state: State<'_, AppState>,
-) -> AppResult<Vec<u8>> {
+) -> AppResult<Response> {
     if !scale.is_finite() || scale <= 0.0 {
         return Err(AppError::Pdf(format!("invalid scale: {scale}")));
     }
-    state.with_open(|open| {
+    let bytes = state.with_open(|open| {
         let pdfium = pdfium(&app)?;
         let doc = load_document(pdfium, &open.bytes)?;
         let page = doc
@@ -136,7 +137,8 @@ pub async fn render_page(
         let mut out = Cursor::new(Vec::<u8>::new());
         image.write_to(&mut out, ImageFormat::Png)?;
         Ok(out.into_inner())
-    })
+    })?;
+    Ok(Response::new(bytes))
 }
 
 #[cfg(test)]
