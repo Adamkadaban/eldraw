@@ -13,6 +13,7 @@ export function createGraphObject(bounds: {
   const starter: GraphFunction = {
     id: uid('fn'),
     expr: 'x',
+    kind: 'explicit',
     color: '#1e88e5',
     width: 2,
     dash: 'solid',
@@ -36,6 +37,7 @@ export function createGraphFunction(): GraphFunction {
   return {
     id: uid('fn'),
     expr: 'x',
+    kind: 'explicit',
     color: '#e53935',
     width: 2,
     dash: 'solid',

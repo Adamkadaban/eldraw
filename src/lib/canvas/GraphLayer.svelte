@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { GraphObject } from '$lib/types';
-  import { parseExpression } from '$lib/graph/parser';
+  import { parseExpression, parseExpressionXY } from '$lib/graph/parser';
   import { plotFunction } from '$lib/graph/plotter';
+  import { marchingSquares, stitchSegments } from '$lib/graph/implicit';
 
   interface Props {
     graphs: GraphObject[];
@@ -18,6 +19,7 @@
   const GRID_COLOR = '#d8d8d8';
   const FRAME_COLOR = '#888';
   const MAX_SAMPLES = 2048;
+  const IMPLICIT_MAX_RES = 256;
 
   function dashFor(d: 'solid' | 'dashed' | 'dotted', strokeWidth: number): number[] {
     if (d === 'dashed') return [strokeWidth * 4, strokeWidth * 3];
@@ -89,7 +91,36 @@
     }
 
     const samples = Math.min(MAX_SAMPLES, Math.max(64, Math.ceil(pw)));
+    const implicitRes = Math.min(IMPLICIT_MAX_RES, Math.max(32, Math.ceil(pw / 4)));
     for (const fn of g.functions) {
+      ctx.strokeStyle = fn.color;
+      ctx.lineWidth = fn.width;
+      ctx.setLineDash(dashFor(fn.dash, fn.width));
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+
+      if (fn.kind === 'implicit') {
+        const r = parseExpressionXY(fn.expr);
+        if (!r.ok) continue;
+        const segs = marchingSquares(r.fn, {
+          xRange: g.xRange,
+          yRange: g.yRange,
+          resolution: implicitRes,
+        });
+        const polylines = stitchSegments(segs);
+        for (const line of polylines) {
+          if (line.length < 2) continue;
+          ctx.beginPath();
+          ctx.moveTo(xToPx(line[0].x), yToPx(line[0].y));
+          for (let i = 1; i < line.length; i += 1) {
+            ctx.lineTo(xToPx(line[i].x), yToPx(line[i].y));
+          }
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        continue;
+      }
+
       const result = parseExpression(fn.expr);
       if (!result.ok) continue;
       const segments = plotFunction(result.fn, {
@@ -97,11 +128,6 @@
         yRange: g.yRange,
         samples,
       });
-      ctx.strokeStyle = fn.color;
-      ctx.lineWidth = fn.width;
-      ctx.setLineDash(dashFor(fn.dash, fn.width));
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
       for (const seg of segments) {
         if (seg.length < 2) continue;
         ctx.beginPath();

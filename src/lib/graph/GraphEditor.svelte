@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { GraphFunction, GraphObject } from '$lib/types';
-  import { parseExpression } from '$lib/graph/parser';
+  import type { GraphFunction, GraphFunctionKind, GraphObject } from '$lib/types';
+  import { parseExpression, parseExpressionXY } from '$lib/graph/parser';
   import { createGraphFunction } from './graphObject';
 
   interface Props {
@@ -41,8 +41,8 @@
     onUpdate({ gridStep: value });
   }
 
-  function exprError(expr: string): string | null {
-    const r = parseExpression(expr);
+  function exprError(expr: string, kind: GraphFunctionKind): string | null {
+    const r = kind === 'implicit' ? parseExpressionXY(expr) : parseExpression(expr);
     return r.ok ? null : r.error;
   }
 </script>
@@ -123,7 +123,8 @@
   <section class="functions">
     <h4 class="section-title">Functions</h4>
     {#each graph.functions as fn (fn.id)}
-      {@const err = exprError(fn.expr)}
+      {@const kind = (fn.kind ?? 'explicit') as GraphFunctionKind}
+      {@const err = exprError(fn.expr, kind)}
       <div class="fn">
         <input
           type="color"
@@ -132,13 +133,25 @@
           onchange={(e) =>
             updateFunction(fn.id, { color: (e.currentTarget as HTMLInputElement).value })}
         />
+        <select
+          class="kind"
+          aria-label="Expression kind"
+          value={kind}
+          onchange={(e) =>
+            updateFunction(fn.id, {
+              kind: (e.currentTarget as HTMLSelectElement).value as GraphFunctionKind,
+            })}
+        >
+          <option value="explicit">y=</option>
+          <option value="implicit">f(x,y)=0</option>
+        </select>
         <input
           class="expr"
           class:invalid={err !== null}
           type="text"
           spellcheck="false"
           value={fn.expr}
-          placeholder="e.g. sin(x)"
+          placeholder={kind === 'implicit' ? 'e.g. x^2 + y^2 = 4' : 'e.g. sin(x)'}
           oninput={(e) =>
             updateFunction(fn.id, { expr: (e.currentTarget as HTMLInputElement).value })}
         />
@@ -237,9 +250,17 @@
   }
   .fn {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto auto 1fr auto;
     gap: 6px;
     align-items: center;
+  }
+  .fn .kind {
+    background: #1b1b1b;
+    color: #eee;
+    border: 1px solid #333;
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-size: 11px;
   }
   .fn .expr {
     background: #1b1b1b;
@@ -267,7 +288,7 @@
     cursor: not-allowed;
   }
   .err {
-    grid-column: 2 / span 2;
+    grid-column: 2 / span 3;
     color: #ef9a9a;
     font-size: 10px;
   }
