@@ -1,6 +1,13 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { CanvasStack, GraphLayer, PdfLayer } from '$lib/canvas';
+  import {
+    CanvasStack,
+    GraphLayer,
+    NumberLineEditor,
+    PdfLayer,
+    TextLayer,
+    TextEditor,
+  } from '$lib/canvas';
   import { Sidebar } from '$lib/sidebar';
   import { openAndLoadPdf } from '$lib/ipc/pdf';
   import { loadSidecar } from '$lib/ipc';
@@ -16,7 +23,17 @@
   import { activeGraph, clearActiveGraph, setActiveGraph } from '$lib/store/activeGraph';
   import { createGraphObject } from '$lib/graph/graphObject';
   import GraphEditor from '$lib/graph/GraphEditor.svelte';
-  import type { AnyObject, EldrawDocument, GraphObject, PdfMeta, StrokeObject } from '$lib/types';
+  import type {
+    AnyObject,
+    EldrawDocument,
+    GraphObject,
+    LineObject,
+    NumberLineObject,
+    PdfMeta,
+    ShapeObject,
+    StrokeObject,
+    TextObject,
+  } from '$lib/types';
 
   const ERASER_RADIUS = 4;
 
@@ -46,6 +63,81 @@
       ? (pageGraphs.find((g) => g.id === activeGraphRef.objectId) ?? null)
       : null,
   );
+  const pageTextObjects = $derived<TextObject[]>(
+    pageObjects.filter((o): o is TextObject => o.type === 'text'),
+  );
+  const isTextTool = $derived(sidebarState.activeTool === 'text');
+
+  type EditorState =
+    | { mode: 'create'; at: { x: number; y: number }; screen: { x: number; y: number } }
+    | { mode: 'edit'; obj: TextObject; screen: { x: number; y: number } };
+
+  let editor: EditorState | null = $state(null);
+
+  const editorInitial = $derived.by(() => {
+    if (!editor) return null;
+    if (editor.mode === 'edit') {
+      const o = editor.obj;
+      return { content: o.content, latex: o.latex, fontSize: o.fontSize, color: o.color };
+    }
+    return { content: '', latex: false, fontSize: 16, color: sidebarState.activeColor };
+  });
+
+  function newId(): string {
+    return `t_${crypto.randomUUID()}`;
+  }
+
+  function onTextEmptyClick(at: { x: number; y: number }, screen: { x: number; y: number }): void {
+    if (!isTextTool) return;
+    editor = { mode: 'create', at, screen };
+  }
+
+  function onTextPick(obj: TextObject, screen: { x: number; y: number }): void {
+    if (!isTextTool) return;
+    editor = { mode: 'edit', obj, screen };
+  }
+
+  function onEditorOk(result: {
+    content: string;
+    latex: boolean;
+    fontSize: number;
+    color: string;
+  }): void {
+    if (!editor) return;
+    if (editor.mode === 'create') {
+      if (result.content.trim().length === 0) {
+        editor = null;
+        return;
+      }
+      const obj: TextObject = {
+        id: newId(),
+        createdAt: Date.now(),
+        type: 'text',
+        at: editor.at,
+        content: result.content,
+        latex: result.latex,
+        fontSize: result.fontSize,
+        color: result.color,
+      };
+      documentStore.addObject(pageIndex, obj);
+    } else {
+      if (result.content.trim().length === 0) {
+        documentStore.removeObject(pageIndex, editor.obj.id);
+      } else {
+        documentStore.updateObject(pageIndex, editor.obj.id, {
+          content: result.content,
+          latex: result.latex,
+          fontSize: result.fontSize,
+          color: result.color,
+        });
+      }
+    }
+    editor = null;
+  }
+
+  function onEditorCancel(): void {
+    editor = null;
+  }
 
   const pageDimsPt = $derived(() => {
     if (currentPage) return { width: currentPage.width, height: currentPage.height };
@@ -116,6 +208,26 @@
 
   function onCommitStroke(stroke: StrokeObject): void {
     documentStore.addObject(pageIndex, stroke);
+  }
+
+  let editingNumberLineId = $state<string | null>(null);
+
+  function onCommitObject(obj: LineObject | ShapeObject | NumberLineObject): void {
+    documentStore.addObject(pageIndex, obj);
+    if (obj.type === 'numberline') editingNumberLineId = obj.id;
+  }
+
+  const editingNumberLine = $derived<NumberLineObject | null>(
+    editingNumberLineId
+      ? (pageObjects.find(
+          (o): o is NumberLineObject => o.type === 'numberline' && o.id === editingNumberLineId,
+        ) ?? null)
+      : null,
+  );
+
+  function patchEditingNumberLine(patch: Partial<NumberLineObject>): void {
+    if (!editingNumberLineId) return;
+    documentStore.updateObject(pageIndex, editingNumberLineId, patch);
   }
 
   function onEraseAt(at: { x: number; y: number }): void {
@@ -216,22 +328,46 @@
           <div class="stack-slot">
             <CanvasStack
               strokes={pageStrokes}
+              objects={pageObjects}
               width={size.width}
               height={size.height}
               ptToPx={size.ptToPx}
+              activeTool={sidebarState.activeTool}
+              laserColor={sidebarState.laser.color}
+              laserRadius={sidebarState.laser.radius}
+              tempInkStyle={sidebarState.toolStyles.pen}
+              tempInkFadeMs={sidebarState.tempInkFadeMs}
               oncommit={onCommitStroke}
               onerase={onEraseAt}
               ongraph={onCommitGraph}
+              oncommitobject={onCommitObject}
             >
-              {#snippet objects()}
+              {#snippet overlay()}
                 <GraphLayer
                   graphs={pageGraphs}
                   width={size.width}
                   height={size.height}
                   ptToPx={size.ptToPx}
                 />
+                {#if editingNumberLine}
+                  <NumberLineEditor
+                    nl={editingNumberLine}
+                    ptToPx={size.ptToPx}
+                    onchange={patchEditingNumberLine}
+                    onclose={() => (editingNumberLineId = null)}
+                  />
+                {/if}
               {/snippet}
             </CanvasStack>
+          </div>
+          <div class="text-slot" class:capture={isTextTool}>
+            <TextLayer
+              objects={pageTextObjects}
+              ptToPx={size.ptToPx}
+              interactive={isTextTool}
+              onemptyclick={onTextEmptyClick}
+              onpick={onTextPick}
+            />
           </div>
           {#if editingGraph}
             <div
@@ -261,6 +397,19 @@
       {/if}
     </div>
   </section>
+
+  {#if editor && editorInitial}
+    <TextEditor
+      initialContent={editorInitial.content}
+      initialLatex={editorInitial.latex}
+      initialFontSize={editorInitial.fontSize}
+      initialColor={editorInitial.color}
+      screenX={editor.screen.x}
+      screenY={editor.screen.y}
+      onok={onEditorOk}
+      oncancel={onEditorCancel}
+    />
+  {/if}
 </main>
 
 <style>
@@ -358,6 +507,15 @@
   .graph-editor-slot {
     position: absolute;
     z-index: 20;
+  }
+  .text-slot {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .text-slot.capture {
+    pointer-events: auto;
   }
   .blank-slot {
     background: #fff;
