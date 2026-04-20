@@ -11,6 +11,7 @@
   import { currentStyle } from '$lib/store/sidebar';
   import { normalizeBounds } from '$lib/tools/shapes';
   import { drawLine, drawNumberLine, drawShape } from './objectRenderer';
+  import { log } from '$lib/log';
 
   interface Props {
     width: number;
@@ -127,6 +128,7 @@
   }
 
   function onPointerDown(e: PointerEvent) {
+    log('shape', `pointerdown tool=${currentTool} active=${isActive} id=${e.pointerId}`);
     if (!isActive) return;
     if (e.pointerType === 'touch') return;
     canvas.setPointerCapture(e.pointerId);
@@ -152,7 +154,10 @@
       // not captured
     }
     activePointerId = null;
-    if (doCommit) commit();
+    if (doCommit) {
+      log('shape', `commit ${currentTool}`);
+      commit();
+    }
     clear();
   }
 
@@ -182,6 +187,7 @@
   .shape-live {
     position: absolute;
     inset: 0;
+    pointer-events: auto;
     touch-action: none;
     cursor: crosshair;
   }
