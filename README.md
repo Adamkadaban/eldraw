@@ -32,8 +32,15 @@ Prebuilt installers are attached to each [GitHub Release](https://github.com/Ada
 
 ```sh
 pnpm install
+./scripts/fetch-pdfium.sh   # downloads libpdfium into src-tauri/pdfium/
 pnpm tauri dev
 ```
+
+The fetch script is only required the first time (and when the pinned pdfium
+version changes). It verifies the SHA-256 of the downloaded archive against
+a value committed in the script. `pnpm tauri dev` works without it only if a
+matching libpdfium is already installed on your system; `pnpm tauri build`
+always requires the bundled copy under `src-tauri/pdfium/`.
 
 ### Checks
 

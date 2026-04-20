@@ -25,6 +25,10 @@ export function setError(error: string): void {
   internal.update((s) => ({ ...s, error, loading: false }));
 }
 
+export function clearError(): void {
+  internal.update((s) => ({ ...s, error: null }));
+}
+
 export function reset(): void {
   internal.set(initial);
 }

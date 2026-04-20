@@ -1,6 +1,8 @@
 use pdfium_render::prelude::Pdfium;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+
+use tauri::{AppHandle, Manager};
 
 use crate::error::{AppError, AppResult};
 
@@ -45,25 +47,60 @@ impl AppState {
 }
 
 /// Returns a process-wide Pdfium handle. The native binary is resolved by
-/// first trying `Pdfium::bind_to_system_library()`, then falling back to a
-/// binary co-located with the running executable. If neither is available,
-/// the error is surfaced to the caller.
-pub fn pdfium() -> AppResult<&'static Pdfium> {
+/// trying, in order:
+///   1. `<resource_dir>/pdfium/` — bundled library shipped with the installer.
+///   2. The directory containing the current executable — useful for portable
+///      layouts and local `cargo run` with a sibling binary.
+///   3. The system loader — last-resort for developers who have pdfium
+///      installed system-wide.
+///
+/// Initialization happens once per process; subsequent calls reuse the handle
+/// regardless of which `app` is passed.
+pub fn pdfium(app: &AppHandle) -> AppResult<&'static Pdfium> {
     static PDFIUM: OnceLock<Result<Pdfium, String>> = OnceLock::new();
     let slot = PDFIUM.get_or_init(|| {
-        let bindings = Pdfium::bind_to_system_library()
-            .or_else(|_| {
-                let exe_dir = std::env::current_exe()
-                    .ok()
-                    .and_then(|p| p.parent().map(PathBuf::from))
-                    .unwrap_or_else(|| PathBuf::from("."));
-                Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&exe_dir))
-            })
-            .map_err(|e| format!("failed to load pdfium binary: {e}"))?;
-        Ok(Pdfium::new(bindings))
+        let mut attempts: Vec<String> = Vec::new();
+
+        if let Ok(resource_dir) = app.path().resource_dir() {
+            let bundled = resource_dir.join("pdfium");
+            if let Some(pdfium) = try_bind(&bundled, &mut attempts) {
+                return Ok(pdfium);
+            }
+        }
+
+        if let Some(exe_dir) = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(PathBuf::from))
+        {
+            if let Some(pdfium) = try_bind(&exe_dir, &mut attempts) {
+                return Ok(pdfium);
+            }
+        }
+
+        match Pdfium::bind_to_system_library() {
+            Ok(bindings) => Ok(Pdfium::new(bindings)),
+            Err(e) => {
+                attempts.push(format!("system: {e}"));
+                Err(format!(
+                    "failed to load pdfium binary; tried: {}",
+                    attempts.join("; ")
+                ))
+            }
+        }
     });
     match slot {
         Ok(p) => Ok(p),
         Err(msg) => Err(AppError::Pdf(msg.clone())),
+    }
+}
+
+fn try_bind(dir: &Path, attempts: &mut Vec<String>) -> Option<Pdfium> {
+    let path = Pdfium::pdfium_platform_library_name_at_path(dir);
+    match Pdfium::bind_to_library(&path) {
+        Ok(bindings) => Some(Pdfium::new(bindings)),
+        Err(e) => {
+            attempts.push(format!("{}: {e}", path.display()));
+            None
+        }
     }
 }

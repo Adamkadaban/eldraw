@@ -36,7 +36,8 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # pdfium binaries (downloaded at build time)
-src-tauri/pdfium/
+src-tauri/pdfium/*
+!src-tauri/pdfium/README.md
 
 # Autosave / crash recovery
 *.eldraw.lock
