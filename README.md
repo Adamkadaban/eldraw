@@ -7,6 +7,7 @@
 <p align="center">
   <a href="https://github.com/Adamkadaban/eldraw/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Adamkadaban/eldraw?include_prereleases&sort=semver"></a>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <img alt="Made with vibes" src="https://img.shields.io/badge/made_with-vibes-ff69b4">
 </p>
 
 ---
