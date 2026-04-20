@@ -1,7 +1,17 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
 import type { ColorPalette, DashStyle, StrokeStyle, ToolKind } from '$lib/types';
+import { clampFadeMs, DEFAULT_TEMP_INK_FADE_MS } from '$lib/tools/tempInk';
 
 export type StyledTool = 'pen' | 'highlighter' | 'line';
+
+export interface LaserStyle {
+  color: string;
+  radius: number;
+}
+
+export const DEFAULT_LASER_STYLE: LaserStyle = { color: '#ff2d2d', radius: 6 };
+export const MIN_LASER_RADIUS = 2;
+export const MAX_LASER_RADIUS = 24;
 
 export const PRESET_COLORS: readonly string[] = [
   '#000000',
@@ -31,6 +41,8 @@ export interface SidebarState {
   toolStyles: Record<StyledTool, StrokeStyle>;
   palettes: ColorPalette[];
   activeColor: string;
+  laser: LaserStyle;
+  tempInkFadeMs: number;
 }
 
 function initialState(): SidebarState {
@@ -47,6 +59,8 @@ function initialState(): SidebarState {
       { id: 'custom', name: 'Custom', colors: [] },
     ],
     activeColor: '#000000',
+    laser: { ...DEFAULT_LASER_STYLE },
+    tempInkFadeMs: DEFAULT_TEMP_INK_FADE_MS,
   };
 }
 
@@ -86,6 +100,8 @@ function createSidebarStore() {
         const next: SidebarState = { ...s, activeTool: tool };
         if (isStyledTool(tool)) {
           next.activeColor = s.toolStyles[tool].color;
+        } else if (tool === 'laser') {
+          next.activeColor = s.laser.color;
         }
         return next;
       });
@@ -99,6 +115,8 @@ function createSidebarStore() {
             ...s.toolStyles,
             [s.activeTool]: { ...s.toolStyles[s.activeTool], color },
           };
+        } else if (s.activeTool === 'laser') {
+          next.laser = { ...s.laser, color };
         }
         return next;
       });
@@ -159,6 +177,15 @@ function createSidebarStore() {
 
     togglePin() {
       update((s) => ({ ...s, pinned: !s.pinned }));
+    },
+
+    setLaserRadius(radius: number) {
+      const clamped = Math.min(MAX_LASER_RADIUS, Math.max(MIN_LASER_RADIUS, radius));
+      update((s) => ({ ...s, laser: { ...s.laser, radius: clamped } }));
+    },
+
+    setTempInkFadeMs(ms: number) {
+      update((s) => ({ ...s, tempInkFadeMs: clampFadeMs(ms) }));
     },
 
     snapshot(): SidebarState {

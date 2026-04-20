@@ -17,7 +17,9 @@ export type ToolKind =
   | 'graph'
   | 'text'
   | 'select'
-  | 'pan';
+  | 'pan'
+  | 'laser'
+  | 'temp-ink';
 
 export interface Point {
   x: number;

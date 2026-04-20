@@ -190,6 +190,11 @@
               width={size.width}
               height={size.height}
               ptToPx={size.ptToPx}
+              activeTool={sidebarState.activeTool}
+              laserColor={sidebarState.laser.color}
+              laserRadius={sidebarState.laser.radius}
+              tempInkStyle={sidebarState.toolStyles.pen}
+              tempInkFadeMs={sidebarState.tempInkFadeMs}
               oncommit={onCommitStroke}
               onerase={onEraseAt}
             />
