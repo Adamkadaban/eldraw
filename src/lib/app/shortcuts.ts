@@ -5,6 +5,7 @@ import { documentStore, currentDocument } from '$lib/store/document';
 import { viewport } from '$lib/store/viewport';
 import { presenter } from '$lib/store/presenter';
 import { zen } from '$lib/store/zen';
+import { sampleCanvasBackground } from '$lib/canvas/bgSample';
 import { isEditableTarget } from './shortcutParser';
 
 /**
@@ -57,13 +58,23 @@ export const shortcuts: Action<HTMLElement> = () => {
     }
   }
 
+  function sampleCurrentPageBackground(): string | undefined {
+    if (typeof document === 'undefined') return undefined;
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      '.pdf-slot canvas[aria-label="Rendered PDF page"]',
+    );
+    if (!canvas) return undefined;
+    return sampleCanvasBackground(canvas) ?? undefined;
+  }
+
   function insertBlankAfterCurrent(): void {
     const doc = get(currentDocument);
     if (!doc) return;
     const idx = currentPage();
     const page = doc.pages[idx];
     if (!page) return;
-    documentStore.insertBlankPageAfter(idx, page.width, page.height);
+    const background = page.type === 'pdf' ? sampleCurrentPageBackground() : page.background;
+    documentStore.insertBlankPageAfter(idx, page.width, page.height, background);
   }
 
   function handleKeyDown(event: KeyboardEvent): void {

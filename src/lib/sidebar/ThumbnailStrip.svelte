@@ -160,9 +160,12 @@
           <span
             class="preview"
             class:blank={page.type === 'blank'}
-            style="width: {size.width}px; height: {size.height}px; {url
-              ? `background-image: url('${url}');`
+            style="width: {size.width}px; height: {size.height}px;{url
+              ? ` background-image: url('${url}');`
               : ''}"
+            style:background-color={page.type === 'blank'
+              ? (page.background ?? undefined)
+              : undefined}
           ></span>
           <span class="label">{i + 1}</span>
         </button>

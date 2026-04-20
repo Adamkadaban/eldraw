@@ -1,5 +1,6 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
 import type { AnyObject, EldrawDocument, ObjectId, Page } from '$lib/types';
+import { isSafeHexColor } from '$lib/color';
 import { applyCommand, createHistory, type Command, type History } from './history';
 
 export interface DocumentStore {
@@ -11,7 +12,12 @@ export interface DocumentStore {
   removeObject(pageIndex: number, id: ObjectId): void;
   updateObject(pageIndex: number, id: ObjectId, patch: Partial<AnyObject>): void;
 
-  insertBlankPageAfter(afterArrayIndex: number, width: number, height: number): void;
+  insertBlankPageAfter(
+    afterArrayIndex: number,
+    width: number,
+    height: number,
+    background?: string,
+  ): void;
   movePage(from: number, to: number): void;
   duplicatePage(index: number): void;
   deletePage(index: number): void;
@@ -67,7 +73,8 @@ function lastPdfIndexAtOrBefore(pages: readonly Page[], arrayIndex: number): num
 function normalizeLoaded(doc: EldrawDocument): EldrawDocument {
   let nextDerived = 0;
   const pages = doc.pages.map((p, i) => {
-    const base = p.pageIndex === i ? p : { ...p, pageIndex: i };
+    const withBg = sanitizePageBackground(p);
+    const base = withBg.pageIndex === i ? withBg : { ...withBg, pageIndex: i };
     if (base.type === 'pdf' && typeof base.pdfSourceIndex !== 'number') {
       const withSource = { ...base, pdfSourceIndex: nextDerived };
       nextDerived += 1;
@@ -79,6 +86,19 @@ function normalizeLoaded(doc: EldrawDocument): EldrawDocument {
     return base;
   });
   return { ...doc, pages };
+}
+
+/**
+ * Sidecars are untrusted input. Drop any `background` value that doesn't
+ * match the strict `#rrggbb` invariant so it can't leak into CSS at render
+ * time.
+ */
+function sanitizePageBackground(page: Page): Page {
+  if (page.background === undefined) return page;
+  if (isSafeHexColor(page.background)) return page;
+  const { background: _drop, ...rest } = page;
+  void _drop;
+  return rest as Page;
 }
 
 function reindex(pages: Page[]): Page[] {
@@ -169,17 +189,19 @@ export function createDocumentStore(): DocumentStore {
       pushAndApply(pageIndex, { type: 'update', objectId: id, before, after });
     },
 
-    insertBlankPageAfter(afterArrayIndex, width, height) {
+    insertBlankPageAfter(afterArrayIndex, width, height, background) {
       state.update((doc) => {
         if (!doc) return doc;
         const insertIdx = afterArrayIndex + 1;
         const insertedAfterPdfPage = lastPdfIndexAtOrBefore(doc.pages, afterArrayIndex);
+        const safeBg = isSafeHexColor(background) ? background : undefined;
         const blank: Page = {
           pageIndex: insertIdx,
           type: 'blank',
           insertedAfterPdfPage,
           width,
           height,
+          ...(safeBg ? { background: safeBg } : {}),
           objects: [],
         };
         const pages = [...doc.pages];
