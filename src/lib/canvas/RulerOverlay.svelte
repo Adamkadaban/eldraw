@@ -62,7 +62,13 @@
     drag = null;
   }
 
+  function onClose(e: PointerEvent | MouseEvent) {
+    overlays.setRulerVisible(false);
+    e.stopPropagation();
+  }
+
   const bodyHeight = 24;
+  const closeOffset = 12;
 </script>
 
 <svg
@@ -131,6 +137,42 @@
     aria-valuenow={Math.round(ruler.rotation)}
     onpointerdown={onEndPointerDown}
   />
+
+  <g
+    transform="translate({ruler.from.x * ptToPx} {ruler.from.y * ptToPx}) rotate({ruler.rotation})"
+  >
+    <circle
+      class="close"
+      cx={-closeOffset}
+      cy={bodyHeight / 2}
+      r="8"
+      fill="#fff"
+      stroke="#1e88e5"
+      stroke-width="1"
+      role="button"
+      tabindex="0"
+      aria-label="Hide ruler"
+      onpointerdown={onClose}
+    />
+    <line
+      x1={-closeOffset - 3}
+      y1={bodyHeight / 2 - 3}
+      x2={-closeOffset + 3}
+      y2={bodyHeight / 2 + 3}
+      stroke="#1e88e5"
+      stroke-width="1.2"
+      pointer-events="none"
+    />
+    <line
+      x1={-closeOffset - 3}
+      y1={bodyHeight / 2 + 3}
+      x2={-closeOffset + 3}
+      y2={bodyHeight / 2 - 3}
+      stroke="#1e88e5"
+      stroke-width="1.2"
+      pointer-events="none"
+    />
+  </g>
 </svg>
 
 <style>
@@ -144,5 +186,8 @@
   }
   .end-handle {
     cursor: grab;
+  }
+  .close {
+    cursor: pointer;
   }
 </style>

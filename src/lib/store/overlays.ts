@@ -5,6 +5,7 @@ import type { RulerState } from '$lib/geometry/ruler';
 export interface OverlaysState {
   protractor: ProtractorState;
   ruler: RulerState;
+  rulerVisible: boolean;
 }
 
 function initial(): OverlaysState {
@@ -21,6 +22,7 @@ function initial(): OverlaysState {
       length: 360,
       unit: 'cm',
     },
+    rulerVisible: false,
   };
 }
 
@@ -59,6 +61,12 @@ function createOverlaysStore() {
     },
     setRulerUnit(unit: RulerState['unit']) {
       update((s) => ({ ...s, ruler: { ...s.ruler, unit } }));
+    },
+    setRulerVisible(visible: boolean) {
+      update((s) => (s.rulerVisible === visible ? s : { ...s, rulerVisible: visible }));
+    },
+    toggleRulerVisible() {
+      update((s) => ({ ...s, rulerVisible: !s.rulerVisible }));
     },
   };
 }

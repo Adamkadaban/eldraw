@@ -21,6 +21,7 @@
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
   import { presenterStore } from '$lib/store/presenter';
   import { zenStore } from '$lib/store/zen';
+  import { overlays } from '$lib/store/overlays';
   import { startToolBridge } from '$lib/app/toolBridge';
   import { shortcuts } from '$lib/app/shortcuts';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
@@ -51,6 +52,14 @@
   const doc = $derived<EldrawDocument | null>($currentDocument);
   const view = $derived($viewportStore);
   const sidebarState = $derived($sidebar);
+  const overlaysState = $derived($overlays);
+  const rulerVisible = $derived(overlaysState.rulerVisible || sidebarState.activeTool === 'ruler');
+  const rulerSnapState = $derived(rulerVisible ? overlaysState.ruler : null);
+  $effect(() => {
+    if (sidebarState.activeTool === 'ruler' && !overlaysState.rulerVisible) {
+      overlays.setRulerVisible(true);
+    }
+  });
   const presenterState = $derived($presenterStore);
   const isPresenter = $derived(presenterState.active);
   const zenState = $derived($zenStore);
@@ -434,6 +443,7 @@
               laserRadius={sidebarState.laser.radius}
               tempInkStyle={sidebarState.toolStyles.pen}
               tempInkFadeMs={sidebarState.tempInkFadeMs}
+              rulerSnap={rulerSnapState}
               oncommit={onCommitStroke}
               onerase={onEraseAt}
               ongraph={onCommitGraph}
@@ -487,7 +497,7 @@
               <ProtractorOverlay ptToPx={size.ptToPx} width={size.width} height={size.height} />
             </div>
           {/if}
-          {#if sidebarState.activeTool === 'ruler'}
+          {#if rulerVisible}
             <div class="overlay-slot">
               <RulerOverlay ptToPx={size.ptToPx} width={size.width} height={size.height} />
             </div>

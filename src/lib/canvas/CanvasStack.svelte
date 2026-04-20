@@ -9,6 +9,7 @@
     StrokeStyle,
     ToolKind,
   } from '$lib/types';
+  import type { RulerState } from '$lib/geometry/ruler';
   import HighlightLayer from './HighlightLayer.svelte';
   import InkLayer from './InkLayer.svelte';
   import LiveLayer from './LiveLayer.svelte';
@@ -28,6 +29,7 @@
     laserRadius?: number;
     tempInkStyle?: StrokeStyle;
     tempInkFadeMs?: number;
+    rulerSnap?: RulerState | null;
     overlay?: Snippet;
     oncommit?: (stroke: StrokeObject) => void;
     onerase?: (at: { x: number; y: number }) => void;
@@ -46,6 +48,7 @@
     laserRadius = 6,
     tempInkStyle = { color: '#000000', width: 2, dash: 'solid', opacity: 1 },
     tempInkFadeMs = 3000,
+    rulerSnap = null,
     overlay,
     oncommit,
     onerase,
@@ -68,7 +71,7 @@
   </div>
 
   <div class="layer layer-live">
-    <LiveLayer {width} {height} {ptToPx} {oncommit} {onerase} {ongraph} />
+    <LiveLayer {width} {height} {ptToPx} {rulerSnap} {oncommit} {onerase} {ongraph} />
   </div>
 
   <div class="layer layer-shape-live">
