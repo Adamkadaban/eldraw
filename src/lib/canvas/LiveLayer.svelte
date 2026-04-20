@@ -4,6 +4,8 @@
   import { toolStore } from '$lib/store/tool';
   import { strokeFromInput } from '$lib/tools/pen';
   import { drawLiveStroke } from './strokeRenderer';
+  import { cursorForTool } from './cursors';
+  import { log } from '$lib/log';
 
   interface Props {
     width: number;
@@ -24,7 +26,7 @@
   let activePointerId: number | null = null;
   let startTime = 0;
   let points: Point[] = [];
-  let currentTool: ToolKind = 'pen';
+  let currentTool: ToolKind = $state('pen');
   let currentStyle: StrokeStyle = {
     color: '#000',
     width: 2,
@@ -35,6 +37,7 @@
   const unsubscribeTool = toolStore.subscribe((s) => {
     currentTool = s.tool;
     currentStyle = s.style;
+    log('tool', `live-layer sees tool=${s.tool}`, s.style);
   });
   onDestroy(unsubscribeTool);
 
@@ -108,6 +111,7 @@
   }
 
   function onPointerDown(e: PointerEvent) {
+    log('live', `pointerdown tool=${currentTool} type=${e.pointerType} id=${e.pointerId}`);
     if (e.pointerType === 'touch') return;
     if (
       currentTool !== 'pen' &&
@@ -172,6 +176,7 @@
 
     if (commit && (currentTool === 'pen' || currentTool === 'highlighter') && points.length > 0) {
       const stroke = strokeFromInput(points, currentStyle, currentTool);
+      log('live', `commit ${currentTool} stroke points=${points.length}`);
       oncommit?.(stroke);
     }
     if (commit && currentTool === 'graph' && graphStart && graphEnd) {
@@ -211,7 +216,7 @@
   {width}
   {height}
   class="live-layer"
-  style="width: {width}px; height: {height}px;"
+  style="width: {width}px; height: {height}px; cursor: {cursorForTool(currentTool)};"
   onpointerdown={onPointerDown}
   onpointermove={onPointerMove}
   onpointerup={onPointerUp}
@@ -222,7 +227,7 @@
   .live-layer {
     position: absolute;
     inset: 0;
+    pointer-events: auto;
     touch-action: none;
-    cursor: crosshair;
   }
 </style>

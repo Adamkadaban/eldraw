@@ -27,6 +27,7 @@
   import { activeGraph, clearActiveGraph, setActiveGraph } from '$lib/store/activeGraph';
   import { createGraphObject } from '$lib/graph/graphObject';
   import GraphEditor from '$lib/graph/GraphEditor.svelte';
+  import { log } from '$lib/log';
   import type {
     AnyObject,
     EldrawDocument,
@@ -54,6 +55,7 @@
   const pages = $derived(doc?.pages ?? []);
 
   function onThumbPick(i: number): void {
+    log('page', `thumb pick ${i}`);
     viewport.setPage(i, pages.length);
   }
 
