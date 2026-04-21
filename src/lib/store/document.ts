@@ -8,6 +8,12 @@ export type PageCommitListener = (pageIndex: number) => void;
 export interface DocumentStore {
   subscribe: Readable<EldrawDocument | null>['subscribe'];
   load(doc: EldrawDocument): void;
+  /**
+   * Swap the document without clearing undo/redo history. Used by PDF
+   * reload's "keep annotations" path where the user expects their history
+   * stack to survive.
+   */
+  replace(doc: EldrawDocument): void;
   clear(): void;
 
   addObject(pageIndex: number, obj: AnyObject): void;
@@ -174,6 +180,10 @@ export function createDocumentStore(): DocumentStore {
     load(doc) {
       state.set(normalizeLoaded(doc));
       history.clear();
+    },
+
+    replace(doc) {
+      state.set(normalizeLoaded(doc));
     },
 
     clear() {

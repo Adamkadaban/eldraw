@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { pdf, setLoading, setMeta, setError, reset } from '$lib/store/pdf';
+import { pdf, setLoading, setMeta, setError, setSource, reset } from '$lib/store/pdf';
 
 describe('pdf store', () => {
   beforeEach(() => reset());
@@ -8,6 +8,7 @@ describe('pdf store', () => {
   it('starts empty', () => {
     const s = get(pdf);
     expect(s.meta).toBeNull();
+    expect(s.source).toBeNull();
     expect(s.error).toBeNull();
     expect(s.loading).toBe(false);
   });
@@ -21,6 +22,11 @@ describe('pdf store', () => {
     expect(s.loading).toBe(false);
     expect(s.meta?.pageCount).toBe(2);
     expect(s.error).toBeNull();
+  });
+
+  it('tracks source so reload knows what to refetch', () => {
+    setSource({ kind: 'file', path: '/tmp/a.pdf' });
+    expect(get(pdf).source).toEqual({ kind: 'file', path: '/tmp/a.pdf' });
   });
 
   it('captures errors', () => {

@@ -10,6 +10,7 @@ import {
   currentPage,
   currentPageCount,
   insertBlankAfterCurrent,
+  reloadPdf,
   toggleFullscreen,
 } from '$lib/app/actions';
 import { hasBackup } from '$lib/config/import';
@@ -19,6 +20,7 @@ import {
   triggerResetSettings,
   triggerRestorePreviousSettings,
 } from '$lib/config/commands';
+import { settings } from '$lib/store/settings';
 
 export interface Command {
   id: string;
@@ -163,6 +165,21 @@ export function getCommands(): Command[] {
       title: 'Insert blank page after current',
       shortcut: 'B',
       run: insertBlankAfterCurrent,
+    },
+    {
+      id: 'pdf.reload',
+      title: 'Reload PDF',
+      run: () => void reloadPdf(),
+    },
+    {
+      id: 'pdf.reload-behavior.keep',
+      title: 'Reload behavior: keep annotations',
+      run: () => settings.setReloadBehavior('keep'),
+    },
+    {
+      id: 'pdf.reload-behavior.discard',
+      title: 'Reload behavior: discard annotations',
+      run: () => settings.setReloadBehavior('discard'),
     },
     {
       id: 'style.cycle-dash',

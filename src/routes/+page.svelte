@@ -13,12 +13,9 @@
   } from '$lib/canvas';
   import { Sidebar } from '$lib/sidebar';
   import { ThumbnailStrip } from '$lib/sidebar';
-  import { openAndLoadPdf } from '$lib/ipc/pdf';
-  import { loadSidecar } from '$lib/ipc';
   import { pdf, clearError } from '$lib/store/pdf';
   import { sidebar, hydrateSidebarFromStorage, streamlineFromSmoothing } from '$lib/store/sidebar';
   import { currentDocument, documentStore, pdfPageIndexAt } from '$lib/store/document';
-  import { startAutosave } from '$lib/store/autosave';
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
   import { presenter, presenterStore } from '$lib/store/presenter';
   import { zenStore, chromeVisibility, registerZenFullscreenBridge } from '$lib/store/zen';
@@ -35,6 +32,9 @@
   import { shortcuts } from '$lib/app/shortcuts';
   import { setWindowFullscreenChromeless } from '$lib/app/windowFullscreen';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
+  import { loadPdfFromSource, stopAutosave } from '$lib/pdf/loader';
+  import { reloadWarning, clearReloadWarning } from '$lib/store/reloadWarning';
+  import { reloadPdf } from '$lib/app/actions';
   import { createSpatialIndex, type SpatialIndex } from '$lib/tools/spatialIndex';
   import { makeEraseFlush } from '$lib/tools/eraserBatch';
   import { createRafBatcher } from '$lib/canvas/inkBatch';
@@ -61,7 +61,6 @@
   const ERASER_RADIUS = 4;
 
   let stopBridge: (() => void) | null = null;
-  let stopAutosave: (() => void) | null = null;
   let stopPresenterBridge: (() => void) | null = null;
   let stopSidebarBridge: (() => void) | null = null;
 
@@ -292,54 +291,10 @@
     };
   });
 
-  function buildEmptyDoc(m: PdfMeta): EldrawDocument {
-    return {
-      version: 1,
-      pdfHash: m.hash,
-      pdfPath: m.path,
-      pages: m.pages.map((p, i) => ({
-        pageIndex: i,
-        type: 'pdf',
-        insertedAfterPdfPage: null,
-        width: p.width,
-        height: p.height,
-        objects: [],
-      })),
-      palettes: [],
-      prefs: {
-        sidebarPinned: true,
-        defaultTool: 'pen',
-        toolDefaults: {
-          pen: { color: '#000000', width: 2, dash: 'solid', opacity: 1 },
-          highlighter: { color: '#fdd835', width: 14, dash: 'solid', opacity: 0.3 },
-          line: { color: '#000000', width: 2, dash: 'solid', opacity: 1 },
-        },
-      },
-    };
-  }
-
   async function openFromDialog(): Promise<void> {
     const path = await openPdfDialog();
     if (!path) return;
-    await loadPath(path);
-  }
-
-  async function loadPath(path: string): Promise<void> {
-    const loaded = await openAndLoadPdf(path);
-    if (!loaded) return;
-
-    let sidecar: EldrawDocument | null = null;
-    try {
-      sidecar = await loadSidecar(path);
-    } catch {
-      sidecar = null;
-    }
-
-    documentStore.load(sidecar ?? buildEmptyDoc(loaded));
-
-    stopAutosave?.();
-    stopAutosave = startAutosave(path);
-    viewport.setPage(0, loaded.pageCount);
+    await loadPdfFromSource({ kind: 'file', path });
   }
 
   function onCommitStroke(stroke: StrokeObject): void {
@@ -494,12 +449,12 @@
 
   onDestroy(() => {
     stopBridge?.();
-    stopAutosave?.();
     stopHydration?.();
     stopPresenterBridge?.();
     stopSidebarBridge?.();
     registerZenFullscreenBridge(null);
     eraseBatcher.cancel();
+    stopAutosave();
   });
 </script>
 
@@ -547,6 +502,32 @@
             onclick={() => viewport.nextPage(pageCount)}
           >
             ›
+          </button>
+          <button
+            type="button"
+            class="pager-reload"
+            aria-label="Reload PDF"
+            title="Reload PDF"
+            disabled={!pdfState.source || pdfState.loading}
+            onclick={() => void reloadPdf()}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
+              <path
+                d="M8 3a5 5 0 1 0 4.546 2.914"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linecap="round"
+              />
+              <path
+                d="M12.5 2v3.5H9"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
           </button>
         </div>
         <div class="zoom">
@@ -728,6 +709,17 @@
       <span class="error-msg">{pdfState.error}</span>
       <button type="button" class="error-dismiss" aria-label="Dismiss error" onclick={clearError}
         >×</button
+      >
+    </div>
+  {/if}
+  {#if $reloadWarning}
+    <div class="reload-warning" role="status">
+      <span class="reload-warning-msg">{$reloadWarning.message}</span>
+      <button
+        type="button"
+        class="reload-warning-dismiss"
+        aria-label="Dismiss reload warning"
+        onclick={clearReloadWarning}>×</button
       >
     </div>
   {/if}
@@ -988,6 +980,52 @@
     padding: 0 4px;
   }
   .error-dismiss:hover {
+    color: #fff;
+  }
+  .pager-reload {
+    width: auto !important;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #bbb;
+  }
+  .pager-reload:hover:not(:disabled) {
+    color: #fff;
+  }
+  .reload-warning {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(720px, calc(100vw - 32px));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #3a3108;
+    border: 1px solid #7a6a1a;
+    border-radius: 6px;
+    color: #f5e7a3;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    font-size: 13px;
+    z-index: 100;
+  }
+  .reload-warning-msg {
+    flex: 1 1 auto;
+    word-break: break-word;
+  }
+  .reload-warning-dismiss {
+    flex: 0 0 auto;
+    background: transparent;
+    border: none;
+    color: #f5e7a3;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+  }
+  .reload-warning-dismiss:hover {
     color: #fff;
   }
 </style>
