@@ -42,23 +42,38 @@ describe('RulerOverlay snap-only mode (regression for #123)', () => {
 
   for (const sel of ['body', 'end-handle', 'close'] as const) {
     it(`${sel} element gets class:interactive bound to isRulerTool`, () => {
-      const re = new RegExp(`class="${sel}"\\s+class:interactive=\\{isRulerTool\\}`);
+      const re = new RegExp(
+        `<[^>]*class="${sel}"[^>]*class:interactive=\\{\\s*isRulerTool\\s*\\}[^>]*>`,
+      );
       expect(source).toMatch(re);
     });
   }
 
   it('body pointer handler is gated on isRulerTool', () => {
-    expect(source).toMatch(/onpointerdown=\{isRulerTool \? onBodyPointerDown : null\}/);
+    expect(source).toMatch(
+      /onpointerdown\s*=\s*\{\s*isRulerTool\s*\?\s*onBodyPointerDown\s*:\s*null\s*\}/,
+    );
   });
 
   it('end-handle pointer handler is gated on isRulerTool', () => {
-    expect(source).toMatch(/onpointerdown=\{isRulerTool \? onEndPointerDown : null\}/);
+    expect(source).toMatch(
+      /onpointerdown\s*=\s*\{\s*isRulerTool\s*\?\s*onEndPointerDown\s*:\s*null\s*\}/,
+    );
   });
 
   it('close button handlers are gated on isRulerTool', () => {
-    expect(source).toMatch(/onclick=\{isRulerTool \? onClose : null\}/);
-    expect(source).toMatch(/onpointerdown=\{isRulerTool \? onClose : null\}/);
-    expect(source).toMatch(/onkeydown=\{isRulerTool \? onCloseKey : null\}/);
+    expect(source).toMatch(/onclick\s*=\s*\{\s*isRulerTool\s*\?\s*onClose\s*:\s*null\s*\}/);
+    expect(source).toMatch(/onpointerdown\s*=\s*\{\s*isRulerTool\s*\?\s*onClose\s*:\s*null\s*\}/);
+    expect(source).toMatch(/onkeydown\s*=\s*\{\s*isRulerTool\s*\?\s*onCloseKey\s*:\s*null\s*\}/);
+  });
+
+  it('outer ruler SVG is aria-hidden when the ruler tool is inactive', () => {
+    expect(source).toMatch(/aria-hidden\s*=\s*\{\s*!\s*isRulerTool\s*\}/);
+  });
+
+  it('focusable ruler elements gate tabindex on isRulerTool', () => {
+    const matches = source.match(/tabindex\s*=\s*\{\s*isRulerTool\s*\?\s*0\s*:\s*-1\s*\}/g) ?? [];
+    expect(matches.length).toBeGreaterThanOrEqual(3);
   });
 });
 

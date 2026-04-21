@@ -87,6 +87,7 @@
   {height}
   role="application"
   aria-label="Ruler overlay"
+  aria-hidden={!isRulerTool}
   onpointermove={onPointerMove}
   onpointerup={onPointerUp}
   onpointercancel={onPointerUp}
@@ -105,7 +106,7 @@
       stroke="#1e88e5"
       stroke-width="1"
       role="button"
-      tabindex="0"
+      tabindex={isRulerTool ? 0 : -1}
       aria-label="Move ruler"
       onpointerdown={isRulerTool ? onBodyPointerDown : null}
     />
@@ -143,7 +144,7 @@
     stroke="#fff"
     stroke-width="1.5"
     role="slider"
-    tabindex="0"
+    tabindex={isRulerTool ? 0 : -1}
     aria-label="Rotate ruler"
     aria-valuenow={Math.round(ruler.rotation)}
     onpointerdown={isRulerTool ? onEndPointerDown : null}
@@ -162,7 +163,7 @@
       stroke="#1e88e5"
       stroke-width="1"
       role="button"
-      tabindex="0"
+      tabindex={isRulerTool ? 0 : -1}
       aria-label="Hide ruler"
       onclick={isRulerTool ? onClose : null}
       onpointerdown={isRulerTool ? onClose : null}
