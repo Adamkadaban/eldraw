@@ -1,7 +1,6 @@
 import { sidebar, styleKeyFor } from '$lib/store/sidebar';
 import { documentStore } from '$lib/store/document';
 import { viewport } from '$lib/store/viewport';
-import { presenter } from '$lib/store/presenter';
 import { zen } from '$lib/store/zen';
 import { commandPalette } from '$lib/command/store';
 import {
@@ -32,8 +31,8 @@ export type ShortcutId =
   | 'page.prev'
   | 'page.next'
   | 'view.toggleFullscreen'
-  | 'view.togglePresenter'
   | 'view.toggleZen'
+  | 'view.toggleZenAlt'
   | 'sidebar.togglePin'
   | 'sidebar.toggleHide'
   | 'sidebar.toggleMinimize'
@@ -158,15 +157,15 @@ function buildCommands(): ShortcutCommand[] {
       run: () => toggleFullscreen(),
     },
     {
-      id: 'view.togglePresenter',
-      label: 'Toggle presenter mode',
+      id: 'view.toggleZen',
+      label: 'Toggle zen mode',
       defaultSpec: 'F5',
-      run: () => presenter.toggle(),
+      run: () => zen.toggle(),
       preventDefault: true,
     },
     {
-      id: 'view.toggleZen',
-      label: 'Toggle zen mode',
+      id: 'view.toggleZenAlt',
+      label: 'Toggle zen mode (secondary)',
       defaultSpec: 'Shift+Z',
       run: () => zen.toggle(),
       preventDefault: true,

@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { viewport, MIN_SCALE, MAX_SCALE } from '../src/lib/store/viewport';
+import { viewport, MIN_SCALE, MAX_SCALE, computeFitScale } from '../src/lib/store/viewport';
 
 describe('viewport', () => {
   beforeEach(() => viewport.reset());
@@ -66,5 +66,59 @@ describe('viewport', () => {
     expect(get(viewport).panMode).toBe(true);
     viewport.setPanMode(false);
     expect(get(viewport).panMode).toBe(false);
+  });
+});
+
+describe('computeFitScale', () => {
+  it('portrait page in landscape viewport is height-limited', () => {
+    // Page 612x792pt (US Letter portrait), viewport 1600x900 minus padding.
+    const scale = computeFitScale({ width: 612, height: 792 }, { width: 1600, height: 900 }, 0);
+    expect(scale).toBeCloseTo(900 / 792, 6);
+  });
+
+  it('landscape page in portrait viewport is width-limited', () => {
+    const scale = computeFitScale({ width: 792, height: 612 }, { width: 900, height: 1600 }, 0);
+    expect(scale).toBeCloseTo(900 / 792, 6);
+  });
+
+  it('exact aspect match yields the matching ratio on both axes', () => {
+    const scale = computeFitScale({ width: 200, height: 100 }, { width: 400, height: 200 }, 0);
+    expect(scale).toBeCloseTo(2, 6);
+  });
+
+  it('respects padding by shrinking the available area', () => {
+    const noPad = computeFitScale({ width: 100, height: 100 }, { width: 200, height: 200 }, 0);
+    const withPad = computeFitScale({ width: 100, height: 100 }, { width: 200, height: 200 }, 24);
+    expect(withPad).toBeLessThan(noPad);
+  });
+
+  it('clamps to MAX_SCALE for tiny pages in huge viewports', () => {
+    const scale = computeFitScale({ width: 1, height: 1 }, { width: 10000, height: 10000 }, 0);
+    expect(scale).toBe(MAX_SCALE);
+  });
+
+  it('clamps to MIN_SCALE for huge pages in tiny viewports', () => {
+    const scale = computeFitScale({ width: 10000, height: 10000 }, { width: 100, height: 100 }, 0);
+    expect(scale).toBe(MIN_SCALE);
+  });
+
+  it('handles invalid page dims gracefully', () => {
+    expect(computeFitScale({ width: 0, height: 100 }, { width: 200, height: 200 })).toBe(1);
+  });
+});
+
+describe('viewport.fitPageToViewport', () => {
+  beforeEach(() => viewport.reset());
+
+  it('sets scale to fit and zeros the offset', () => {
+    viewport.setOffset(50, 70);
+    viewport.fitPageToViewport({ width: 200, height: 100 }, { width: 400, height: 200 });
+    const s = get(viewport);
+    expect(s.offsetX).toBe(0);
+    expect(s.offsetY).toBe(0);
+    expect(s.scale).toBeCloseTo(
+      computeFitScale({ width: 200, height: 100 }, { width: 400, height: 200 }),
+      6,
+    );
   });
 });
