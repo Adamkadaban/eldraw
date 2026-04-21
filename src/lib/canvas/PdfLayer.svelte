@@ -4,9 +4,11 @@
   interface Props {
     pageIndex: number;
     scale: number;
+    pageCount?: number;
+    pdfId?: string;
   }
 
-  let { pageIndex, scale }: Props = $props();
+  let { pageIndex, scale, pageCount, pdfId }: Props = $props();
 
   let canvas: HTMLCanvasElement | undefined = $state();
   let error: string | null = $state(null);
@@ -20,34 +22,40 @@
   ): Promise<void> {
     error = null;
     try {
-      const pngBytes = await renderPage(index, s);
+      const page = await renderPage(index, s, pdfId);
       if (requestId !== latestRequestId) return;
-      const blob = new Blob([pngBytes], { type: 'image/png' });
-      const url = URL.createObjectURL(blob);
-      try {
-        const image = await loadImage(url);
-        if (requestId !== latestRequestId) return;
-        target.width = image.width;
-        target.height = image.height;
-        const ctx = target.getContext('2d');
-        if (!ctx) throw new Error('2d canvas context unavailable');
-        ctx.drawImage(image, 0, 0);
-      } finally {
-        URL.revokeObjectURL(url);
-      }
+      target.width = page.width;
+      target.height = page.height;
+      const ctx = target.getContext('2d');
+      if (!ctx) throw new Error('2d canvas context unavailable');
+      const imageData = new ImageData(page.rgba, page.width, page.height);
+      ctx.putImageData(imageData, 0, 0);
+      schedulePrefetch(index, s);
     } catch (err) {
       if (requestId !== latestRequestId) return;
       error = err instanceof Error ? err.message : String(err);
     }
   }
 
-  function loadImage(url: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('failed to decode page image'));
-      img.src = url;
-    });
+  function schedulePrefetch(index: number, s: number): void {
+    if (pageCount === undefined) return;
+    const neighbors: number[] = [];
+    if (index + 1 < pageCount) neighbors.push(index + 1);
+    if (index - 1 >= 0) neighbors.push(index - 1);
+    if (neighbors.length === 0) return;
+
+    const run = (): void => {
+      for (const n of neighbors) {
+        void renderPage(n, s, pdfId).catch(() => {
+          /* fire-and-forget; cache warms on success */
+        });
+      }
+    };
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      window.requestIdleCallback(run, { timeout: 500 });
+    } else {
+      setTimeout(run, 0);
+    }
   }
 
   $effect(() => {

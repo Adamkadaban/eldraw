@@ -1,6 +1,7 @@
 mod error;
 mod export;
 mod model;
+mod page_cache;
 mod pdf;
 mod state;
 mod storage;
@@ -13,6 +14,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(state::AppState::default())
         .manage(thumbnails::ThumbnailCache::default())
+        .manage(page_cache::PageCache::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
