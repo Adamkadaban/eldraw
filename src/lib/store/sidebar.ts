@@ -15,6 +15,10 @@ export const DEFAULT_SMOOTHING_PEN = 50;
 export const DEFAULT_SMOOTHING_HIGHLIGHTER = 50;
 export const DEFAULT_SMOOTHING_TEMP_INK = 30;
 
+export const DEFAULT_STRAIGHT_EDGE_SNAP_STEP = 15;
+export const MIN_STRAIGHT_EDGE_SNAP_STEP = 1;
+export const MAX_STRAIGHT_EDGE_SNAP_STEP = 90;
+
 export interface LaserStyle {
   color: string;
   radius: number;
@@ -58,6 +62,7 @@ export interface SidebarState {
   smoothingPen: number;
   smoothingHighlighter: number;
   smoothingTempInk: number;
+  straightEdgeSnapStep: number;
   presets: ToolPreset[];
   floatingPos: { x: number; y: number } | null;
   hidden: boolean;
@@ -93,6 +98,7 @@ function initialState(): SidebarState {
     smoothingPen: DEFAULT_SMOOTHING_PEN,
     smoothingHighlighter: DEFAULT_SMOOTHING_HIGHLIGHTER,
     smoothingTempInk: DEFAULT_SMOOTHING_TEMP_INK,
+    straightEdgeSnapStep: DEFAULT_STRAIGHT_EDGE_SNAP_STEP,
     presets: [],
     floatingPos: null,
     hidden: false,
@@ -300,6 +306,16 @@ function createSidebarStore() {
         if (snapshot.smoothingTempInk !== undefined && Number.isFinite(snapshot.smoothingTempInk)) {
           next.smoothingTempInk = clamp(snapshot.smoothingTempInk, 0, 100);
         }
+        if (
+          snapshot.straightEdgeSnapStep !== undefined &&
+          Number.isFinite(snapshot.straightEdgeSnapStep)
+        ) {
+          next.straightEdgeSnapStep = clamp(
+            snapshot.straightEdgeSnapStep,
+            MIN_STRAIGHT_EDGE_SNAP_STEP,
+            MAX_STRAIGHT_EDGE_SNAP_STEP,
+          );
+        }
         if (snapshot.presets !== undefined) next.presets = snapshot.presets;
         if (typeof snapshot.hidden === 'boolean') next.hidden = snapshot.hidden;
         if (typeof snapshot.minimized === 'boolean') next.minimized = snapshot.minimized;
@@ -356,6 +372,13 @@ function createSidebarStore() {
       });
     },
 
+    setStraightEdgeSnapStep(value: number) {
+      const clamped = clamp(value, MIN_STRAIGHT_EDGE_SNAP_STEP, MAX_STRAIGHT_EDGE_SNAP_STEP);
+      update((s) =>
+        s.straightEdgeSnapStep === clamped ? s : { ...s, straightEdgeSnapStep: clamped },
+      );
+    },
+
     capturePreset(): ToolPreset | null {
       const s = get(store);
       const key = styleKeyFor(s.activeTool);
@@ -403,6 +426,7 @@ const PRESETS_STORAGE_KEY = 'eldraw.presets.v1';
 const FLOATING_POS_STORAGE_KEY = 'eldraw.sidebar-pos.v1';
 const SMOOTHING_STORAGE_KEY = 'eldraw.smoothing.v1';
 const LAYOUT_STORAGE_KEY = 'eldraw.sidebar-layout.v1';
+const STRAIGHT_EDGE_STORAGE_KEY = 'eldraw.straight-edge.v1';
 
 const VALID_TOOLS: ReadonlySet<ToolKind> = new Set<ToolKind>([
   'pen',
@@ -514,6 +538,21 @@ function loadPersistedSmoothing(): PersistedSmoothing | null {
   }
 }
 
+function loadPersistedStraightEdgeSnapStep(): number | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STRAIGHT_EDGE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const p = parsed as Record<string, unknown>;
+    if (typeof p.snapStepDeg !== 'number' || !Number.isFinite(p.snapStepDeg)) return null;
+    return clamp(p.snapStepDeg, MIN_STRAIGHT_EDGE_SNAP_STEP, MAX_STRAIGHT_EDGE_SNAP_STEP);
+  } catch {
+    return null;
+  }
+}
+
 let hydrated = false;
 let hydrationUnsubscribe: (() => void) | null = null;
 
@@ -562,6 +601,9 @@ export function hydrateSidebarFromStorage(): () => void {
     sidebar.setSmoothing('temp-ink', smoothing.tempInk);
   }
 
+  const snapStep = loadPersistedStraightEdgeSnapStep();
+  if (snapStep !== null) sidebar.setStraightEdgeSnapStep(snapStep);
+
   const layout = loadPersistedLayout();
   if (layout) {
     sidebar.setHidden(layout.hidden);
@@ -585,6 +627,10 @@ export function hydrateSidebarFromStorage(): () => void {
           highlighter: s.smoothingHighlighter,
           tempInk: s.smoothingTempInk,
         }),
+      );
+      localStorage.setItem(
+        STRAIGHT_EDGE_STORAGE_KEY,
+        JSON.stringify({ snapStepDeg: s.straightEdgeSnapStep }),
       );
       localStorage.setItem(
         LAYOUT_STORAGE_KEY,
@@ -627,6 +673,7 @@ export type SyncableSidebarState = Pick<
   | 'smoothingPen'
   | 'smoothingHighlighter'
   | 'smoothingTempInk'
+  | 'straightEdgeSnapStep'
   | 'presets'
   | 'hidden'
   | 'minimized'
@@ -716,6 +763,13 @@ function sanitizeImportedSidebar(raw: Record<string, unknown>): Partial<Syncable
   if (typeof raw.smoothingTempInk === 'number' && Number.isFinite(raw.smoothingTempInk)) {
     out.smoothingTempInk = clamp(raw.smoothingTempInk, 0, 100);
   }
+  if (typeof raw.straightEdgeSnapStep === 'number' && Number.isFinite(raw.straightEdgeSnapStep)) {
+    out.straightEdgeSnapStep = clamp(
+      raw.straightEdgeSnapStep,
+      MIN_STRAIGHT_EDGE_SNAP_STEP,
+      MAX_STRAIGHT_EDGE_SNAP_STEP,
+    );
+  }
   if (Array.isArray(raw.presets)) {
     out.presets = raw.presets.filter(isValidPreset).map(sanitizePreset).slice(0, MAX_PRESETS);
   }
@@ -741,6 +795,7 @@ export function pickSyncable(state: SidebarState): SyncableSidebarState {
     smoothingPen: state.smoothingPen,
     smoothingHighlighter: state.smoothingHighlighter,
     smoothingTempInk: state.smoothingTempInk,
+    straightEdgeSnapStep: state.straightEdgeSnapStep,
     presets: state.presets,
     hidden: state.hidden,
     minimized: state.minimized,

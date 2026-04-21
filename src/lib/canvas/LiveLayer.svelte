@@ -1,14 +1,21 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import type { Point, StrokeObject, StrokeStyle, ToolKind } from '$lib/types';
+  import type { LineObject, Point, StrokeObject, StrokeStyle, ToolKind } from '$lib/types';
   import { toolStore } from '$lib/store/tool';
   import { strokeFromInput } from '$lib/tools/pen';
   import { drawLiveStroke } from './strokeRenderer';
+  import { drawLine } from './objectRenderer';
   import { cursorForTool } from './cursors';
   import { log } from '$lib/log';
   import { snapPointToRuler, snapStrokeToRuler, type RulerState } from '$lib/geometry/ruler';
   import { createRafBatcher, type Batcher } from './inkBatch';
   import { createOneEuroFilter, stabilizationToConfig, type OneEuroFilter } from './stabilizer';
+  import {
+    buildStraightEdgeLine,
+    decideStraightEdgeCommit,
+    straightEdgeEndpoint,
+    DEFAULT_STRAIGHT_EDGE_SNAP_STEP,
+  } from '$lib/tools/straightEdge';
 
   interface Props {
     width: number;
@@ -18,7 +25,9 @@
     rulerSnapThresholdPx?: number;
     penStabilization?: number;
     highlighterStabilization?: number;
+    straightEdgeSnapStep?: number;
     oncommit?: (stroke: StrokeObject) => void;
+    oncommitline?: (line: LineObject) => void;
     onerase?: (samples: { x: number; y: number }[]) => void;
     ongraph?: (bounds: { x: number; y: number; w: number; h: number }) => void;
   }
@@ -31,7 +40,9 @@
     rulerSnapThresholdPx = 12,
     penStabilization = 0,
     highlighterStabilization = 0,
+    straightEdgeSnapStep = DEFAULT_STRAIGHT_EDGE_SNAP_STEP,
     oncommit,
+    oncommitline,
     onerase,
     ongraph,
   }: Props = $props();
@@ -48,6 +59,8 @@
   let startTime = 0;
   let points: Point[] = [];
   let predictedTail: Point[] = [];
+  let shiftHeld = false;
+  let altHeld = false;
   let currentTool: ToolKind = $state('pen');
   let currentStyle: StrokeStyle = {
     color: '#000',
@@ -111,6 +124,8 @@
     predictedTail = [];
     graphStart = null;
     graphEnd = null;
+    shiftHeld = false;
+    altHeld = false;
     stabilizer = null;
     batcher?.cancel();
     clear();
@@ -154,18 +169,55 @@
     return { ...p, x: out.x, y: out.y };
   }
 
+  function straightEdgeActive(): boolean {
+    if (!shiftHeld) return false;
+    if (rulerSnap) return false;
+    if (currentTool !== 'pen' && currentTool !== 'highlighter') return false;
+    return points.length > 0;
+  }
+
+  function drawStraightPreview(c: CanvasRenderingContext2D) {
+    const first = points[0];
+    const last = points[points.length - 1];
+    const to = straightEdgeEndpoint({
+      start: { x: first.x, y: first.y },
+      current: { x: last.x, y: last.y },
+      snapStepDeg: straightEdgeSnapStep,
+      bypassSnap: altHeld,
+    });
+    const preview: LineObject = {
+      id: 'live-straight',
+      createdAt: 0,
+      type: 'line',
+      style: currentStyle,
+      from: { x: first.x, y: first.y },
+      to,
+      arrow: { start: false, end: false },
+    };
+    drawLine(c, preview, ptToPx);
+  }
+
   function redrawLive() {
     const c = ensureCtx();
     if (!c) return;
     clear();
     if (currentTool === 'highlighter') {
-      c.globalCompositeOperation = 'multiply';
-      const tail = points.concat(predictedTail);
-      drawLiveStroke(c, tail, currentStyle, 'highlighter', ptToPx);
+      if (straightEdgeActive()) {
+        c.globalCompositeOperation = 'multiply';
+        drawStraightPreview(c);
+      } else {
+        c.globalCompositeOperation = 'multiply';
+        const tail = points.concat(predictedTail);
+        drawLiveStroke(c, tail, currentStyle, 'highlighter', ptToPx);
+      }
     } else if (currentTool === 'pen') {
       c.globalCompositeOperation = 'source-over';
-      const tail = points.concat(predictedTail);
-      drawLiveStroke(c, tail, currentStyle, 'pen', ptToPx);
+      if (straightEdgeActive()) {
+        drawStraightPreview(c);
+      } else {
+        const tail = points.concat(predictedTail);
+        drawLiveStroke(c, tail, currentStyle, 'pen', ptToPx);
+      }
     } else if (currentTool === 'graph' && graphStart && graphEnd) {
       drawGraphRect(c);
     }
@@ -255,6 +307,8 @@
     activePointerId = e.pointerId;
     startTime = e.timeStamp;
     predictedTail = [];
+    shiftHeld = e.shiftKey;
+    altHeld = e.altKey;
 
     if (currentTool === 'eraser') {
       const p = toPoint(e);
@@ -279,6 +333,8 @@
 
   function handleMoveLike(e: PointerEvent) {
     if (activePointerId !== e.pointerId) return;
+    shiftHeld = e.shiftKey;
+    altHeld = e.altKey;
     const rect = canvas.getBoundingClientRect();
     if (currentTool === 'eraser') {
       const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
@@ -332,6 +388,8 @@
 
   function finish(e: PointerEvent, commit: boolean) {
     if (activePointerId !== e.pointerId) return;
+    shiftHeld = e.shiftKey;
+    altHeld = e.altKey;
     try {
       canvas.releasePointerCapture(e.pointerId);
     } catch {
@@ -345,12 +403,36 @@
     predictedTail = [];
 
     if (commit && (currentTool === 'pen' || currentTool === 'highlighter') && points.length > 0) {
-      const snapped = rulerSnap
-        ? snapStrokeToRuler(points, rulerSnap, rulerSnapThresholdPx / ptToPx)
-        : points;
-      const stroke = strokeFromInput(snapped, currentStyle, currentTool);
-      log('live', `commit ${currentTool} points=${snapped.length}`);
-      oncommit?.(stroke);
+      const first = points[0];
+      const last = points[points.length - 1];
+      const decision = decideStraightEdgeCommit({
+        shiftAtPointerUp: shiftHeld,
+        altAtPointerUp: altHeld,
+        rulerActive: rulerSnap !== null,
+        tool: currentTool,
+        first: { x: first.x, y: first.y },
+        last: { x: last.x, y: last.y },
+        style: currentStyle,
+        snapStepDeg: straightEdgeSnapStep,
+      });
+      if (decision.kind === 'line') {
+        const line = buildStraightEdgeLine(
+          crypto.randomUUID(),
+          Date.now(),
+          decision.from,
+          decision.to,
+          currentStyle,
+        );
+        log('live', `commit straight-edge ${currentTool} tool`);
+        oncommitline?.(line);
+      } else {
+        const snapped = rulerSnap
+          ? snapStrokeToRuler(points, rulerSnap, rulerSnapThresholdPx / ptToPx)
+          : points;
+        const stroke = strokeFromInput(snapped, currentStyle, currentTool);
+        log('live', `commit ${currentTool} points=${snapped.length}`);
+        oncommit?.(stroke);
+      }
     }
     if (commit && currentTool === 'graph' && graphStart && graphEnd) {
       const x = Math.min(graphStart.x, graphEnd.x);
@@ -364,6 +446,8 @@
     points = [];
     graphStart = null;
     graphEnd = null;
+    shiftHeld = false;
+    altHeld = false;
     stabilizer = null;
     clear();
   }

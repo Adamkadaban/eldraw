@@ -97,6 +97,15 @@
     if (Number.isFinite(v)) sidebar.setSmoothing(tool, v);
   }
 
+  const showStraightEdgeSnap = $derived(
+    sidebarState.activeTool === 'pen' || sidebarState.activeTool === 'highlighter',
+  );
+
+  function onStraightEdgeSnapStep(e: Event) {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (Number.isFinite(v)) sidebar.setStraightEdgeSnapStep(v);
+  }
+
   function onColor(color: string) {
     onStyleChange?.({ ...style, color });
   }
@@ -435,6 +444,25 @@
           />
           <span class="value">{smoothing}%</span>
         </div>
+      </section>
+    {/if}
+
+    {#if showStraightEdgeSnap}
+      <section class="section straight-edge" aria-label="Straight-edge snap">
+        <h3 class="section-title">Straight-edge snap</h3>
+        <div class="row">
+          <input
+            type="range"
+            min="1"
+            max="90"
+            step="1"
+            value={sidebarState.straightEdgeSnapStep}
+            oninput={onStraightEdgeSnapStep}
+            aria-label="Straight-edge snap step in degrees"
+          />
+          <span class="value">{sidebarState.straightEdgeSnapStep}°</span>
+        </div>
+        <p class="hint">Hold Shift to snap; Alt to bypass.</p>
       </section>
     {/if}
 
@@ -779,6 +807,25 @@
     min-width: 36px;
     text-align: right;
     font-variant-numeric: tabular-nums;
+  }
+  .straight-edge .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .straight-edge input[type='range'] {
+    flex: 1;
+    min-width: 0;
+  }
+  .straight-edge .value {
+    min-width: 36px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .straight-edge .hint {
+    margin: 0;
+    font-size: 10px;
+    color: #888;
   }
   input[type='number'] {
     background: #1b1b1b;

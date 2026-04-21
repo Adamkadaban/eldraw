@@ -688,6 +688,7 @@
               penStabilization={sidebarState.smoothingPen}
               highlighterStabilization={sidebarState.smoothingHighlighter}
               tempInkStabilization={sidebarState.smoothingTempInk}
+              straightEdgeSnapStep={sidebarState.straightEdgeSnapStep}
               rulerSnap={rulerSnapState}
               oncommit={onCommitStroke}
               onerase={onEraseAt}
