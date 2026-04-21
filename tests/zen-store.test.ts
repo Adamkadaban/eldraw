@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { zen, chromeVisibility } from '../src/lib/store/zen';
+import { zen, chromeVisibility, registerZenFullscreenBridge } from '../src/lib/store/zen';
 
 describe('zen store', () => {
   beforeEach(() => zen.reset());
@@ -45,6 +45,61 @@ describe('zen store', () => {
     zen.toggle();
     unsubscribe();
     expect(observed).toEqual([false, true, false]);
+  });
+});
+
+describe('zen fullscreen bridge', () => {
+  const setFullscreen = vi.fn();
+
+  beforeEach(() => {
+    zen.reset();
+    setFullscreen.mockClear();
+    registerZenFullscreenBridge({ setFullscreen });
+  });
+  afterEach(() => registerZenFullscreenBridge(null));
+
+  it('enter calls the bridge with true', () => {
+    zen.enter();
+    expect(setFullscreen).toHaveBeenCalledTimes(1);
+    expect(setFullscreen).toHaveBeenCalledWith(true);
+  });
+
+  it('enter is idempotent and only calls the bridge on state change', () => {
+    zen.enter();
+    zen.enter();
+    expect(setFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it('exit calls the bridge with false', () => {
+    zen.enter();
+    setFullscreen.mockClear();
+    zen.exit();
+    expect(setFullscreen).toHaveBeenCalledTimes(1);
+    expect(setFullscreen).toHaveBeenCalledWith(false);
+  });
+
+  it('toggle drives the bridge on every flip', () => {
+    zen.toggle();
+    zen.toggle();
+    expect(setFullscreen.mock.calls.map((c) => c[0])).toEqual([true, false]);
+  });
+
+  it('reset exits fullscreen when zen was active', () => {
+    zen.enter();
+    setFullscreen.mockClear();
+    zen.reset();
+    expect(setFullscreen).toHaveBeenCalledWith(false);
+  });
+
+  it('reset does not call the bridge when zen was already inactive', () => {
+    zen.reset();
+    expect(setFullscreen).not.toHaveBeenCalled();
+  });
+
+  it('unregistering the bridge stops bridge calls', () => {
+    registerZenFullscreenBridge(null);
+    zen.toggle();
+    expect(setFullscreen).not.toHaveBeenCalled();
   });
 });
 

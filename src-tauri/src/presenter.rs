@@ -74,6 +74,11 @@ fn monitor_key(m: &tauri::Monitor) -> (i32, i32, u32, u32) {
 #[allow(clippy::needless_pass_by_value)]
 pub fn open_presenter_window(app: AppHandle, monitor_index: Option<usize>) -> AppResult<()> {
     if let Some(existing) = app.get_webview_window(PRESENTER_LABEL) {
+        // Force-reapply the chromeless-fullscreen invariants. Some compositors
+        // drop decorations/fullscreen after the window has been re-presented.
+        existing.set_decorations(false).ok();
+        existing.set_always_on_top(true).ok();
+        existing.set_fullscreen(true).ok();
         existing.set_focus().ok();
         return Ok(());
     }
@@ -82,6 +87,7 @@ pub fn open_presenter_window(app: AppHandle, monitor_index: Option<usize>) -> Ap
         WebviewWindowBuilder::new(&app, PRESENTER_LABEL, WebviewUrl::App("presenter".into()))
             .title("eldraw presenter")
             .decorations(false)
+            .always_on_top(true)
             .resizable(true)
             .visible(false);
 
@@ -106,6 +112,10 @@ pub fn open_presenter_window(app: AppHandle, monitor_index: Option<usize>) -> Ap
             let _ = app_handle.emit(PRESENTER_WINDOW_CLOSED_EVENT, ());
         }
     });
+    // Re-apply the chromeless flags post-build: the builder hints are not
+    // always honored on GNOME/Wayland until the window is realized.
+    window.set_decorations(false).ok();
+    window.set_always_on_top(true).ok();
     window.set_fullscreen(true).ok();
     window.show()?;
     Ok(())
@@ -115,6 +125,9 @@ pub fn open_presenter_window(app: AppHandle, monitor_index: Option<usize>) -> Ap
 #[allow(clippy::needless_pass_by_value)]
 pub fn close_presenter_window(app: AppHandle) -> AppResult<()> {
     if let Some(w) = app.get_webview_window(PRESENTER_LABEL) {
+        // Exit fullscreen before tearing the window down to avoid the OS
+        // animating a decorated window into view on the way out.
+        w.set_fullscreen(false).ok();
         w.close()?;
     }
     app.emit(PRESENTER_WINDOW_CLOSED_EVENT, ())

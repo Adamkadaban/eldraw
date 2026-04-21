@@ -3,5 +3,12 @@
   "identifier": "default",
   "description": "Capability for the main, presenter, and sidebar windows",
   "windows": ["main", "presenter", "sidebar-window"],
-  "permissions": ["core:default", "opener:default", "dialog:allow-open"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-set-decorations",
+    "core:window:allow-set-always-on-top",
+    "opener:default",
+    "dialog:allow-open"
+  ]
 }

@@ -2,6 +2,10 @@
   import { onDestroy, onMount } from 'svelte';
   import { CanvasStack, GraphLayer, PdfLayer, TextLayer } from '$lib/canvas';
   import { onPresenterSync, closePresenterWindow } from '$lib/ipc/presenter';
+  import { setWindowFullscreenChromeless } from '$lib/app/windowFullscreen';
+  // Teardown deliberately leaves fullscreen/decorations to Rust's
+  // `close_presenter_window`: restoring decorations from JS before close
+  // causes a decorated-window flash.
   import { presenterMirror, presenterMirrorStore } from '$lib/store/presenterMirror';
   import { pdfPageIndexAt } from '$lib/store/document';
   import type { AnyObject, GraphObject, StrokeObject, TextObject } from '$lib/types';
@@ -53,6 +57,7 @@
   }
 
   onMount(async () => {
+    await setWindowFullscreenChromeless(true);
     unlisten = await onPresenterSync((payload) => presenterMirror.apply(payload));
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', onResize);

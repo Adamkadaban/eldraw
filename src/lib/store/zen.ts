@@ -4,6 +4,25 @@ export interface ZenState {
   active: boolean;
 }
 
+export interface ZenFullscreenBridge {
+  setFullscreen(on: boolean): void | Promise<void>;
+}
+
+let bridge: ZenFullscreenBridge | null = null;
+
+/**
+ * Inject the OS-level fullscreen bridge. The UI shell registers the real
+ * Tauri bridge on mount; tests register mocks. Pass `null` to unregister.
+ */
+export function registerZenFullscreenBridge(b: ZenFullscreenBridge | null): void {
+  bridge = b;
+}
+
+function pushFullscreen(on: boolean): void {
+  if (!bridge) return;
+  void Promise.resolve(bridge.setFullscreen(on)).catch(() => {});
+}
+
 function createZen() {
   const store = writable<ZenState>({ active: false });
   const { subscribe, update, set } = store;
@@ -16,19 +35,38 @@ function createZen() {
     },
 
     enter(): void {
-      update((s) => (s.active ? s : { ...s, active: true }));
+      let changed = false;
+      update((s) => {
+        if (s.active) return s;
+        changed = true;
+        return { ...s, active: true };
+      });
+      if (changed) pushFullscreen(true);
     },
 
     exit(): void {
-      update((s) => (s.active ? { ...s, active: false } : s));
+      let changed = false;
+      update((s) => {
+        if (!s.active) return s;
+        changed = true;
+        return { ...s, active: false };
+      });
+      if (changed) pushFullscreen(false);
     },
 
     toggle(): void {
-      update((s) => ({ ...s, active: !s.active }));
+      let next = false;
+      update((s) => {
+        next = !s.active;
+        return { ...s, active: next };
+      });
+      pushFullscreen(next);
     },
 
     reset(): void {
+      const wasActive = get(store).active;
       set({ active: false });
+      if (wasActive) pushFullscreen(false);
     },
   };
 }
