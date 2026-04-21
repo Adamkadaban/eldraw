@@ -7,6 +7,7 @@ import { presenter } from '$lib/store/presenter';
 import { zen } from '$lib/store/zen';
 import { sampleCanvasBackground } from '$lib/canvas/bgSample';
 import { isEditableTarget } from './shortcutParser';
+import { isTextInput } from './focus';
 
 /**
  * Global keyboard shortcuts for the app shell. Listeners are attached to
@@ -78,7 +79,17 @@ export const shortcuts: Action<HTMLElement> = () => {
   }
 
   function handleKeyDown(event: KeyboardEvent): void {
-    if (isEditableTarget(event.target)) return;
+    const ctrlOrMeta = event.ctrlKey || event.metaKey;
+    const lower = event.key.toLowerCase();
+
+    if (isTextInput(event.target)) {
+      // Let the input handle typing; only surface document-editing shortcuts so
+      // undo/redo remain reachable while a text field is focused.
+      const editingShortcut = ctrlOrMeta && (lower === 'z' || lower === 'y');
+      if (!editingShortcut) return;
+    } else if (isEditableTarget(event.target)) {
+      return;
+    }
 
     const key = event.key;
 
@@ -112,10 +123,7 @@ export const shortcuts: Action<HTMLElement> = () => {
       return;
     }
 
-    const ctrlOrMeta = event.ctrlKey || event.metaKey;
-
     if (ctrlOrMeta) {
-      const lower = key.toLowerCase();
       if (lower === 'z' && event.shiftKey) {
         event.preventDefault();
         documentStore.redo(currentPage());
