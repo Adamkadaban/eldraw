@@ -29,6 +29,29 @@ export async function renderPage(pageIndex: number, scale: number): Promise<Arra
   }
 }
 
+export async function renderPdfThumbnail(
+  pdfId: string,
+  pageIndex: number,
+  maxDim: number,
+): Promise<ArrayBuffer> {
+  const t = performance.now();
+  try {
+    const bytes = await invoke<ArrayBuffer>('render_pdf_thumbnail', {
+      pdfId,
+      pageIndex,
+      maxDim,
+    });
+    log(
+      'ipc',
+      `render_pdf_thumbnail idx=${pageIndex} max=${maxDim} bytes=${bytes.byteLength} in ${(performance.now() - t).toFixed(1)}ms`,
+    );
+    return bytes;
+  } catch (err) {
+    warn('ipc', `render_pdf_thumbnail idx=${pageIndex} failed`, err);
+    throw err;
+  }
+}
+
 export async function loadSidecar(pdfPath: string): Promise<EldrawDocument | null> {
   return invoke('load_sidecar', { pdfPath });
 }

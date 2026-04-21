@@ -17,10 +17,11 @@ pub struct OpenPdf {
     #[allow(dead_code)] // retained for future cache invalidation / diagnostics
     pub path: PathBuf,
     pub bytes: Vec<u8>,
+    pub hash: String,
 }
 
 impl AppState {
-    pub fn set_open(&self, path: PathBuf, bytes: Vec<u8>) -> AppResult<()> {
+    pub fn set_open(&self, path: PathBuf, bytes: Vec<u8>, hash: String) -> AppResult<()> {
         let mut guard = self
             .inner
             .lock()
@@ -29,6 +30,7 @@ impl AppState {
         *guard = Some(OpenPdf {
             path: canonical,
             bytes,
+            hash,
         });
         Ok(())
     }

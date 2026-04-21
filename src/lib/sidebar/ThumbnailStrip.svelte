@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import type { Page } from '$lib/types';
-  import { renderPage } from '$lib/ipc';
+  import {
+    getThumbnail,
+    retainThumbnails,
+    revokeThumbnails,
+    DEFAULT_MAX_DIM,
+  } from '$lib/pdf/thumbnails';
   import { thumbnailSize } from './thumbnailSize';
 
   interface Props {
@@ -28,114 +33,112 @@
   }: Props = $props();
 
   const canDelete = $derived(pages.length > 1);
-  const MAX_CONCURRENT_RENDERS = 3;
 
   let previewUrls = $state(new Map<number, string>());
-  const inflight = new Set<number>();
-  const queue: Page[] = [];
-  let activeRenders = 0;
+  const requested = new Set<number>();
   let destroyed = false;
   let cacheKey: string | null = null;
-
-  function thumbnailScale(widthPt: number): number {
-    if (!widthPt || widthPt <= 0) return 1;
-    const target = Math.max(64, Math.min(maxWidth, 220));
-    return target / widthPt;
-  }
+  let observer: IntersectionObserver | null = null;
+  const slotToKey = new WeakMap<Element, number>();
 
   function sourceKey(page: Page): number {
     return page.pdfSourceIndex ?? page.pageIndex;
   }
 
-  function revokeAll() {
-    for (const url of previewUrls.values()) URL.revokeObjectURL(url);
+  function dropState() {
+    if (cacheKey) revokeThumbnails(cacheKey);
     previewUrls = new Map();
-    inflight.clear();
-    queue.length = 0;
-    activeRenders = 0;
+    requested.clear();
   }
 
-  function pumpQueue() {
-    while (!destroyed && activeRenders < MAX_CONCURRENT_RENDERS && queue.length > 0) {
-      const page = queue.shift()!;
-      void renderOne(page);
-    }
-  }
-
-  async function renderOne(page: Page): Promise<void> {
-    const key = sourceKey(page);
-    activeRenders += 1;
+  async function request(key: number) {
+    if (!docKey || destroyed || requested.has(key)) return;
+    requested.add(key);
+    const scopedKey = docKey;
     try {
-      const bytes = await renderPage(key, thumbnailScale(page.width));
-      if (destroyed) return;
-      const blob = new Blob([bytes], { type: 'image/png' });
-      const url = URL.createObjectURL(blob);
-      if (destroyed) {
-        URL.revokeObjectURL(url);
-        return;
-      }
+      const url = await getThumbnail(scopedKey, key, DEFAULT_MAX_DIM);
+      if (destroyed || scopedKey !== cacheKey) return;
       const next = new Map(previewUrls);
-      const prior = next.get(key);
-      if (prior) URL.revokeObjectURL(prior);
       next.set(key, url);
       previewUrls = next;
     } catch {
       // Leave the slot blank on failure; main layer surfaces the error.
     } finally {
-      inflight.delete(key);
-      activeRenders -= 1;
-      pumpQueue();
+      requested.delete(key);
     }
   }
 
-  function enqueue(page: Page) {
-    if (page.type !== 'pdf') return;
+  function ensureObserver(): IntersectionObserver | null {
+    if (observer || typeof IntersectionObserver === 'undefined') return observer;
+    observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const key = slotToKey.get(entry.target);
+          if (key !== undefined) void request(key);
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    return observer;
+  }
+
+  function observe(el: Element, page: Page) {
+    if (page.type !== 'pdf') return { destroy() {} };
     const key = sourceKey(page);
-    if (previewUrls.has(key) || inflight.has(key)) return;
-    inflight.add(key);
-    queue.push(page);
-  }
-
-  function pruneStaleKeys(snapshot: Page[]) {
-    const live = new Set<number>();
-    for (const p of snapshot) if (p.type === 'pdf') live.add(sourceKey(p));
-    let changed = false;
-    const next = new Map(previewUrls);
-    for (const [key, url] of next) {
-      if (!live.has(key)) {
-        URL.revokeObjectURL(url);
-        next.delete(key);
-        changed = true;
-      }
+    const io = ensureObserver();
+    if (!io) {
+      void request(key);
+      return { destroy() {} };
     }
-    if (changed) previewUrls = next;
+    slotToKey.set(el, key);
+    io.observe(el);
+    return {
+      destroy() {
+        io.unobserve(el);
+        slotToKey.delete(el);
+      },
+    };
   }
 
   $effect(() => {
     const key = docKey;
     untrack(() => {
       if (key !== cacheKey) {
-        revokeAll();
+        dropState();
         cacheKey = key;
       }
     });
   });
 
   $effect(() => {
-    const snapshot = pages;
+    const activeKeys = new Set<number>();
+    for (const page of pages) {
+      if (page.type === 'pdf') activeKeys.add(sourceKey(page));
+    }
     untrack(() => {
-      pruneStaleKeys(snapshot);
-      for (const p of snapshot) enqueue(p);
-      pumpQueue();
+      if (!cacheKey) return;
+      let changed = false;
+      const next = new Map(previewUrls);
+      for (const key of next.keys()) {
+        if (!activeKeys.has(key)) {
+          next.delete(key);
+          requested.delete(key);
+          changed = true;
+        }
+      }
+      if (changed) previewUrls = next;
+      retainThumbnails(cacheKey, activeKeys);
     });
   });
 
   onDestroy(() => {
     destroyed = true;
-    for (const url of previewUrls.values()) URL.revokeObjectURL(url);
+    observer?.disconnect();
+    observer = null;
+    if (cacheKey) revokeThumbnails(cacheKey);
     previewUrls.clear();
-    inflight.clear();
-    queue.length = 0;
+    requested.clear();
   });
 
   function previewFor(page: Page): string | undefined {
@@ -160,6 +163,7 @@
           <span
             class="preview"
             class:blank={page.type === 'blank'}
+            use:observe={page}
             style="width: {size.width}px; height: {size.height}px;{url
               ? ` background-image: url('${url}');`
               : ''}"
