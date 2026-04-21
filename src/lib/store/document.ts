@@ -292,7 +292,7 @@ export function createDocumentStore(): DocumentStore {
       const page = doc.pages[pageIndex];
       if (!page) return;
       const byId = new Map(page.objects.map((o) => [o.id, o] as const));
-      const entries = [];
+      const entries: Extract<Command, { type: 'updateMany' }>['entries'] = [];
       for (const after of afters) {
         const before = byId.get(after.id);
         if (!before) continue;

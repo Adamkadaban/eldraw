@@ -109,9 +109,11 @@ export function rectContains(outer: Rect, inner: Rect): boolean {
 }
 
 /**
- * True when the object intersects the lasso polygon. Strokes use accurate
- * segment-vs-polygon; shapes/lines/graphs/text/angle marks fall back to
- * their AABB so marquee-like behavior works without per-type polygon code.
+ * True when the object intersects the lasso polygon. Strokes, lines, and
+ * angle marks use accurate segment-vs-polygon tests on their polyline
+ * geometry. Other types (shape, graph, numberline, text) fall back to
+ * AABB-vs-polygon overlap, which is cheap and good enough for UI hit
+ * testing without per-type polygon code.
  */
 export function objectIntersectsPolygon(
   obj: AnyObject,

@@ -26,7 +26,13 @@
   import { pickInLasso, pickInMarquee, pickTopAt } from './hitTest';
   import type { Rect, Vec2 } from './geometry';
   import { transformObject, translateObject } from './transform';
-  import { commitStylePatch, commitTransform, commitTranslate, commitDelete } from './ops';
+  import {
+    commitStylePatch,
+    commitTransform,
+    commitTranslate,
+    commitDelete,
+    reorderSelection,
+  } from './ops';
   import {
     duplicateInPlace,
     hasClipboardContents,
@@ -35,7 +41,6 @@
     stampForPaste,
   } from './clipboard';
   import { documentStore } from '$lib/store/document';
-  import { reorderArray } from './ops';
   import SelectionToolbar from './SelectionToolbar.svelte';
 
   interface Props {
@@ -193,7 +198,7 @@
         kind: 'marquee',
         start: p,
         current: p,
-        additive: e.ctrlKey || e.metaKey || selectedObjects.length > 0,
+        additive: e.ctrlKey || e.metaKey,
       };
     } else {
       if (selectedObjects.length > 0) selection.clear();
@@ -265,7 +270,10 @@
     };
     const preview = new Map<ObjectId, AnyObject>();
     for (const o of itx.startObjects) {
-      preview.set(o.id, transformObject(o, { scale: { sx, sy, pivot } }));
+      preview.set(
+        o.id,
+        transformObject(o, { scale: { sx, sy, pivot } }, { scaleStrokeWidth: true }),
+      );
     }
     return preview;
   }
@@ -417,22 +425,11 @@
   }
 
   function onBringForward() {
-    reorderAndCommit('forward');
+    reorderSelection(pageIndex, selectionState.ids, 'forward');
   }
 
   function onSendBackward() {
-    reorderAndCommit('backward');
-  }
-
-  function reorderAndCommit(direction: 'forward' | 'backward') {
-    const next = reorderArray(objects, selectionState.ids, direction);
-    const same = next.length === objects.length && next.every((o, i) => o.id === objects[i].id);
-    if (same) return;
-    documentStore.removeObjects(
-      pageIndex,
-      objects.map((o) => o.id),
-    );
-    for (const obj of next) documentStore.addObject(pageIndex, obj);
+    reorderSelection(pageIndex, selectionState.ids, 'backward');
   }
 
   function lassoPathD(points: readonly Vec2[]): string {

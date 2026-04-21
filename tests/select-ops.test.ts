@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { documentStore } from '$lib/store/document';
-import { commitStylePatch, commitTranslate, commitDelete } from '$lib/select/ops';
+import { commitStylePatch, commitTranslate, commitDelete, reorderSelection } from '$lib/select/ops';
 import type { EldrawDocument, ShapeObject, StrokeStyle } from '$lib/types';
 
 const STYLE: StrokeStyle = { color: '#000', width: 2, dash: 'solid', opacity: 1 };
@@ -100,5 +100,29 @@ describe('commit ops', () => {
     const u = documentStore.history.canUndo(0).subscribe((v) => (canUndo = v));
     u();
     expect(canUndo).toBe(false);
+  });
+
+  it('reorderSelection forward moves selection one step toward top', () => {
+    const a = mkShape('a');
+    const b = mkShape('b');
+    const c = mkShape('c');
+    documentStore.load(doc([a, b, c]));
+    reorderSelection(0, new Set(['a']), 'forward');
+    let objs: ShapeObject[] = [];
+    const u = documentStore.objectsOnPage(0).subscribe((v) => (objs = v as ShapeObject[]));
+    u();
+    expect(objs.map((o) => o.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('reorderSelection backward moves selection one step toward bottom', () => {
+    const a = mkShape('a');
+    const b = mkShape('b');
+    const c = mkShape('c');
+    documentStore.load(doc([a, b, c]));
+    reorderSelection(0, new Set(['c']), 'backward');
+    let objs: ShapeObject[] = [];
+    const u = documentStore.objectsOnPage(0).subscribe((v) => (objs = v as ShapeObject[]));
+    u();
+    expect(objs.map((o) => o.id)).toEqual(['a', 'c', 'b']);
   });
 });

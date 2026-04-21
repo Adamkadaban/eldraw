@@ -60,29 +60,16 @@ export function commitDelete(pageIndex: number, ids: ReadonlySet<ObjectId>): voi
 }
 
 /**
- * Z-order mutation: remove then re-add in the new order. Wrapped under a
- * single undo entry is tricky given the existing commands; for now we
- * implement via two separate ops (remove + re-add). Undoing will take two
- * steps for z-order changes — acceptable for phase 1.
+ * Z-order mutation: remove then re-add in the new order. This is currently
+ * two history entries because the existing command set has no single
+ * reorder op; undoing a reorder takes two undos.
  */
-export function bringForward(pageIndex: number, ids: ReadonlySet<ObjectId>): void {
-  reorderSelection(pageIndex, ids, 'forward');
-}
-
-export function sendBackward(pageIndex: number, ids: ReadonlySet<ObjectId>): void {
-  reorderSelection(pageIndex, ids, 'backward');
-}
-
-function pageSnapshot(pageIndex: number): AnyObject[] | null {
-  return pageObjects(pageIndex);
-}
-
-function reorderSelection(
+export function reorderSelection(
   pageIndex: number,
   ids: ReadonlySet<ObjectId>,
   direction: 'forward' | 'backward',
 ): void {
-  const current = pageSnapshot(pageIndex);
+  const current = pageObjects(pageIndex);
   if (!current) return;
   const next = reorderArray(current, ids, direction);
   if (arraysEqualById(current, next)) return;

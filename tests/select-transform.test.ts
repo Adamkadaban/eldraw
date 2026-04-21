@@ -187,6 +187,54 @@ describe('transformObject rotate', () => {
     expect(s.bounds.w).toBe(10);
     expect(s.bounds.h).toBe(10);
   });
+  it('rectangular shape rotation preserves w/h (does not swap)', () => {
+    const rect: ShapeObject = { ...shape(), bounds: { x: 0, y: 0, w: 10, h: 20 } };
+    const s = transformObject(rect, {
+      rotate: { angle: Math.PI / 2, pivot: { x: 0, y: 0 } },
+    }) as ShapeObject;
+    expect(s.bounds.w).toBe(10);
+    expect(s.bounds.h).toBe(20);
+  });
+  it('graph rotation preserves w/h (anchor moves only)', () => {
+    const g = transformObject(graph(), {
+      rotate: { angle: Math.PI / 2, pivot: { x: 0, y: 0 } },
+    }) as GraphObject;
+    expect(g.bounds.w).toBe(100);
+    expect(g.bounds.h).toBe(100);
+  });
+  it('rectangular graph rotation preserves w/h', () => {
+    const g: GraphObject = { ...graph(), bounds: { x: 0, y: 0, w: 80, h: 40 } };
+    const r = transformObject(g, {
+      rotate: { angle: Math.PI / 2, pivot: { x: 0, y: 0 } },
+    }) as GraphObject;
+    expect(r.bounds.w).toBe(80);
+    expect(r.bounds.h).toBe(40);
+  });
+});
+
+describe('transformObject scaleStrokeWidth', () => {
+  it('scales stroke width when requested', () => {
+    const s = transformObject(
+      stroke(),
+      { scale: { sx: 2, sy: 2, pivot: { x: 0, y: 0 } } },
+      { scaleStrokeWidth: true },
+    ) as StrokeObject;
+    expect(s.style.width).toBe(4);
+  });
+  it('scales shape width when requested', () => {
+    const s = transformObject(
+      shape(),
+      { scale: { sx: 3, sy: 3, pivot: { x: 0, y: 0 } } },
+      { scaleStrokeWidth: true },
+    ) as ShapeObject;
+    expect(s.style.width).toBe(6);
+  });
+  it('does not scale width by default', () => {
+    const s = transformObject(shape(), {
+      scale: { sx: 2, sy: 2, pivot: { x: 0, y: 0 } },
+    }) as ShapeObject;
+    expect(s.style.width).toBe(2);
+  });
 });
 
 describe('applyStyleToObject', () => {

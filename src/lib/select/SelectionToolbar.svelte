@@ -31,20 +31,32 @@
   const canWidth = $derived(selectedObjects.some(supportsWidth));
   const canDash = $derived(selectedObjects.some(supportsDash));
 
-  const currentWidth = $derived.by(() => {
-    for (const o of selectedObjects) {
-      if (
-        o.type === 'stroke' ||
-        o.type === 'line' ||
-        o.type === 'shape' ||
-        o.type === 'numberline'
-      ) {
-        return o.style.width;
-      }
-      if (o.type === 'angleMark') return o.width;
+  function widthOf(o: AnyObject): number | null {
+    if (o.type === 'stroke' || o.type === 'line' || o.type === 'shape' || o.type === 'numberline') {
+      return o.style.width;
     }
-    return 2;
+    if (o.type === 'angleMark') return o.width;
+    if (o.type === 'graph') {
+      for (const f of o.functions) {
+        if (typeof f.width === 'number') return f.width;
+      }
+      return null;
+    }
+    return null;
+  }
+
+  const currentWidth = $derived.by<number | null>(() => {
+    let found: number | null = null;
+    for (const o of selectedObjects) {
+      const w = widthOf(o);
+      if (w == null) continue;
+      if (found == null) found = w;
+      else if (found !== w) return null;
+    }
+    return found;
   });
+
+  const showWidth = $derived(canWidth && currentWidth != null);
 
   function pickColor(color: string) {
     onColorChange?.(color);
@@ -81,7 +93,7 @@
     </div>
   {/if}
 
-  {#if canWidth}
+  {#if showWidth}
     <div class="group" role="group" aria-label="Width">
       <input
         type="range"

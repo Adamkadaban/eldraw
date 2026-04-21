@@ -88,17 +88,12 @@ export function transformObject(obj: AnyObject, t: Affine, opts: TransformOption
       };
     }
     case 'shape': {
-      const corners = [
-        { x: obj.bounds.x, y: obj.bounds.y },
-        { x: obj.bounds.x + obj.bounds.w, y: obj.bounds.y + obj.bounds.h },
-      ].map((p) => applyAffine(p, t));
-      const x = Math.min(corners[0].x, corners[1].x);
-      const y = Math.min(corners[0].y, corners[1].y);
-      const w = Math.abs(corners[1].x - corners[0].x);
-      const h = Math.abs(corners[1].y - corners[0].y);
+      const anchor = applyAffine({ x: obj.bounds.x, y: obj.bounds.y }, t);
+      const w = obj.bounds.w * Math.abs(t.scale?.sx ?? 1);
+      const h = obj.bounds.h * Math.abs(t.scale?.sy ?? 1);
       return {
         ...obj,
-        bounds: { x, y, w, h },
+        bounds: { x: anchor.x, y: anchor.y, w, h },
         style: shouldScaleWidth ? scaleWidth(obj.style, factor) : obj.style,
       };
     }
@@ -113,15 +108,10 @@ export function transformObject(obj: AnyObject, t: Affine, opts: TransformOption
       };
     }
     case 'graph': {
-      const corners = [
-        { x: obj.bounds.x, y: obj.bounds.y },
-        { x: obj.bounds.x + obj.bounds.w, y: obj.bounds.y + obj.bounds.h },
-      ].map((p) => applyAffine(p, t));
-      const x = Math.min(corners[0].x, corners[1].x);
-      const y = Math.min(corners[0].y, corners[1].y);
-      const w = Math.abs(corners[1].x - corners[0].x);
-      const h = Math.abs(corners[1].y - corners[0].y);
-      return { ...obj, bounds: { x, y, w, h } };
+      const anchor = applyAffine({ x: obj.bounds.x, y: obj.bounds.y }, t);
+      const w = obj.bounds.w * Math.abs(t.scale?.sx ?? 1);
+      const h = obj.bounds.h * Math.abs(t.scale?.sy ?? 1);
+      return { ...obj, bounds: { x: anchor.x, y: anchor.y, w, h } };
     }
     case 'text': {
       const at = applyAffine(obj.at, t);
