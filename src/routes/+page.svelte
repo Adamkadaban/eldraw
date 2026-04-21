@@ -29,6 +29,7 @@
   import { activeGraph, clearActiveGraph, setActiveGraph } from '$lib/store/activeGraph';
   import { createGraphObject } from '$lib/graph/graphObject';
   import GraphEditor from '$lib/graph/GraphEditor.svelte';
+  import { CommandPalette } from '$lib/command';
   import { log } from '$lib/log';
   import type {
     AngleMarkObject,
@@ -579,6 +580,7 @@
       >
     </div>
   {/if}
+  <CommandPalette />
 </main>
 
 <style>
