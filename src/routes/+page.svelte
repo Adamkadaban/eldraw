@@ -46,6 +46,15 @@
   import GraphEditor from '$lib/graph/GraphEditor.svelte';
   import { CommandPalette } from '$lib/command';
   import ConfigDialog from '$lib/config/ConfigDialog.svelte';
+  import {
+    RecordControls,
+    ReplayBar,
+    ReplayLayer,
+    SessionsPanel,
+    player,
+    replayState,
+  } from '$lib/session';
+  import type { ReplayRenderState } from '$lib/session/player';
   import { log } from '$lib/log';
   import type {
     AngleMarkObject,
@@ -245,6 +254,25 @@
     | { mode: 'edit'; obj: TextObject; screen: { x: number; y: number } };
 
   let editor: EditorState | null = $state(null);
+
+  let sessionsPanelOpen = $state(false);
+  let replayRender = $state<ReplayRenderState>({
+    currentPage: 0,
+    byPage: new Map(),
+    activeStrokes: [],
+  });
+  const replaySt = $derived($replayState);
+  const replayObjectsOnPage = $derived(replayRender.byPage.get(pageIndex) ?? []);
+  const replayActiveOnPage = $derived(
+    replayRender.currentPage === pageIndex ? replayRender.activeStrokes : [],
+  );
+
+  $effect(() => {
+    const unsub = player.render.subscribe((r) => {
+      replayRender = r;
+    });
+    return unsub;
+  });
 
   const editorInitial = $derived.by(() => {
     if (!editor) return null;
@@ -609,6 +637,16 @@
         >
           Clear page
         </button>
+        <RecordControls />
+        <button
+          type="button"
+          class="topbar-btn"
+          onclick={() => (sessionsPanelOpen = true)}
+          disabled={!pdfState.source}
+          title="View recorded sessions"
+        >
+          Sessions
+        </button>
       </header>
     {/if}
 
@@ -714,6 +752,15 @@
               <RulerOverlay ptToPx={size.ptToPx} width={size.width} height={size.height} />
             </div>
           {/if}
+          {#if replaySt.active}
+            <ReplayLayer
+              width={size.width}
+              height={size.height}
+              ptToPx={size.ptToPx}
+              objects={replayObjectsOnPage}
+              activeStrokes={replayActiveOnPage}
+            />
+          {/if}
         </div>
       {:else}
         <div class="empty">
@@ -789,6 +836,8 @@
   {/if}
   <CommandPalette />
   <ConfigDialog />
+  <SessionsPanel open={sessionsPanelOpen} onClose={() => (sessionsPanelOpen = false)} />
+  <ReplayBar />
   <OpenFromSlidesDialog
     open={$slidesDialogOpen}
     onCancel={() => slidesDialogOpen.set(false)}

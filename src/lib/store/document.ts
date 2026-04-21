@@ -1,9 +1,35 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
 import type { AnyObject, EldrawDocument, ObjectId, Page } from '$lib/types';
 import { isSafeHexColor } from '$lib/color';
-import { applyCommand, createHistory, type Command, type History } from './history';
+import { applyCommand, createHistory, invertCommand, type Command, type History } from './history';
 
 export type PageCommitListener = (pageIndex: number) => void;
+
+export type MutationEvent =
+  | { kind: 'add'; pageIndex: number; object: AnyObject }
+  | { kind: 'remove'; pageIndex: number; ids: ObjectId[] }
+  | { kind: 'update'; pageIndex: number; id: ObjectId; after: AnyObject };
+
+export type MutationListener = (ev: MutationEvent) => void;
+
+function commandToMutations(pageIndex: number, cmd: Command): MutationEvent[] {
+  switch (cmd.type) {
+    case 'add':
+      return [{ kind: 'add', pageIndex, object: cmd.object }];
+    case 'remove':
+      return [{ kind: 'remove', pageIndex, ids: [cmd.object.id] }];
+    case 'removeMany':
+      return [{ kind: 'remove', pageIndex, ids: cmd.items.map((i) => i.object.id) }];
+    case 'insertMany':
+      return cmd.items.map((i) => ({ kind: 'add', pageIndex, object: i.object }));
+    case 'update':
+      return [{ kind: 'update', pageIndex, id: cmd.objectId, after: cmd.after }];
+    case 'clearPage':
+      return [{ kind: 'remove', pageIndex, ids: cmd.objects.map((o) => o.id) }];
+    case 'restorePage':
+      return cmd.objects.map((o) => ({ kind: 'add', pageIndex, object: o }));
+  }
+}
 
 export interface DocumentStore {
   subscribe: Readable<EldrawDocument | null>['subscribe'];
@@ -46,6 +72,13 @@ export interface DocumentStore {
    * structural page ops (insert/move/duplicate/delete).
    */
   onPageCommit(listener: PageCommitListener): () => void;
+
+  /**
+   * Subscribe to granular mutation events. Fires after each apply, including
+   * undo/redo, for every object add / remove / update. Used by the session
+   * recorder to build an event log.
+   */
+  onMutation(listener: MutationListener): () => void;
 
   /** Escape hatch for undo/redo replays that must not re-push history. */
   _internalApply(pageIndex: number, cmd: Command): void;
@@ -154,9 +187,17 @@ export function createDocumentStore(): DocumentStore {
   const state = writable<EldrawDocument | null>(null);
   const history = createHistory();
   const commitListeners = new Set<PageCommitListener>();
+  const mutationListeners = new Set<MutationListener>();
 
   function emitCommit(pageIndex: number) {
     for (const listener of commitListeners) listener(pageIndex);
+  }
+
+  function emitMutations(pageIndex: number, cmd: Command) {
+    if (mutationListeners.size === 0) return;
+    for (const ev of commandToMutations(pageIndex, cmd)) {
+      for (const listener of mutationListeners) listener(ev);
+    }
   }
 
   function mutatePage(pageIndex: number, fn: (p: Page) => Page) {
@@ -172,6 +213,7 @@ export function createDocumentStore(): DocumentStore {
     history.pushCommand(pageIndex, cmd);
     mutatePage(pageIndex, (p) => applyCommand(p, cmd));
     emitCommit(pageIndex);
+    emitMutations(pageIndex, cmd);
   }
 
   return {
@@ -304,10 +346,12 @@ export function createDocumentStore(): DocumentStore {
       if (!doc) return;
       const page = doc.pages[pageIndex];
       if (!page) return;
+      const cmd = history.peekUndo(pageIndex);
       const next = history.undo(pageIndex, page);
       if (next) {
         mutatePage(pageIndex, () => next);
         emitCommit(pageIndex);
+        if (cmd) emitMutations(pageIndex, invertCommand(cmd));
       }
     },
 
@@ -316,10 +360,12 @@ export function createDocumentStore(): DocumentStore {
       if (!doc) return;
       const page = doc.pages[pageIndex];
       if (!page) return;
+      const cmd = history.peekRedo(pageIndex);
       const next = history.redo(pageIndex, page);
       if (next) {
         mutatePage(pageIndex, () => next);
         emitCommit(pageIndex);
+        if (cmd) emitMutations(pageIndex, cmd);
       }
     },
 
@@ -342,9 +388,17 @@ export function createDocumentStore(): DocumentStore {
       };
     },
 
+    onMutation(listener) {
+      mutationListeners.add(listener);
+      return () => {
+        mutationListeners.delete(listener);
+      };
+    },
+
     _internalApply(pageIndex, cmd) {
       mutatePage(pageIndex, (p) => applyCommand(p, cmd));
       emitCommit(pageIndex);
+      emitMutations(pageIndex, cmd);
     },
 
     history,
