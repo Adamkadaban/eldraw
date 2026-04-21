@@ -178,6 +178,26 @@ function createShortcutsStore() {
       set(next);
     },
 
+    /**
+     * Pure preview: run the migration ladder on a deep copy of the payload
+     * without mutating live state. Returns only the bindings actually present
+     * in the payload (defaults are not filled in), so the caller can diff
+     * against the current live bindings.
+     */
+    previewImportedPayload(payload: {
+      version?: unknown;
+      bindings?: unknown;
+    }): Partial<Record<ShortcutId, string>> {
+      const { version, bindings } = extractStoredBindings(payload);
+      runMigrations(bindings, version);
+      const out: Partial<Record<ShortcutId, string>> = {};
+      for (const id of SHORTCUT_IDS) {
+        const v = bindings[id];
+        if (typeof v === 'string' && v.length > 0) out[id] = v;
+      }
+      return out;
+    },
+
     /** Test-only: drop persisted state and restore defaults in memory. */
     _reset(): void {
       if (typeof localStorage !== 'undefined') {

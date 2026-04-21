@@ -226,6 +226,59 @@ describe('config diff', () => {
     if (!parsed.ok) return;
     expect(diffConfig(cfg, parsed.value).hasChanges).toBe(false);
   });
+
+  it('reflects post-migration state for older-version shortcut payloads', () => {
+    // A v0 shortcuts payload still carrying the legacy Mod+K default should
+    // be migrated to Mod+P before diffing, so the preview does not show a
+    // spurious "commandPalette.open: Mod+K" change that applyConfig would
+    // never actually write.
+    const current = buildConfigExport();
+    const incoming: ConfigExport = {
+      eldraw: 'config',
+      version: 1,
+      exportedAt: '',
+      exportedBy: '',
+      sections: {
+        shortcuts: {
+          kind: 'shortcuts',
+          version: 0,
+          bindings: { ...current.sections.shortcuts!.bindings, 'commandPalette.open': 'Mod+K' },
+        },
+      },
+    };
+    const diff = diffConfig(current, incoming);
+    const joined = diff.sections.flatMap((s) => s.changes).join(' ');
+    expect(joined).not.toMatch(/Mod\+K/);
+    expect(joined).not.toMatch(/commandPalette\.open/);
+    expect(diff.hasChanges).toBe(false);
+  });
+
+  it('drops invalid sidebar fields from the diff (sanitize pipeline)', () => {
+    const current = buildConfigExport();
+    const incoming: ConfigExport = {
+      eldraw: 'config',
+      version: 1,
+      exportedAt: '',
+      exportedBy: '',
+      sections: {
+        sidebar: {
+          kind: 'sidebar',
+          version: 1,
+          state: {
+            smoothingPen: 25,
+            // Invalid fields that sanitize drops — must not appear in diff.
+            bogusField: 'should-be-dropped',
+            activeTool: 'not-a-real-tool',
+          },
+        },
+      },
+    };
+    const diff = diffConfig(current, incoming);
+    const joined = diff.sections.flatMap((s) => s.changes).join(' ');
+    expect(joined).not.toMatch(/bogusField/);
+    expect(joined).not.toMatch(/not-a-real-tool/);
+    expect(joined).toMatch(/smoothingPen/);
+  });
 });
 
 describe('default bindings sanity', () => {

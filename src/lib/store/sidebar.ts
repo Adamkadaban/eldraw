@@ -670,6 +670,27 @@ export function applyImportedSidebarPayload(payload: { version?: unknown; state?
   sidebar.applyRemote(sanitized);
 }
 
+/**
+ * Pure preview: run migrations + sanitize on a deep copy of the payload
+ * without mutating live state. Returns the subset of fields the importer
+ * would actually apply, so the caller can diff against the current state.
+ */
+export function previewImportedSidebarPayload(payload: {
+  version?: unknown;
+  state?: unknown;
+}): Partial<SyncableSidebarState> {
+  const rawState =
+    payload.state && typeof payload.state === 'object'
+      ? JSON.parse(JSON.stringify(payload.state))
+      : {};
+  const version =
+    typeof payload.version === 'number' && Number.isInteger(payload.version) && payload.version >= 0
+      ? payload.version
+      : 0;
+  runSidebarMigrations(rawState, version);
+  return sanitizeImportedSidebar(rawState);
+}
+
 export function syncableEqual(a: SyncableSidebarState, b: SyncableSidebarState): boolean {
   return deepEqual(a, b);
 }

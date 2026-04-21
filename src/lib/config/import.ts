@@ -10,7 +10,7 @@ import {
 } from './schema';
 import { buildConfigExport } from './export';
 import { shortcutsStore } from '$lib/store/shortcuts';
-import { applyImportedSidebarPayload } from '$lib/store/sidebar';
+import { applyImportedSidebarPayload, previewImportedSidebarPayload } from '$lib/store/sidebar';
 
 function err(kind: ConfigError['kind'], message: string): Result<never, ConfigError> {
   return { ok: false, error: { kind, message } };
@@ -94,11 +94,12 @@ export function parseConfig(raw: string): Result<ConfigExport, ConfigError> {
 }
 
 export function diffConfig(current: ConfigExport, incoming: ConfigExport): ConfigDiff {
+  const effective = previewEffectiveConfig(incoming);
   const sections: SectionChange[] = [];
 
-  if (incoming.sections.shortcuts) {
+  if (effective.sections.shortcuts) {
     const cur = current.sections.shortcuts?.bindings ?? {};
-    const next = incoming.sections.shortcuts.bindings;
+    const next = effective.sections.shortcuts.bindings;
     const changes: string[] = [];
     for (const [id, spec] of Object.entries(next)) {
       if (cur[id] !== spec) {
@@ -117,9 +118,9 @@ export function diffConfig(current: ConfigExport, incoming: ConfigExport): Confi
     }
   }
 
-  if (incoming.sections.sidebar) {
+  if (effective.sections.sidebar) {
     const cur = current.sections.sidebar?.state ?? {};
-    const next = incoming.sections.sidebar.state;
+    const next = effective.sections.sidebar.state;
     const changes: string[] = [];
     for (const [key, value] of Object.entries(next)) {
       const before = (cur as Record<string, unknown>)[key];
@@ -137,6 +138,49 @@ export function diffConfig(current: ConfigExport, incoming: ConfigExport): Confi
   }
 
   return { hasChanges: sections.length > 0, sections };
+}
+
+/**
+ * Normalize an incoming config by running each section's migration and
+ * sanitize pipeline on a deep copy. The result mirrors what `applyConfig`
+ * would actually persist, without mutating live store state. Used by
+ * `diffConfig` so the preview reflects the post-migration world (e.g.
+ * Mod+K → Mod+P) rather than the raw bytes on disk.
+ */
+export function previewEffectiveConfig(cfg: ConfigExport): ConfigExport {
+  const out: ConfigExport = {
+    eldraw: 'config',
+    version: cfg.version,
+    exportedAt: cfg.exportedAt,
+    exportedBy: cfg.exportedBy,
+    sections: {},
+  };
+
+  if (cfg.sections.shortcuts) {
+    const bindings = shortcutsStore.previewImportedPayload({
+      version: cfg.sections.shortcuts.version,
+      bindings: cfg.sections.shortcuts.bindings,
+    });
+    out.sections.shortcuts = {
+      kind: 'shortcuts',
+      version: cfg.sections.shortcuts.version,
+      bindings: bindings as Record<string, string>,
+    };
+  }
+
+  if (cfg.sections.sidebar) {
+    const state = previewImportedSidebarPayload({
+      version: cfg.sections.sidebar.version,
+      state: cfg.sections.sidebar.state,
+    });
+    out.sections.sidebar = {
+      kind: 'sidebar',
+      version: cfg.sections.sidebar.version,
+      state: state as Record<string, unknown>,
+    };
+  }
+
+  return out;
 }
 
 function preview(v: unknown): string {

@@ -1,8 +1,17 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { closeConfigDialog, configDialog } from './dialog';
   import { applyConfig } from './import';
   import { shortcutsStore } from '$lib/store/shortcuts';
   import { sidebar } from '$lib/store/sidebar';
+
+  let modalEl: HTMLDivElement | null = $state(null);
+
+  $effect(() => {
+    if ($configDialog.kind !== 'closed') {
+      void tick().then(() => modalEl?.focus());
+    }
+  });
 
   function confirmImport(): void {
     const state = $configDialog;
@@ -27,6 +36,7 @@
 {#if $configDialog.kind !== 'closed'}
   <div class="backdrop" role="presentation" onclick={closeConfigDialog}>
     <div
+      bind:this={modalEl}
       class="modal"
       role="dialog"
       aria-modal="true"

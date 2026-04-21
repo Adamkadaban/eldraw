@@ -6,7 +6,6 @@
  * vitest/SvelteKit without pulling in `@tauri-apps/plugin-fs`.
  */
 
-import { get } from 'svelte/store';
 import { buildConfigExport, defaultExportFilename, serializeConfig } from './export';
 import {
   applyConfig,
@@ -45,11 +44,16 @@ export function triggerImportSettings(
   input.type = 'file';
   input.accept = 'application/json,.json';
   input.style.display = 'none';
+
+  const cleanup = (): void => {
+    if (input.parentNode) input.parentNode.removeChild(input);
+  };
+
   input.addEventListener(
     'change',
     async () => {
       const file = input.files?.[0] ?? null;
-      doc.body.removeChild(input);
+      cleanup();
       if (!file) return;
       try {
         const raw = await file.text();
@@ -63,6 +67,20 @@ export function triggerImportSettings(
     },
     { once: true },
   );
+
+  // Not every browser/runtime fires `cancel`. Use window focus-return as a
+  // fallback so a cancelled picker never leaves the element dangling.
+  input.addEventListener('cancel', cleanup, { once: true });
+  if (typeof window !== 'undefined') {
+    window.addEventListener(
+      'focus',
+      () => {
+        setTimeout(cleanup, 500);
+      },
+      { once: true },
+    );
+  }
+
   doc.body.appendChild(input);
   input.click();
 }
@@ -99,9 +117,4 @@ export function _hasBackup(): boolean {
 /** Exposed for tests. */
 export function _clearBackupForTest(): void {
   clearBackup();
-}
-
-/** Avoid unused import when the commands file is tree-shaken. */
-export function _subscribeDialog() {
-  return get(configDialog);
 }
