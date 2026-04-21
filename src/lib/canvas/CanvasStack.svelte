@@ -29,9 +29,9 @@
     laserRadius?: number;
     tempInkStyle?: StrokeStyle;
     tempInkFadeMs?: number;
-    penStreamline?: number;
-    highlighterStreamline?: number;
-    tempInkStreamline?: number;
+    penStabilization?: number;
+    highlighterStabilization?: number;
+    tempInkStabilization?: number;
     rulerSnap?: RulerState | null;
     rulerSnapThresholdPx?: number;
     overlay?: Snippet;
@@ -52,9 +52,9 @@
     laserRadius = 6,
     tempInkStyle = { color: '#000000', width: 2, dash: 'solid', opacity: 1 },
     tempInkFadeMs = 3000,
-    penStreamline,
-    highlighterStreamline,
-    tempInkStreamline,
+    penStabilization,
+    highlighterStabilization,
+    tempInkStabilization,
     rulerSnap = null,
     rulerSnapThresholdPx,
     overlay,
@@ -85,8 +85,8 @@
       {ptToPx}
       {rulerSnap}
       {rulerSnapThresholdPx}
-      {penStreamline}
-      {highlighterStreamline}
+      {penStabilization}
+      {highlighterStabilization}
       {oncommit}
       {onerase}
       {ongraph}
@@ -105,7 +105,7 @@
       active={activeTool === 'temp-ink'}
       style={tempInkStyle}
       fadeMs={tempInkFadeMs}
-      streamline={tempInkStreamline}
+      stabilization={tempInkStabilization}
     />
   </div>
 
