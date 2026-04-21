@@ -181,6 +181,19 @@ pub async fn render_page(
 
     let key = PageKey::new(&hash, page_index, scale);
     if let Some(hit) = cache.get(&key)? {
+        state.with_open(|open| {
+            if let Some(expected) = pdf_id.as_deref() {
+                if expected != open.hash {
+                    return Err(AppError::InvalidInput(format!(
+                        "pdf_id {expected} does not match the currently-open document"
+                    )));
+                }
+            }
+            if open.hash != hash {
+                return Err(AppError::InvalidInput("pdf changed during render".into()));
+            }
+            Ok(())
+        })?;
         return Ok(Response::new(encode_response(&hit)));
     }
 
