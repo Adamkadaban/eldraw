@@ -5,6 +5,7 @@ mod page_cache;
 mod pdf;
 mod presenter;
 mod sidebar_window;
+mod slides;
 mod state;
 mod storage;
 mod thumbnails;
@@ -28,6 +29,7 @@ pub fn run() {
             storage::acquire_lock,
             storage::release_lock,
             export::export_flattened_pdf,
+            slides::fetch_slides_pdf,
             presenter::open_presenter_window,
             presenter::close_presenter_window,
             presenter::presenter_sync,

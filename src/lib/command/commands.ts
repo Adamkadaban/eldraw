@@ -21,6 +21,7 @@ import {
   triggerRestorePreviousSettings,
 } from '$lib/config/commands';
 import { settings } from '$lib/store/settings';
+import { openSlidesDialog } from '$lib/slides/dialog';
 
 export interface Command {
   id: string;
@@ -186,6 +187,11 @@ export function getCommands(): Command[] {
       title: 'Cycle dash style',
       shortcut: 'D',
       run: () => sidebar.cycleDash(),
+    },
+    {
+      id: 'file.openFromSlides',
+      title: 'Open from Google Slides…',
+      run: openSlidesDialog,
     },
     {
       id: 'config.export',
