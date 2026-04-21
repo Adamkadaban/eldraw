@@ -175,7 +175,7 @@ fn google_redirect_policy() -> reqwest::redirect::Policy {
 async fn download(url: &str) -> AppResult<reqwest::Response> {
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_mins(1))
         .redirect(google_redirect_policy())
         .build()
         .map_err(|e| AppError::InvalidInput(format!("http client: {e}")))?;
