@@ -6,7 +6,7 @@
  * - Empty query matches everything with a neutral score of 0.
  * - Earlier matches score higher (first-match position is penalized).
  * - Contiguous matches score higher (gaps between matched chars are penalized).
- * - Matches on word boundaries (start, after space/-/_) get a small bonus.
+ * - Matches on word boundaries (start, after space/-/_//) get a small bonus.
  */
 export function score(query: string, title: string): number | null {
   if (query.length === 0) return 0;

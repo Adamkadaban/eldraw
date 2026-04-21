@@ -8,14 +8,17 @@
   let selected = $state(0);
   let inputEl: HTMLInputElement | null = $state(null);
   let listEl: HTMLUListElement | null = $state(null);
+  let paletteEl: HTMLDivElement | null = $state(null);
+  let previouslyFocused: HTMLElement | null = null;
 
   let allCommands: Command[] = $state([]);
 
   const filtered = $derived.by<Array<{ cmd: Command; score: number }>>(() => {
-    if (query.trim() === '') return allCommands.map((cmd) => ({ cmd, score: 0 }));
+    const normalized = query.trim().replace(/\s+/g, ' ');
+    if (normalized === '') return allCommands.map((cmd) => ({ cmd, score: 0 }));
     const results: Array<{ cmd: Command; score: number }> = [];
     for (const cmd of allCommands) {
-      const s = score(query, cmd.title);
+      const s = score(normalized, cmd.title);
       if (s !== null) results.push({ cmd, score: s });
     }
     results.sort((a, b) => b.score - a.score);
@@ -27,7 +30,15 @@
       query = '';
       selected = 0;
       allCommands = getCommands();
+      previouslyFocused =
+        typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
       void tick().then(() => inputEl?.focus());
+    } else if (previouslyFocused) {
+      const el = previouslyFocused;
+      previouslyFocused = null;
+      void tick().then(() => el.focus());
     }
   });
 
@@ -49,7 +60,46 @@
     entry.cmd.run();
   }
 
+  function focusableElements(): HTMLElement[] {
+    if (!paletteEl) return [];
+    const selector =
+      'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(paletteEl.querySelectorAll<HTMLElement>(selector)).filter(
+      (el) => !el.hasAttribute('disabled') && el.offsetParent !== null,
+    );
+  }
+
+  function trapTab(event: KeyboardEvent): void {
+    const focusables = focusableElements();
+    if (focusables.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (event.shiftKey) {
+      if (active === first || !paletteEl?.contains(active)) {
+        event.preventDefault();
+        last.focus();
+      }
+    } else if (active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   function onKey(event: KeyboardEvent) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !event.altKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeCommandPalette();
+      return;
+    }
+    if (event.key === 'Tab') {
+      trapTab(event);
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       closeCommandPalette();
@@ -86,7 +136,13 @@
     role="presentation"
     tabindex="-1"
   >
-    <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div
+      bind:this={paletteEl}
+      class="palette"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command palette"
+    >
       <input
         bind:this={inputEl}
         bind:value={query}
@@ -110,7 +166,7 @@
               <button
                 type="button"
                 class="row"
-                onmousemove={() => (selected = i)}
+                onmouseenter={() => (selected = i)}
                 onclick={() => runAt(i)}
               >
                 <span class="title">{entry.cmd.title}</span>
