@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { EldrawDocument } from '$lib/types';
 
 export const PRESENTER_SYNC_EVENT = 'presenter-sync';
+export const PRESENTER_WINDOW_CLOSED_EVENT = 'presenter-window-closed';
 
 export interface MonitorInfo {
   index: number;
@@ -41,4 +42,8 @@ export function onPresenterSync(
   handler: (payload: PresenterSyncPayload) => void,
 ): Promise<UnlistenFn> {
   return listen<PresenterSyncPayload>(PRESENTER_SYNC_EVENT, (event) => handler(event.payload));
+}
+
+export function onPresenterWindowClosed(handler: () => void): Promise<UnlistenFn> {
+  return listen(PRESENTER_WINDOW_CLOSED_EVENT, () => handler());
 }

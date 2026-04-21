@@ -19,11 +19,12 @@
   import { currentDocument, documentStore, pdfPageIndexAt } from '$lib/store/document';
   import { startAutosave } from '$lib/store/autosave';
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
-  import { presenterStore } from '$lib/store/presenter';
+  import { presenter, presenterStore } from '$lib/store/presenter';
   import { zenStore } from '$lib/store/zen';
   import { overlays } from '$lib/store/overlays';
   import { startToolBridge } from '$lib/app/toolBridge';
   import { startPresenterBridge } from '$lib/app/presenterBridge';
+  import { onPresenterWindowClosed } from '$lib/ipc/presenter';
   import { shortcuts } from '$lib/app/shortcuts';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
   import { hitTestStrokes } from '$lib/tools/eraser';
@@ -374,6 +375,13 @@
   onMount(() => {
     stopHydration = hydrateSidebarFromStorage();
     stopBridge = startToolBridge();
+    let unlistenPresenterClose: (() => void) | null = null;
+    void onPresenterWindowClosed(() => presenter.setWindowOpen(false)).then((fn) => {
+      unlistenPresenterClose = fn;
+    });
+    return () => {
+      unlistenPresenterClose?.();
+    };
   });
 
   onDestroy(() => {

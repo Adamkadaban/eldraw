@@ -4,15 +4,16 @@
 //! sync events emitted from the primary window. The presenter is a pure
 //! consumer: no autosave, no input, no tool state. It reuses the
 //! process-wide `AppState` so `render_page` hits the already-loaded PDF
-//! without re-parsing.
+//! bytes/hash instead of loading them a second time.
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use crate::error::{AppError, AppResult};
 
 pub const PRESENTER_LABEL: &str = "presenter";
 pub const PRESENTER_SYNC_EVENT: &str = "presenter-sync";
+pub const PRESENTER_WINDOW_CLOSED_EVENT: &str = "presenter-window-closed";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +97,15 @@ pub fn open_presenter_window(app: AppHandle, monitor_index: Option<usize>) -> Ap
     }
 
     let window = builder.build()?;
+    let app_handle = app.clone();
+    window.on_window_event(move |event| {
+        if matches!(
+            event,
+            WindowEvent::Destroyed | WindowEvent::CloseRequested { .. }
+        ) {
+            let _ = app_handle.emit(PRESENTER_WINDOW_CLOSED_EVENT, ());
+        }
+    });
     window.set_fullscreen(true).ok();
     window.show()?;
     Ok(())
@@ -107,6 +117,8 @@ pub fn close_presenter_window(app: AppHandle) -> AppResult<()> {
     if let Some(w) = app.get_webview_window(PRESENTER_LABEL) {
         w.close()?;
     }
+    app.emit(PRESENTER_WINDOW_CLOSED_EVENT, ())
+        .map_err(|e| AppError::Window(format!("emit {PRESENTER_WINDOW_CLOSED_EVENT}: {e}")))?;
     Ok(())
 }
 

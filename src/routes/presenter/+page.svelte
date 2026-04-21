@@ -8,11 +8,13 @@
   import type { UnlistenFn } from '@tauri-apps/api/event';
 
   let unlisten: UnlistenFn | null = null;
+  let windowWidth = $state(typeof window !== 'undefined' ? window.innerWidth : 0);
+  let windowHeight = $state(typeof window !== 'undefined' ? window.innerHeight : 0);
 
-  const state = $derived($presenterMirrorStore);
-  const doc = $derived(state.document);
+  const mirror = $derived($presenterMirrorStore);
+  const doc = $derived(mirror.document);
   const pages = $derived(doc?.pages ?? []);
-  const pageIndex = $derived(Math.min(state.pageIndex, Math.max(0, pages.length - 1)));
+  const pageIndex = $derived(Math.min(mirror.pageIndex, Math.max(0, pages.length - 1)));
   const currentPage = $derived(pages[pageIndex] ?? null);
   const pdfPageIndex = $derived(doc ? pdfPageIndexAt(doc.pages, pageIndex) : null);
   const pageObjects = $derived<AnyObject[]>(currentPage?.objects ?? []);
@@ -28,8 +30,8 @@
 
   const canvasSize = $derived.by(() => {
     if (!currentPage) return null;
-    const windowW = typeof window !== 'undefined' ? window.innerWidth : currentPage.width;
-    const windowH = typeof window !== 'undefined' ? window.innerHeight : currentPage.height;
+    const windowW = windowWidth || currentPage.width;
+    const windowH = windowHeight || currentPage.height;
     const fit = Math.min(windowW / currentPage.width, windowH / currentPage.height);
     const scale = Number.isFinite(fit) && fit > 0 ? fit : 1;
     return {
@@ -45,9 +47,16 @@
     }
   }
 
+  function onResize(): void {
+    windowWidth = window.innerWidth;
+    windowHeight = window.innerHeight;
+  }
+
   onMount(async () => {
     unlisten = await onPresenterSync((payload) => presenterMirror.apply(payload));
     window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    onResize();
   });
 
   onDestroy(() => {
@@ -55,6 +64,7 @@
     presenterMirror.reset();
     if (typeof window !== 'undefined') {
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onResize);
     }
   });
 </script>
@@ -131,6 +141,7 @@
     position: absolute;
     inset: 0;
   }
+  .stack-slot,
   .text-slot {
     pointer-events: none;
   }
