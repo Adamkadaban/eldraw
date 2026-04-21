@@ -445,7 +445,12 @@
         >
           {#if meta && currentPage?.type !== 'blank' && pdfPageIndex !== null}
             <div class="pdf-slot">
-              <PdfLayer pageIndex={pdfPageIndex} scale={view.scale} />
+              <PdfLayer
+                pageIndex={pdfPageIndex}
+                scale={view.scale}
+                pageCount={meta.pageCount}
+                pdfId={meta.hash}
+              />
             </div>
           {:else if currentPage?.type === 'blank'}
             <div

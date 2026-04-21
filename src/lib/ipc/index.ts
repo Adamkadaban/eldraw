@@ -14,15 +14,43 @@ export async function openPdf(path: string): Promise<PdfMeta> {
   }
 }
 
-export async function renderPage(pageIndex: number, scale: number): Promise<ArrayBuffer> {
+export interface RenderedPage {
+  width: number;
+  height: number;
+  rgba: Uint8ClampedArray;
+}
+
+/**
+ * Render a PDF page. Returns a raw RGBA bitmap prefixed on the wire by a
+ * two-`u32` (little-endian) header `[width, height]`; the rest of the buffer
+ * is `width * height * 4` pixel bytes suitable for `new ImageData(...)`.
+ *
+ * `pdfId` is the hash reported by `open_pdf`. When provided, the backend
+ * rejects the call if the currently-open document has a different hash,
+ * preventing a stale navigation from drawing the wrong PDF's pages.
+ */
+export async function renderPage(
+  pageIndex: number,
+  scale: number,
+  pdfId?: string,
+): Promise<RenderedPage> {
   const t = performance.now();
   try {
-    const bytes = await invoke<ArrayBuffer>('render_page', { pageIndex, scale });
+    const bytes = await invoke<ArrayBuffer>('render_page', { pageIndex, scale, pdfId });
+    const header = new DataView(bytes, 0, 8);
+    const width = header.getUint32(0, true);
+    const height = header.getUint32(4, true);
+    const expected = width * height * 4;
+    const payload = bytes.byteLength - 8;
+    if (payload !== expected) {
+      throw new Error(`render_page payload ${payload} != expected ${expected}`);
+    }
+    const rgba = new Uint8ClampedArray(bytes, 8, expected);
     log(
       'ipc',
-      `render_page idx=${pageIndex} scale=${scale.toFixed(3)} bytes=${bytes.byteLength} in ${(performance.now() - t).toFixed(1)}ms`,
+      `render_page idx=${pageIndex} scale=${scale.toFixed(3)} ${width}x${height} in ${(performance.now() - t).toFixed(1)}ms`,
     );
-    return bytes;
+    return { width, height, rgba };
   } catch (err) {
     warn('ipc', `render_page idx=${pageIndex} failed`, err);
     throw err;

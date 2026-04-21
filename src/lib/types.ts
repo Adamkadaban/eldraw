@@ -216,7 +216,7 @@ export interface EldrawDocument {
  */
 export interface IpcCommands {
   open_pdf: (args: { path: string }) => Promise<PdfMeta>;
-  render_page: (args: { pageIndex: number; scale: number }) => Promise<ArrayBuffer>;
+  render_page: (args: { pageIndex: number; scale: number; pdfId?: string }) => Promise<ArrayBuffer>;
   load_sidecar: (args: { pdfPath: string }) => Promise<EldrawDocument | null>;
   save_sidecar: (args: { pdfPath: string; doc: EldrawDocument }) => Promise<void>;
   acquire_lock: (args: { pdfPath: string }) => Promise<boolean>;
