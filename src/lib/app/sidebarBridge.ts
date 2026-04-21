@@ -32,6 +32,7 @@ export function startSidebarBridge(side: Side): () => void {
   let stopped = false;
   let pushInFlight = false;
   let pushPending = false;
+  let applyingRemote = false;
   let lastSeen: SyncableSidebarState | null = null;
 
   const send = side === 'main' ? sidebarSync : sidebarSyncBack;
@@ -62,14 +63,24 @@ export function startSidebarBridge(side: Side): () => void {
     }
   }
 
-  const unsubStore = sidebar.subscribe(() => void push());
+  const unsubStore = sidebar.subscribe(() => {
+    if (applyingRemote) return;
+    void push();
+  });
   void push();
 
   let unsubEvent: (() => void) | null = null;
   void subscribe((payload) => {
     const incoming = pickSyncable(payload as unknown as SidebarState);
-    lastSeen = incoming;
-    sidebar.applyRemote(incoming);
+    applyingRemote = true;
+    try {
+      sidebar.applyRemote(incoming);
+    } finally {
+      applyingRemote = false;
+    }
+    // Snapshot the post-apply state so partial incoming payloads don't
+    // look like a new local change and bounce back.
+    lastSeen = pickSyncable(get(sidebar));
   }).then((fn) => {
     if (stopped) fn();
     else unsubEvent = fn;

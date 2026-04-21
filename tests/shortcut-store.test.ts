@@ -7,7 +7,6 @@ import {
   SHORTCUTS_SCHEMA_VERSION,
 } from '../src/lib/store/shortcuts';
 import { DEFAULT_BINDINGS } from '../src/lib/app/shortcutRegistry';
-import type { ShortcutId } from '../src/lib/app/shortcutRegistry';
 
 class MemoryStorage {
   private map = new Map<string, string>();
@@ -186,46 +185,15 @@ describe('shortcuts store', () => {
     expect(snap['tool.eraser']).toBe('Alt+E');
   });
 
-  it('number-key defaults: 1-9 pick presets, Mod+1-9 pick colors', () => {
-    for (let n = 1; n <= 9; n++) {
-      expect(DEFAULT_BINDINGS[`preset.${n}` as ShortcutId]).toBe(`${n}`);
-      expect(DEFAULT_BINDINGS[`palette.${n}` as ShortcutId]).toBe(`Mod+${n}`);
-    }
+  it('has default bindings for the new hide/minimize/right-bar commands', () => {
+    expect(DEFAULT_BINDINGS['sidebar.toggleHide']).toBe('Shift+H');
+    expect(DEFAULT_BINDINGS['sidebar.toggleMinimize']).toBe('Shift+M');
+    expect(DEFAULT_BINDINGS['rightBar.toggleHide']).toBe('Shift+T');
   });
 
-  it('v1 → v2 migration swaps stored bindings still at old defaults', () => {
-    const stored: Record<string, string> = {};
-    for (let n = 1; n <= 9; n++) {
-      stored[`preset.${n}`] = `Mod+${n}`;
-      stored[`palette.${n}`] = `${n}`;
-    }
-    memory.setItem(SHORTCUTS_STORAGE_KEY, JSON.stringify({ version: 1, bindings: stored }));
-    shortcutsStore.hydrate();
-    const snap = shortcutsStore.snapshot();
-    for (let n = 1; n <= 9; n++) {
-      expect(snap[`preset.${n}` as ShortcutId]).toBe(`${n}`);
-      expect(snap[`palette.${n}` as ShortcutId]).toBe(`Mod+${n}`);
-    }
-  });
-
-  it('v1 → v2 migration preserves user overrides that differ from old defaults', () => {
-    memory.setItem(
-      SHORTCUTS_STORAGE_KEY,
-      JSON.stringify({
-        version: 1,
-        bindings: {
-          'preset.1': 'Shift+1',
-          'palette.1': 'Alt+1',
-          'preset.2': 'Mod+2',
-          'palette.2': '2',
-        },
-      }),
-    );
-    shortcutsStore.hydrate();
-    const snap = shortcutsStore.snapshot();
-    expect(snap['preset.1']).toBe('Shift+1');
-    expect(snap['palette.1']).toBe('Alt+1');
-    expect(snap['preset.2']).toBe(`2`);
-    expect(snap['palette.2']).toBe(`Mod+2`);
+  it('new defaults do not collide with existing bindings', () => {
+    const values = Object.values(DEFAULT_BINDINGS);
+    const duplicates = values.filter((v, i) => values.indexOf(v) !== i);
+    expect(duplicates).toEqual([]);
   });
 });

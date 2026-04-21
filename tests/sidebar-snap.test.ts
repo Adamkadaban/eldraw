@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { applySnap, clampToViewport, SNAP_MARGIN, SNAP_THRESHOLD } from '../src/lib/sidebar/snap';
+import {
+  applySnap,
+  clampToViewport,
+  detectSnapEdge,
+  EDGE_SNAP_THRESHOLD,
+  SNAP_MARGIN,
+  SNAP_THRESHOLD,
+} from '../src/lib/sidebar/snap';
 
 const size = { width: 220, height: 400 };
 const viewport = { width: 1200, height: 800 };
@@ -89,5 +96,52 @@ describe('applySnap', () => {
 
   it('default threshold is 24', () => {
     expect(SNAP_THRESHOLD).toBe(24);
+  });
+});
+
+describe('detectSnapEdge', () => {
+  it('returns null when drag point is far from every edge', () => {
+    expect(detectSnapEdge({ x: 500, y: 300 }, size, viewport)).toBeNull();
+  });
+
+  it('detects left edge when x is within threshold', () => {
+    expect(detectSnapEdge({ x: 10, y: 300 }, size, viewport)).toBe('left');
+  });
+
+  it('detects right edge', () => {
+    const p = { x: viewport.width - size.width - 5, y: 300 };
+    expect(detectSnapEdge(p, size, viewport)).toBe('right');
+  });
+
+  it('detects top edge', () => {
+    expect(detectSnapEdge({ x: 500, y: 5 }, size, viewport)).toBe('top');
+  });
+
+  it('detects bottom edge', () => {
+    const p = { x: 500, y: viewport.height - size.height - 8 };
+    expect(detectSnapEdge(p, size, viewport)).toBe('bottom');
+  });
+
+  it('picks the closest edge when multiple are in range (corner)', () => {
+    // near top-left corner: top dist 5 < left dist 10 → prefers top
+    expect(detectSnapEdge({ x: 10, y: 5 }, size, viewport)).toBe('top');
+    // flipped: prefers left when left is closer
+    expect(detectSnapEdge({ x: 3, y: 20 }, size, viewport)).toBe('left');
+  });
+
+  it('respects custom threshold', () => {
+    const p = { x: 30, y: 300 };
+    expect(detectSnapEdge(p, size, viewport, 40)).toBe('left');
+    expect(detectSnapEdge(p, size, viewport, 20)).toBeNull();
+  });
+
+  it('default edge threshold matches exported constant', () => {
+    expect(EDGE_SNAP_THRESHOLD).toBe(40);
+  });
+
+  it('prefers left edge when sidebar is larger than viewport at origin', () => {
+    const bigSidebar = { width: 2000, height: 1500 };
+    const smallViewport = { width: 1200, height: 800 };
+    expect(detectSnapEdge({ x: 0, y: 0 }, bigSidebar, smallViewport)).toBe('left');
   });
 });

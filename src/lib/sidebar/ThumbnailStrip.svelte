@@ -21,6 +21,7 @@
     onmove?: (from: number, to: number) => void;
     onduplicate?: (index: number) => void;
     ondelete?: (index: number) => void;
+    onhide?: () => void;
     maxWidth?: number;
     /** Stable identifier for the loaded PDF; thumbnail cache is scoped to it. */
     docKey?: string | null;
@@ -33,6 +34,7 @@
     onmove,
     onduplicate,
     ondelete,
+    onhide,
     maxWidth = 140,
     docKey = null,
   }: Props = $props();
@@ -259,6 +261,19 @@
 </script>
 
 <aside class="strip" aria-label="Page thumbnails">
+  {#if onhide}
+    <header class="strip-head">
+      <button
+        type="button"
+        class="hide-btn"
+        aria-label="Hide thumbnail strip"
+        title="Hide thumbnail strip"
+        onclick={onhide}
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    </header>
+  {/if}
   <ul>
     {#each pages as page, i (page.pageIndex)}
       {@const size = thumbnailSize(page.width, page.height, maxWidth)}
@@ -335,6 +350,25 @@
     border-left: 1px solid #111;
     padding: 8px;
     box-sizing: border-box;
+  }
+  .strip-head {
+    display: flex;
+    justify-content: flex-end;
+    padding-bottom: 6px;
+  }
+  .hide-btn {
+    background: transparent;
+    border: 1px solid #3a3a3a;
+    color: #ddd;
+    border-radius: 4px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .hide-btn:hover {
+    border-color: #666;
   }
   ul {
     list-style: none;

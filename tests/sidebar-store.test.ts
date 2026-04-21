@@ -236,4 +236,83 @@ describe('sidebar store', () => {
     expect(s.smoothingHighlighter).toBe(DEFAULT_SMOOTHING_HIGHLIGHTER);
     expect(s.smoothingTempInk).toBe(DEFAULT_SMOOTHING_TEMP_INK);
   });
+
+  it('toggleHidden flips hidden and setHidden assigns it', () => {
+    expect(sidebar.snapshot().hidden).toBe(false);
+    sidebar.toggleHidden();
+    expect(sidebar.snapshot().hidden).toBe(true);
+    sidebar.setHidden(false);
+    expect(sidebar.snapshot().hidden).toBe(false);
+  });
+
+  it('toggleMinimized flips minimized and setMinimized assigns it', () => {
+    expect(sidebar.snapshot().minimized).toBe(false);
+    sidebar.toggleMinimized();
+    expect(sidebar.snapshot().minimized).toBe(true);
+    sidebar.setMinimized(false);
+    expect(sidebar.snapshot().minimized).toBe(false);
+  });
+
+  it('toggleRightBarHidden flips rightBarHidden', () => {
+    expect(sidebar.snapshot().rightBarHidden).toBe(false);
+    sidebar.toggleRightBarHidden();
+    expect(sidebar.snapshot().rightBarHidden).toBe(true);
+    sidebar.setRightBarHidden(false);
+    expect(sidebar.snapshot().rightBarHidden).toBe(false);
+  });
+
+  it('setSnapEdge accepts valid edges and null, rejects garbage', () => {
+    expect(sidebar.snapshot().snapEdge).toBeNull();
+    sidebar.setSnapEdge('left');
+    expect(sidebar.snapshot().snapEdge).toBe('left');
+    sidebar.setSnapEdge('top');
+    expect(sidebar.snapshot().snapEdge).toBe('top');
+    // invalid value is ignored
+    sidebar.setSnapEdge('corner' as unknown as 'left');
+    expect(sidebar.snapshot().snapEdge).toBe('top');
+    sidebar.setSnapEdge(null);
+    expect(sidebar.snapshot().snapEdge).toBeNull();
+  });
+
+  it('pickSyncable includes hide/minimize/snap/rightBarHidden', () => {
+    sidebar.setHidden(true);
+    sidebar.setMinimized(true);
+    sidebar.setSnapEdge('right');
+    sidebar.setRightBarHidden(true);
+    const sync = pickSyncable(sidebar.snapshot());
+    expect(sync.hidden).toBe(true);
+    expect(sync.minimized).toBe(true);
+    expect(sync.snapEdge).toBe('right');
+    expect(sync.rightBarHidden).toBe(true);
+  });
+
+  it('applyRemote round-trips hide/minimize/snap/rightBarHidden', () => {
+    sidebar.setHidden(true);
+    sidebar.setMinimized(true);
+    sidebar.setSnapEdge('bottom');
+    sidebar.setRightBarHidden(true);
+    const snap = pickSyncable(sidebar.snapshot());
+    sidebar.reset();
+    sidebar.applyRemote(snap);
+    const s = sidebar.snapshot();
+    expect(s.hidden).toBe(true);
+    expect(s.minimized).toBe(true);
+    expect(s.snapEdge).toBe('bottom');
+    expect(s.rightBarHidden).toBe(true);
+  });
+
+  it('applyRemote validates snapEdge and rejects unknown strings', () => {
+    sidebar.applyRemote({ snapEdge: 'diagonal' as unknown as 'left' });
+    expect(sidebar.snapshot().snapEdge).toBeNull();
+    sidebar.applyRemote({ snapEdge: 'left' });
+    expect(sidebar.snapshot().snapEdge).toBe('left');
+    sidebar.applyRemote({ snapEdge: null });
+    expect(sidebar.snapshot().snapEdge).toBeNull();
+  });
+
+  it('applyRemote ignores non-boolean hide flags', () => {
+    sidebar.setHidden(true);
+    sidebar.applyRemote({ hidden: 'yes' as unknown as boolean });
+    expect(sidebar.snapshot().hidden).toBe(true);
+  });
 });
