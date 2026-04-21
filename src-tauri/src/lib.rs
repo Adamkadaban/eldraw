@@ -4,6 +4,7 @@ mod model;
 mod pdf;
 mod state;
 mod storage;
+mod thumbnails;
 
 pub use error::{AppError, AppResult};
 
@@ -11,11 +12,13 @@ pub use error::{AppError, AppResult};
 pub fn run() {
     tauri::Builder::default()
         .manage(state::AppState::default())
+        .manage(thumbnails::ThumbnailCache::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             pdf::open_pdf,
             pdf::render_page,
+            thumbnails::render_pdf_thumbnail,
             storage::load_sidecar,
             storage::save_sidecar,
             storage::acquire_lock,
