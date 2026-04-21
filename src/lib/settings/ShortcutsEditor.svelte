@@ -22,17 +22,22 @@
     recordingId = null;
   }
 
-  function onRecordingKeyDown(event: KeyboardEvent): void {
-    if (!recordingId) return;
-    event.preventDefault();
+  function onDialogKeyDown(event: KeyboardEvent): void {
     event.stopPropagation();
 
     if (event.key === 'Escape') {
-      recordingId = null;
+      event.preventDefault();
+      if (recordingId) {
+        recordingId = null;
+      } else {
+        onClose?.();
+      }
       return;
     }
 
-    // Wait for a non-modifier-only press.
+    if (!recordingId) return;
+    event.preventDefault();
+
     if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) return;
 
     const spec = formatEvent(event);
@@ -51,22 +56,14 @@
   onMount(() => {
     dialog?.focus();
   });
-
-  function onBackdropKey(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && !recordingId) {
-      onClose?.();
-    }
-  }
 </script>
 
-<div
+<button
+  type="button"
   class="backdrop"
-  role="button"
-  tabindex="-1"
   aria-label="Close shortcuts settings"
   onclick={() => onClose?.()}
-  onkeydown={onBackdropKey}
-></div>
+></button>
 
 <div
   class="dialog"
@@ -75,7 +72,7 @@
   aria-labelledby="shortcuts-title"
   bind:this={dialog}
   tabindex="-1"
-  onkeydown={onRecordingKeyDown}
+  onkeydown={onDialogKeyDown}
 >
   <header class="dialog-header">
     <h2 id="shortcuts-title">Keyboard shortcuts</h2>

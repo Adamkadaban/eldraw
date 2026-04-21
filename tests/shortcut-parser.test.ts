@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isEditableTarget, matchesEvent, parseShortcut } from '../src/lib/app/shortcutParser';
+import {
+  formatSpec,
+  isEditableTarget,
+  matchesEvent,
+  parseShortcut,
+} from '../src/lib/app/shortcutParser';
 
 function kb(
   key: string,
@@ -103,6 +108,14 @@ describe('matchesEvent', () => {
     expect(matchesEvent(p, kb('z', { ctrl: true }))).toBe(true);
     expect(matchesEvent(p, kb('z', { meta: true }))).toBe(true);
     expect(matchesEvent(p, kb('z'))).toBe(false);
+  });
+
+  it('Space spec matches a Space keydown and round-trips through formatSpec', () => {
+    const p = parseShortcut('Space');
+    expect(p.key).toBe(' ');
+    expect(matchesEvent(p, kb(' '))).toBe(true);
+    expect(formatSpec('Space')).toBe('Space');
+    expect(matchesEvent(parseShortcut('Shift+Space'), kb(' ', { shift: true }))).toBe(true);
   });
 });
 

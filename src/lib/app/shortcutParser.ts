@@ -52,6 +52,8 @@ export function parseShortcut(spec: string): ParsedKey {
       else if (lower === 'alt') alt = true;
       else if (lower === 'mod' || lower === 'cmdorctrl') modOrMeta = true;
       else meta = true;
+    } else if (lower === 'space') {
+      key = ' ';
     } else {
       key = part.length === 1 ? part.toLowerCase() : part;
     }
@@ -116,7 +118,12 @@ export function formatSpec(spec: string): string {
     if (parsed.meta) parts.push('Meta');
     if (parsed.alt) parts.push('Alt');
     if (parsed.shift) parts.push('Shift');
-    const key = parsed.key.length === 1 ? parsed.key.toUpperCase() : parsed.key;
+    const key =
+      parsed.key === ' '
+        ? 'Space'
+        : parsed.key.length === 1
+          ? parsed.key.toUpperCase()
+          : parsed.key;
     parts.push(key);
     return parts.join('+');
   } catch {
