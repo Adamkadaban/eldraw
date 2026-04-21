@@ -11,12 +11,19 @@ export interface IndexedObject {
   index: number;
 }
 
+export interface UpdateEntry {
+  objectId: ObjectId;
+  before: AnyObject;
+  after: AnyObject;
+}
+
 export type Command =
   | { type: 'add'; object: AnyObject }
   | { type: 'remove'; object: AnyObject }
   | { type: 'removeMany'; items: IndexedObject[] }
   | { type: 'insertMany'; items: IndexedObject[] }
   | { type: 'update'; objectId: ObjectId; before: AnyObject; after: AnyObject }
+  | { type: 'updateMany'; entries: UpdateEntry[] }
   | { type: 'clearPage'; objects: AnyObject[] }
   | { type: 'restorePage'; objects: AnyObject[] };
 
@@ -45,6 +52,13 @@ export function applyCommand(page: Page, cmd: Command): Page {
         ...page,
         objects: page.objects.map((o) => (o.id === cmd.objectId ? cmd.after : o)),
       };
+    case 'updateMany': {
+      const byId = new Map(cmd.entries.map((e) => [e.objectId, e.after]));
+      return {
+        ...page,
+        objects: page.objects.map((o) => byId.get(o.id) ?? o),
+      };
+    }
     case 'clearPage':
       return { ...page, objects: [] };
     case 'restorePage':
@@ -68,6 +82,15 @@ export function invertCommand(cmd: Command): Command {
         objectId: cmd.objectId,
         before: cmd.after,
         after: cmd.before,
+      };
+    case 'updateMany':
+      return {
+        type: 'updateMany',
+        entries: cmd.entries.map((e) => ({
+          objectId: e.objectId,
+          before: e.after,
+          after: e.before,
+        })),
       };
     case 'clearPage':
       return { type: 'restorePage', objects: cmd.objects };
