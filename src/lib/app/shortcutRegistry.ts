@@ -14,6 +14,7 @@ export type ShortcutId =
   | 'tool.pen'
   | 'tool.highlighter'
   | 'tool.eraser'
+  | 'tool.select'
   | 'tool.line'
   | 'tool.rect'
   | 'tool.ellipse'
@@ -91,6 +92,7 @@ const TOOL_COMMANDS: Array<{ id: ShortcutId; label: string; spec: string; tool: 
   { id: 'tool.pen', label: 'Tool: Pen', spec: 'p', tool: 'pen' },
   { id: 'tool.highlighter', label: 'Tool: Highlighter', spec: 'h', tool: 'highlighter' },
   { id: 'tool.eraser', label: 'Tool: Eraser', spec: 'e', tool: 'eraser' },
+  { id: 'tool.select', label: 'Tool: Select', spec: 's', tool: 'select' },
   { id: 'tool.line', label: 'Tool: Line', spec: 'l', tool: 'line' },
   { id: 'tool.rect', label: 'Tool: Rectangle', spec: 'r', tool: 'rect' },
   { id: 'tool.ellipse', label: 'Tool: Ellipse', spec: 'o', tool: 'ellipse' },
