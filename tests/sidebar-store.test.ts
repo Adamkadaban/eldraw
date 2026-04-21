@@ -217,4 +217,23 @@ describe('sidebar store', () => {
     expect(after.smoothingHighlighter).toBe(DEFAULT_SMOOTHING_HIGHLIGHTER);
     expect(after.smoothingTempInk).toBe(DEFAULT_SMOOTHING_TEMP_INK);
   });
+
+  it('applyRemote clamps smoothing values and rejects non-finite', () => {
+    sidebar.applyRemote({ smoothingPen: -50, smoothingHighlighter: 500, smoothingTempInk: 42 });
+    let s = sidebar.snapshot();
+    expect(s.smoothingPen).toBe(0);
+    expect(s.smoothingHighlighter).toBe(100);
+    expect(s.smoothingTempInk).toBe(42);
+
+    sidebar.reset();
+    sidebar.applyRemote({
+      smoothingPen: Number.NaN,
+      smoothingHighlighter: Number.POSITIVE_INFINITY,
+      smoothingTempInk: Number.NEGATIVE_INFINITY,
+    });
+    s = sidebar.snapshot();
+    expect(s.smoothingPen).toBe(DEFAULT_SMOOTHING_PEN);
+    expect(s.smoothingHighlighter).toBe(DEFAULT_SMOOTHING_HIGHLIGHTER);
+    expect(s.smoothingTempInk).toBe(DEFAULT_SMOOTHING_TEMP_INK);
+  });
 });

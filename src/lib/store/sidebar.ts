@@ -252,12 +252,17 @@ function createSidebarStore() {
         if (snapshot.activeColor !== undefined) next.activeColor = snapshot.activeColor;
         if (snapshot.laser !== undefined) next.laser = snapshot.laser;
         if (snapshot.tempInkFadeMs !== undefined) next.tempInkFadeMs = snapshot.tempInkFadeMs;
-        if (snapshot.smoothingPen !== undefined) next.smoothingPen = snapshot.smoothingPen;
-        if (snapshot.smoothingHighlighter !== undefined) {
-          next.smoothingHighlighter = snapshot.smoothingHighlighter;
+        if (snapshot.smoothingPen !== undefined && Number.isFinite(snapshot.smoothingPen)) {
+          next.smoothingPen = clamp(snapshot.smoothingPen, 0, 100);
         }
-        if (snapshot.smoothingTempInk !== undefined) {
-          next.smoothingTempInk = snapshot.smoothingTempInk;
+        if (
+          snapshot.smoothingHighlighter !== undefined &&
+          Number.isFinite(snapshot.smoothingHighlighter)
+        ) {
+          next.smoothingHighlighter = clamp(snapshot.smoothingHighlighter, 0, 100);
+        }
+        if (snapshot.smoothingTempInk !== undefined && Number.isFinite(snapshot.smoothingTempInk)) {
+          next.smoothingTempInk = clamp(snapshot.smoothingTempInk, 0, 100);
         }
         if (snapshot.presets !== undefined) next.presets = snapshot.presets;
         return next;
@@ -347,6 +352,7 @@ export const sidebar = createSidebarStore();
 
 const PRESETS_STORAGE_KEY = 'eldraw.presets.v1';
 const FLOATING_POS_STORAGE_KEY = 'eldraw.sidebar-pos.v1';
+const SMOOTHING_STORAGE_KEY = 'eldraw.smoothing.v1';
 
 const VALID_TOOLS: ReadonlySet<ToolKind> = new Set<ToolKind>([
   'pen',
@@ -427,6 +433,37 @@ function loadPersistedFloatingPos(): { x: number; y: number } | null {
   }
 }
 
+interface PersistedSmoothing {
+  pen: number;
+  highlighter: number;
+  tempInk: number;
+}
+
+function loadPersistedSmoothing(): PersistedSmoothing | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(SMOOTHING_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const p = parsed as Record<string, unknown>;
+    const pen = typeof p.pen === 'number' ? p.pen : null;
+    const highlighter = typeof p.highlighter === 'number' ? p.highlighter : null;
+    const tempInk = typeof p.tempInk === 'number' ? p.tempInk : null;
+    if (pen === null || highlighter === null || tempInk === null) return null;
+    if (!Number.isFinite(pen) || !Number.isFinite(highlighter) || !Number.isFinite(tempInk)) {
+      return null;
+    }
+    return {
+      pen: clamp(pen, 0, 100),
+      highlighter: clamp(highlighter, 0, 100),
+      tempInk: clamp(tempInk, 0, 100),
+    };
+  } catch {
+    return null;
+  }
+}
+
 let hydrated = false;
 let hydrationUnsubscribe: (() => void) | null = null;
 
@@ -440,6 +477,13 @@ export function hydrateSidebarFromStorage(): () => void {
   const floatingPos = loadPersistedFloatingPos();
   if (floatingPos) sidebar.setFloatingPos(floatingPos);
 
+  const smoothing = loadPersistedSmoothing();
+  if (smoothing) {
+    sidebar.setSmoothing('pen', smoothing.pen);
+    sidebar.setSmoothing('highlighter', smoothing.highlighter);
+    sidebar.setSmoothing('temp-ink', smoothing.tempInk);
+  }
+
   if (typeof localStorage === 'undefined') {
     hydrationUnsubscribe = () => undefined;
     return hydrationUnsubscribe;
@@ -448,6 +492,14 @@ export function hydrateSidebarFromStorage(): () => void {
   const unsubscribe = sidebar.subscribe((s) => {
     try {
       localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(s.presets));
+      localStorage.setItem(
+        SMOOTHING_STORAGE_KEY,
+        JSON.stringify({
+          pen: s.smoothingPen,
+          highlighter: s.smoothingHighlighter,
+          tempInk: s.smoothingTempInk,
+        }),
+      );
     } catch {
       // storage full or unavailable; ignore
     }

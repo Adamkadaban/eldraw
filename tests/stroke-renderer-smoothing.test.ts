@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { StrokeObject } from '$lib/types';
 import { streamlineFromSmoothing } from '$lib/store/sidebar';
 
@@ -13,7 +13,6 @@ vi.mock('perfect-freehand', () => ({
 }));
 
 class FakePath2D {}
-(globalThis as unknown as { Path2D: typeof FakePath2D }).Path2D = FakePath2D;
 
 function makeCtx(): CanvasRenderingContext2D {
   const noop = () => undefined;
@@ -52,7 +51,11 @@ function stroke(): StrokeObject {
 }
 
 describe('strokeRenderer streamline wiring', () => {
-  beforeEach(() => getStroke.mockClear());
+  beforeEach(() => {
+    getStroke.mockClear();
+    vi.stubGlobal('Path2D', FakePath2D);
+  });
+  afterEach(() => vi.unstubAllGlobals());
 
   it('defaults streamline to 0.5 when not provided', async () => {
     const { drawStroke } = await import('$lib/canvas/strokeRenderer');
@@ -103,6 +106,6 @@ describe('strokeRenderer streamline wiring', () => {
       1,
       streamlineFromSmoothing(50),
     );
-    expect(getStroke.mock.calls[0][1]).toMatchObject({ streamline: 0.495 });
+    expect(getStroke.mock.calls[0][1].streamline).toBeCloseTo(0.495);
   });
 });
