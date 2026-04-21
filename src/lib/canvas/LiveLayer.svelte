@@ -7,6 +7,9 @@
   import { cursorForTool } from './cursors';
   import { log } from '$lib/log';
   import { snapPointToRuler, snapStrokeToRuler, type RulerState } from '$lib/geometry/ruler';
+  import { catmullRomSmooth } from './catmullRom';
+  import { simplifyRdp } from './simplify';
+  import { createRafBatcher, type Batcher } from './inkBatch';
 
   interface Props {
     width: number;
@@ -34,14 +37,20 @@
     ongraph,
   }: Props = $props();
 
+  const MIN_GRAPH_SIZE_PT = 8;
+  const RDP_EPSILON_PX = 0.5;
+  const CATMULL_MAX_CHORD_PX = 6;
+  const HAS_RAW_UPDATE = typeof window !== 'undefined' && 'onpointerrawupdate' in window;
+
   let graphStart: { x: number; y: number } | null = null;
   let graphEnd: { x: number; y: number } | null = null;
-  const MIN_GRAPH_SIZE_PT = 8;
 
   let canvas: HTMLCanvasElement;
+  let ctx2d: CanvasRenderingContext2D | null = null;
   let activePointerId: number | null = null;
   let startTime = 0;
   let points: Point[] = [];
+  let predictedTail: Point[] = [];
   let currentTool: ToolKind = $state('pen');
   let currentStyle: StrokeStyle = {
     color: '#000',
@@ -50,19 +59,43 @@
     opacity: 1,
   };
 
+  type Sample = { point: Point; predicted: Point[] };
+  let batcher: Batcher<Sample> | null = null;
+
+  const debugEnabled =
+    typeof window !== 'undefined' &&
+    (new URLSearchParams(window.location.search).get('inkdebug') === '1' ||
+      (typeof localStorage !== 'undefined' && localStorage.getItem('eldrawInkDebug') === '1'));
+  let debugInfo = $state({ hz: 0, frameMs: 0, coalesced: 0, predicted: 0 });
+  let debugWindow: number[] = [];
+  let debugLastFrameTs = 0;
+
   const unsubscribeTool = toolStore.subscribe((s) => {
     currentTool = s.tool;
     currentStyle = s.style;
     log('tool', `live-layer sees tool=${s.tool}`, s.style);
   });
-  onDestroy(unsubscribeTool);
+  onDestroy(() => {
+    unsubscribeTool();
+    batcher?.cancel();
+  });
 
-  function ctx(): CanvasRenderingContext2D | null {
-    return canvas?.getContext('2d') ?? null;
+  function ensureCtx(): CanvasRenderingContext2D | null {
+    if (ctx2d) return ctx2d;
+    if (!canvas) return null;
+    // desynchronized: true is a meaningful latency win for inking because it
+    // lets the browser bypass the compositor for this canvas. alpha: true so
+    // we can sit on top of the static ink layer without an opaque background.
+    ctx2d = canvas.getContext('2d', {
+      alpha: true,
+      desynchronized: true,
+      willReadFrequently: false,
+    });
+    return ctx2d;
   }
 
   function clear() {
-    const c = ctx();
+    const c = ensureCtx();
     if (!c) return;
     c.clearRect(0, 0, canvas.width, canvas.height);
   }
@@ -77,8 +110,10 @@
     }
     activePointerId = null;
     points = [];
+    predictedTail = [];
     graphStart = null;
     graphEnd = null;
+    batcher?.cancel();
     clear();
   }
 
@@ -105,15 +140,19 @@
   }
 
   function redrawLive() {
-    const c = ctx();
+    const c = ensureCtx();
     if (!c) return;
     clear();
     if (currentTool === 'highlighter') {
       c.globalCompositeOperation = 'multiply';
-      drawLiveStroke(c, points, currentStyle, 'highlighter', ptToPx, highlighterStreamline);
+      const tail = points.concat(predictedTail);
+      const smoothed = catmullRomSmooth(tail, CATMULL_MAX_CHORD_PX / ptToPx);
+      drawLiveStroke(c, smoothed, currentStyle, 'highlighter', ptToPx, highlighterStreamline);
     } else if (currentTool === 'pen') {
       c.globalCompositeOperation = 'source-over';
-      drawLiveStroke(c, points, currentStyle, 'pen', ptToPx, penStreamline);
+      const tail = points.concat(predictedTail);
+      const smoothed = catmullRomSmooth(tail, CATMULL_MAX_CHORD_PX / ptToPx);
+      drawLiveStroke(c, smoothed, currentStyle, 'pen', ptToPx, penStreamline);
     } else if (currentTool === 'graph' && graphStart && graphEnd) {
       drawGraphRect(c);
     }
@@ -135,6 +174,58 @@
     c.setLineDash([]);
   }
 
+  function ensureBatcher(): Batcher<Sample> {
+    if (batcher) return batcher;
+    batcher = createRafBatcher<Sample>((samples) => {
+      // Committed strokes live on InkLayer/HighlightLayer; we only redraw the
+      // active stroke on this canvas. Reference: Excalidraw splits live vs
+      // committed the same way (see packages/excalidraw/renderer).
+      const t0 = performance.now();
+      let latestPredicted: Point[] = [];
+      for (const s of samples) {
+        points.push(s.point);
+        if (s.predicted.length > 0) latestPredicted = s.predicted;
+      }
+      predictedTail = latestPredicted;
+      redrawLive();
+
+      if (debugEnabled) {
+        const now = performance.now();
+        debugWindow.push(now);
+        const cutoff = now - 1000;
+        while (debugWindow.length > 0 && debugWindow[0] < cutoff) debugWindow.shift();
+        debugInfo = {
+          hz: debugWindow.length,
+          frameMs: Math.round(now - t0),
+          coalesced: samples.length,
+          predicted: latestPredicted.length,
+        };
+        if (debugLastFrameTs !== 0) {
+          // keep the most recent frame interval visible in the overlay
+          debugInfo.frameMs = Math.round(now - debugLastFrameTs);
+        }
+        debugLastFrameTs = now;
+      }
+    });
+    return batcher;
+  }
+
+  function coalescedPoints(e: PointerEvent): Point[] {
+    const native = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
+    if (!native || native.length === 0) return [maybeSnap(toPoint(e))];
+    const out: Point[] = [];
+    for (const c of native) out.push(maybeSnap(toPoint(c)));
+    return out;
+  }
+
+  function predictedPoints(e: PointerEvent): Point[] {
+    const native = typeof e.getPredictedEvents === 'function' ? e.getPredictedEvents() : [];
+    if (!native || native.length === 0) return [];
+    const out: Point[] = [];
+    for (const c of native) out.push(maybeSnap(toPoint(c)));
+    return out;
+  }
+
   function onPointerDown(e: PointerEvent) {
     log('live', `pointerdown tool=${currentTool} type=${e.pointerType} id=${e.pointerId}`);
     if (e.pointerType === 'touch') return;
@@ -149,6 +240,7 @@
     canvas.setPointerCapture(e.pointerId);
     activePointerId = e.pointerId;
     startTime = performance.now();
+    predictedTail = [];
 
     if (currentTool === 'eraser') {
       const p = toPoint(e);
@@ -170,11 +262,15 @@
     e.preventDefault();
   }
 
-  function onPointerMove(e: PointerEvent) {
+  function handleMoveLike(e: PointerEvent) {
     if (activePointerId !== e.pointerId) return;
     if (currentTool === 'eraser') {
-      const p = toPoint(e);
-      onerase?.({ x: p.x, y: p.y });
+      const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
+      const events = coalesced && coalesced.length > 0 ? coalesced : [e];
+      for (const ev of events) {
+        const p = toPoint(ev);
+        onerase?.({ x: p.x, y: p.y });
+      }
       return;
     }
     if (currentTool === 'graph') {
@@ -185,9 +281,30 @@
       return;
     }
     if (currentTool !== 'pen' && currentTool !== 'highlighter') return;
-    points.push(maybeSnap(toPoint(e)));
-    redrawLive();
+
+    const cps = coalescedPoints(e);
+    const predicted = predictedPoints(e);
+    const b = ensureBatcher();
+    // getCoalescedEvents can return 10+ samples for a single pointermove at
+    // high stylus rates; we flatten them into the batcher so every sample is
+    // smoothed and rendered, but we still only paint once per frame.
+    for (let i = 0; i < cps.length; i++) {
+      const isLast = i === cps.length - 1;
+      b.push({ point: cps[i], predicted: isLast ? predicted : [] });
+    }
     e.preventDefault();
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    // When pointerrawupdate is available we prefer it for sub-frame resolution.
+    // Fall back to pointermove transparently on browsers that lack it.
+    if (HAS_RAW_UPDATE && (currentTool === 'pen' || currentTool === 'highlighter')) return;
+    handleMoveLike(e);
+  }
+
+  function onPointerRawUpdate(e: PointerEvent) {
+    if (!HAS_RAW_UPDATE) return;
+    handleMoveLike(e);
   }
 
   function finish(e: PointerEvent, commit: boolean) {
@@ -199,13 +316,20 @@
     }
     activePointerId = null;
 
+    // Drain any samples still queued in the batcher before we commit so the
+    // final stroke contains every input sample.
+    batcher?.flushNow();
+    predictedTail = [];
+
     if (commit && (currentTool === 'pen' || currentTool === 'highlighter') && points.length > 0) {
-      const finalPoints = rulerSnap
+      const snapped = rulerSnap
         ? snapStrokeToRuler(points, rulerSnap, rulerSnapThresholdPx / ptToPx)
         : points;
+      const epsilonPt = RDP_EPSILON_PX / ptToPx;
+      const simplified = simplifyRdp(snapped, epsilonPt);
       const bakedStreamline = currentTool === 'highlighter' ? highlighterStreamline : penStreamline;
-      const stroke = strokeFromInput(finalPoints, currentStyle, currentTool, bakedStreamline);
-      log('live', `commit ${currentTool} stroke points=${points.length}`);
+      const stroke = strokeFromInput(simplified, currentStyle, currentTool, bakedStreamline);
+      log('live', `commit ${currentTool} raw=${points.length} simplified=${simplified.length}`);
       oncommit?.(stroke);
     }
     if (commit && currentTool === 'graph' && graphStart && graphEnd) {
@@ -231,7 +355,18 @@
     finish(e, false);
   }
 
-  onMount(clear);
+  onMount(() => {
+    clear();
+    if (HAS_RAW_UPDATE && canvas) {
+      canvas.addEventListener('pointerrawupdate', onPointerRawUpdate as (e: Event) => void);
+    }
+  });
+
+  onDestroy(() => {
+    if (HAS_RAW_UPDATE && canvas) {
+      canvas.removeEventListener('pointerrawupdate', onPointerRawUpdate as (e: Event) => void);
+    }
+  });
 
   $effect(() => {
     void width;
@@ -252,11 +387,38 @@
   onpointercancel={onPointerCancel}
 ></canvas>
 
+{#if debugEnabled}
+  <div class="ink-debug">
+    <div>flush/s: {debugInfo.hz}</div>
+    <div>frame: {debugInfo.frameMs}ms</div>
+    <div>coalesced: {debugInfo.coalesced}</div>
+    <div>predicted: {debugInfo.predicted}</div>
+    <div>raw: {HAS_RAW_UPDATE ? 'on' : 'off'}</div>
+  </div>
+{/if}
+
 <style>
   .live-layer {
     position: absolute;
     inset: 0;
     pointer-events: auto;
     touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .ink-debug {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 100;
+    padding: 4px 6px;
+    font:
+      10px/1.3 ui-monospace,
+      monospace;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 3px;
+    pointer-events: none;
+    white-space: nowrap;
   }
 </style>
