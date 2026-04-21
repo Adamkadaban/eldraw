@@ -114,6 +114,7 @@ export interface GraphObject extends ObjectBase {
   bounds: { x: number; y: number; w: number; h: number };
   xRange: [number, number];
   yRange: [number, number];
+  /** Grid spacing in graph units. `0` means auto (derived from range). */
   gridStep: number;
   showAxes: boolean;
   showGrid: boolean;
