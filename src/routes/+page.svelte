@@ -19,10 +19,12 @@
   import { currentDocument, documentStore, pdfPageIndexAt } from '$lib/store/document';
   import { startAutosave } from '$lib/store/autosave';
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
-  import { presenterStore } from '$lib/store/presenter';
+  import { presenter, presenterStore } from '$lib/store/presenter';
   import { zenStore } from '$lib/store/zen';
   import { overlays } from '$lib/store/overlays';
   import { startToolBridge } from '$lib/app/toolBridge';
+  import { startPresenterBridge } from '$lib/app/presenterBridge';
+  import { onPresenterWindowClosed } from '$lib/ipc/presenter';
   import { shortcuts } from '$lib/app/shortcuts';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
   import { hitTestStrokes } from '$lib/tools/eraser';
@@ -48,6 +50,7 @@
 
   let stopBridge: (() => void) | null = null;
   let stopAutosave: (() => void) | null = null;
+  let stopPresenterBridge: (() => void) | null = null;
 
   const pdfState = $derived($pdf);
   const meta = $derived<PdfMeta | null>(pdfState.meta);
@@ -64,6 +67,14 @@
   });
   const presenterState = $derived($presenterStore);
   const isPresenter = $derived(presenterState.active);
+  $effect(() => {
+    if (presenterState.windowOpen && !stopPresenterBridge) {
+      stopPresenterBridge = startPresenterBridge();
+    } else if (!presenterState.windowOpen && stopPresenterBridge) {
+      stopPresenterBridge();
+      stopPresenterBridge = null;
+    }
+  });
   const zenState = $derived($zenStore);
   const isZen = $derived(zenState.active);
   const chromeHidden = $derived(isPresenter || isZen);
@@ -364,12 +375,20 @@
   onMount(() => {
     stopHydration = hydrateSidebarFromStorage();
     stopBridge = startToolBridge();
+    let unlistenPresenterClose: (() => void) | null = null;
+    void onPresenterWindowClosed(() => presenter.setWindowOpen(false)).then((fn) => {
+      unlistenPresenterClose = fn;
+    });
+    return () => {
+      unlistenPresenterClose?.();
+    };
   });
 
   onDestroy(() => {
     stopBridge?.();
     stopAutosave?.();
     stopHydration?.();
+    stopPresenterBridge?.();
   });
 </script>
 
