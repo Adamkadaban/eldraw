@@ -1,6 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { currentStyle, PRESET_COLORS, sidebar } from '$lib/store/sidebar';
+import {
+  currentStyle,
+  PRESET_COLORS,
+  sidebar,
+  streamlineFromSmoothing,
+  pickSyncable,
+  DEFAULT_SMOOTHING_PEN,
+  DEFAULT_SMOOTHING_HIGHLIGHTER,
+  DEFAULT_SMOOTHING_TEMP_INK,
+} from '$lib/store/sidebar';
 
 describe('sidebar store', () => {
   beforeEach(() => sidebar.reset());
@@ -149,5 +158,82 @@ describe('sidebar store', () => {
     sidebar.setFloatingPos({ x: 1, y: 2 });
     sidebar.setFloatingPos(null);
     expect(sidebar.snapshot().floatingPos).toBeNull();
+  });
+
+  it('smoothing defaults: 50/50/30', () => {
+    const s = sidebar.snapshot();
+    expect(s.smoothingPen).toBe(DEFAULT_SMOOTHING_PEN);
+    expect(s.smoothingHighlighter).toBe(DEFAULT_SMOOTHING_HIGHLIGHTER);
+    expect(s.smoothingTempInk).toBe(DEFAULT_SMOOTHING_TEMP_INK);
+    expect(DEFAULT_SMOOTHING_PEN).toBe(50);
+    expect(DEFAULT_SMOOTHING_HIGHLIGHTER).toBe(50);
+    expect(DEFAULT_SMOOTHING_TEMP_INK).toBe(30);
+  });
+
+  it('setSmoothing persists per-tool and clamps to 0..100', () => {
+    sidebar.setSmoothing('pen', 80);
+    sidebar.setSmoothing('highlighter', 10);
+    sidebar.setSmoothing('temp-ink', 65);
+    let s = sidebar.snapshot();
+    expect(s.smoothingPen).toBe(80);
+    expect(s.smoothingHighlighter).toBe(10);
+    expect(s.smoothingTempInk).toBe(65);
+
+    sidebar.setSmoothing('pen', -20);
+    sidebar.setSmoothing('highlighter', 150);
+    sidebar.setSmoothing('temp-ink', Number.NaN);
+    s = sidebar.snapshot();
+    expect(s.smoothingPen).toBe(0);
+    expect(s.smoothingHighlighter).toBe(100);
+    expect(s.smoothingTempInk).toBe(0);
+  });
+
+  it('streamlineFromSmoothing maps 0 -> 0 and 100 -> 0.99', () => {
+    expect(streamlineFromSmoothing(0)).toBe(0);
+    expect(streamlineFromSmoothing(100)).toBeCloseTo(0.99, 10);
+    expect(streamlineFromSmoothing(50)).toBeCloseTo(0.495, 10);
+    expect(streamlineFromSmoothing(-5)).toBe(0);
+    expect(streamlineFromSmoothing(250)).toBeCloseTo(0.99, 10);
+    expect(streamlineFromSmoothing(Number.NaN)).toBe(0);
+  });
+
+  it('pickSyncable includes per-tool smoothing for cross-window sync', () => {
+    sidebar.setSmoothing('pen', 77);
+    sidebar.setSmoothing('highlighter', 22);
+    sidebar.setSmoothing('temp-ink', 4);
+    const sync = pickSyncable(sidebar.snapshot());
+    expect(sync.smoothingPen).toBe(77);
+    expect(sync.smoothingHighlighter).toBe(22);
+    expect(sync.smoothingTempInk).toBe(4);
+  });
+
+  it('applyRemote round-trips smoothing values', () => {
+    sidebar.setSmoothing('pen', 11);
+    const snap = pickSyncable(sidebar.snapshot());
+    sidebar.reset();
+    sidebar.applyRemote(snap);
+    const after = sidebar.snapshot();
+    expect(after.smoothingPen).toBe(11);
+    expect(after.smoothingHighlighter).toBe(DEFAULT_SMOOTHING_HIGHLIGHTER);
+    expect(after.smoothingTempInk).toBe(DEFAULT_SMOOTHING_TEMP_INK);
+  });
+
+  it('applyRemote clamps smoothing values and rejects non-finite', () => {
+    sidebar.applyRemote({ smoothingPen: -50, smoothingHighlighter: 500, smoothingTempInk: 42 });
+    let s = sidebar.snapshot();
+    expect(s.smoothingPen).toBe(0);
+    expect(s.smoothingHighlighter).toBe(100);
+    expect(s.smoothingTempInk).toBe(42);
+
+    sidebar.reset();
+    sidebar.applyRemote({
+      smoothingPen: Number.NaN,
+      smoothingHighlighter: Number.POSITIVE_INFINITY,
+      smoothingTempInk: Number.NEGATIVE_INFINITY,
+    });
+    s = sidebar.snapshot();
+    expect(s.smoothingPen).toBe(DEFAULT_SMOOTHING_PEN);
+    expect(s.smoothingHighlighter).toBe(DEFAULT_SMOOTHING_HIGHLIGHTER);
+    expect(s.smoothingTempInk).toBe(DEFAULT_SMOOTHING_TEMP_INK);
   });
 });

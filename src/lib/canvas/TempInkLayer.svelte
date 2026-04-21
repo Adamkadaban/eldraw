@@ -16,9 +16,10 @@
     active: boolean;
     style: StrokeStyle;
     fadeMs: number;
+    streamline?: number;
   }
 
-  let { width, height, ptToPx, active, style, fadeMs }: Props = $props();
+  let { width, height, ptToPx, active, style, fadeMs, streamline }: Props = $props();
 
   let canvas: HTMLCanvasElement;
   let strokes: TempInkStroke[] = [];
@@ -50,14 +51,14 @@
       const a = fadeOpacity(s, now);
       if (a <= 0) continue;
       c.globalAlpha = a * s.style.opacity;
-      drawLiveStroke(c, s.points, { ...s.style, opacity: 1 }, 'pen', ptToPx);
+      drawLiveStroke(c, s.points, { ...s.style, opacity: 1 }, 'pen', ptToPx, streamline);
     }
     c.restore();
 
     if (livePoints.length > 0) {
       c.save();
       c.globalAlpha = liveStyle.opacity;
-      drawLiveStroke(c, livePoints, { ...liveStyle, opacity: 1 }, 'pen', ptToPx);
+      drawLiveStroke(c, livePoints, { ...liveStyle, opacity: 1 }, 'pen', ptToPx, streamline);
       c.restore();
     }
 

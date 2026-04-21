@@ -14,6 +14,8 @@
     ptToPx: number;
     rulerSnap?: RulerState | null;
     rulerSnapThresholdPx?: number;
+    penStreamline?: number;
+    highlighterStreamline?: number;
     oncommit?: (stroke: StrokeObject) => void;
     onerase?: (at: { x: number; y: number }) => void;
     ongraph?: (bounds: { x: number; y: number; w: number; h: number }) => void;
@@ -25,6 +27,8 @@
     ptToPx,
     rulerSnap = null,
     rulerSnapThresholdPx = 12,
+    penStreamline,
+    highlighterStreamline,
     oncommit,
     onerase,
     ongraph,
@@ -106,10 +110,10 @@
     clear();
     if (currentTool === 'highlighter') {
       c.globalCompositeOperation = 'multiply';
-      drawLiveStroke(c, points, currentStyle, 'highlighter', ptToPx);
+      drawLiveStroke(c, points, currentStyle, 'highlighter', ptToPx, highlighterStreamline);
     } else if (currentTool === 'pen') {
       c.globalCompositeOperation = 'source-over';
-      drawLiveStroke(c, points, currentStyle, 'pen', ptToPx);
+      drawLiveStroke(c, points, currentStyle, 'pen', ptToPx, penStreamline);
     } else if (currentTool === 'graph' && graphStart && graphEnd) {
       drawGraphRect(c);
     }

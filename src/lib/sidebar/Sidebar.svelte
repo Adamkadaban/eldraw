@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { currentStyle, sidebar, styleKeyFor } from '$lib/store/sidebar';
+  import { currentStyle, sidebar, styleKeyFor, type SmoothingTool } from '$lib/store/sidebar';
   import type { DashStyle, StrokeStyle, ToolKind } from '$lib/types';
+  import type { SidebarState } from '$lib/store/sidebar';
   import ColorPalette from './ColorPalette.svelte';
   import WidthPicker from './WidthPicker.svelte';
   import DashStyleToggle from './DashStyleToggle.svelte';
@@ -55,6 +56,10 @@
 
   const sidebarState = $derived($sidebar);
   const style = $derived($currentStyle);
+  const activeSmoothingTool = $derived(smoothingToolFor(sidebarState.activeTool));
+  const smoothing = $derived(
+    activeSmoothingTool ? smoothingValue(sidebarState, activeSmoothingTool) : 0,
+  );
 
   function pickTool(tool: ToolKind, disabled: boolean | undefined) {
     if (disabled) return;
@@ -72,6 +77,24 @@
   function onTempInkFade(e: Event) {
     const v = Number((e.target as HTMLInputElement).value);
     if (Number.isFinite(v)) sidebar.setTempInkFadeMs(v);
+  }
+
+  function smoothingToolFor(tool: ToolKind): SmoothingTool | null {
+    if (tool === 'pen' || tool === 'highlighter' || tool === 'temp-ink') return tool;
+    return null;
+  }
+
+  function smoothingValue(state: SidebarState, tool: SmoothingTool): number {
+    if (tool === 'pen') return state.smoothingPen;
+    if (tool === 'highlighter') return state.smoothingHighlighter;
+    return state.smoothingTempInk;
+  }
+
+  function onSmoothing(e: Event) {
+    const tool = smoothingToolFor(sidebarState.activeTool);
+    if (!tool) return;
+    const v = Number((e.target as HTMLInputElement).value);
+    if (Number.isFinite(v)) sidebar.setSmoothing(tool, v);
   }
 
   function onColor(color: string) {
@@ -299,6 +322,24 @@
     <DashStyleToggle value={style.dash} onChange={onDash} />
   </section>
 
+  {#if activeSmoothingTool}
+    <section class="section smoothing" aria-label="Smoothing">
+      <h3 class="section-title">Smoothing</h3>
+      <div class="row">
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={smoothing}
+          oninput={onSmoothing}
+          aria-label="Smoothing amount"
+        />
+        <span class="value">{smoothing}%</span>
+      </div>
+    </section>
+  {/if}
+
   <section class="section" aria-label="Presets">
     <ToolPresets
       presets={sidebarState.presets}
@@ -477,6 +518,20 @@
   .value {
     font-size: 11px;
     color: #aaa;
+  }
+  .smoothing .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .smoothing input[type='range'] {
+    flex: 1;
+    min-width: 0;
+  }
+  .smoothing .value {
+    min-width: 36px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
   input[type='number'] {
     background: #1b1b1b;

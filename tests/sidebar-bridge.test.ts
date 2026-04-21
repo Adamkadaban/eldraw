@@ -101,6 +101,9 @@ describe('sidebar detached window bridge', () => {
       activeColor: '#abcdef',
       laser: get(sidebar).laser,
       tempInkFadeMs: get(sidebar).tempInkFadeMs,
+      smoothingPen: get(sidebar).smoothingPen,
+      smoothingHighlighter: get(sidebar).smoothingHighlighter,
+      smoothingTempInk: get(sidebar).smoothingTempInk,
       presets: [],
     });
     await flush();

@@ -29,6 +29,9 @@
     laserRadius?: number;
     tempInkStyle?: StrokeStyle;
     tempInkFadeMs?: number;
+    penStreamline?: number;
+    highlighterStreamline?: number;
+    tempInkStreamline?: number;
     rulerSnap?: RulerState | null;
     rulerSnapThresholdPx?: number;
     overlay?: Snippet;
@@ -49,6 +52,9 @@
     laserRadius = 6,
     tempInkStyle = { color: '#000000', width: 2, dash: 'solid', opacity: 1 },
     tempInkFadeMs = 3000,
+    penStreamline,
+    highlighterStreamline,
+    tempInkStreamline,
     rulerSnap = null,
     rulerSnapThresholdPx,
     overlay,
@@ -61,7 +67,7 @@
 
 <div class="stack" style="width: {width}px; height: {height}px;">
   <div class="layer layer-highlight">
-    <HighlightLayer {strokes} {width} {height} {ptToPx} />
+    <HighlightLayer {strokes} {width} {height} {ptToPx} streamline={highlighterStreamline} />
   </div>
 
   <div class="layer layer-objects">
@@ -69,7 +75,7 @@
   </div>
 
   <div class="layer layer-ink">
-    <InkLayer {strokes} {width} {height} {ptToPx} />
+    <InkLayer {strokes} {width} {height} {ptToPx} streamline={penStreamline} />
   </div>
 
   <div class="layer layer-live">
@@ -79,6 +85,8 @@
       {ptToPx}
       {rulerSnap}
       {rulerSnapThresholdPx}
+      {penStreamline}
+      {highlighterStreamline}
       {oncommit}
       {onerase}
       {ongraph}
@@ -97,6 +105,7 @@
       active={activeTool === 'temp-ink'}
       style={tempInkStyle}
       fadeMs={tempInkFadeMs}
+      streamline={tempInkStreamline}
     />
   </div>
 

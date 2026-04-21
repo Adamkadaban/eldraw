@@ -8,9 +8,10 @@
     width: number;
     height: number;
     ptToPx: number;
+    streamline?: number;
   }
 
-  let { strokes, width, height, ptToPx }: Props = $props();
+  let { strokes, width, height, ptToPx, streamline }: Props = $props();
 
   let canvas: HTMLCanvasElement;
 
@@ -26,7 +27,7 @@
         ...s,
         style: { ...s.style, opacity: Math.min(s.style.opacity, 0.3) },
       };
-      drawStroke(ctx, faded, { ptToPx });
+      drawStroke(ctx, faded, { ptToPx, streamline });
     }
   }
 
@@ -37,6 +38,7 @@
     void width;
     void height;
     void ptToPx;
+    void streamline;
     redraw();
   });
 </script>
