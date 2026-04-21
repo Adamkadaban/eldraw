@@ -104,3 +104,102 @@ describe('getThumbnail', () => {
     );
   });
 });
+
+describe('page generation', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('starts at 0, bumps to 1, notifies subscribers with the new generation', async () => {
+    setupObjectUrls();
+    const mod = await import('../src/lib/pdf/thumbnails');
+
+    expect(mod.pageGeneration('hash-a', 0)).toBe(0);
+    const seen: number[] = [];
+    const unsub = mod.subscribePageGeneration('hash-a', 0, (g) => seen.push(g));
+
+    mod.bumpPageGeneration('hash-a', 0);
+    mod.bumpPageGeneration('hash-a', 0);
+
+    expect(mod.pageGeneration('hash-a', 0)).toBe(2);
+    expect(seen).toEqual([1, 2]);
+    unsub();
+    mod.bumpPageGeneration('hash-a', 0);
+    expect(seen).toEqual([1, 2]);
+  });
+
+  it('scopes generations per (pdfId, pageIndex)', async () => {
+    setupObjectUrls();
+    const mod = await import('../src/lib/pdf/thumbnails');
+
+    mod.bumpPageGeneration('hash-a', 0);
+    expect(mod.pageGeneration('hash-a', 0)).toBe(1);
+    expect(mod.pageGeneration('hash-a', 1)).toBe(0);
+    expect(mod.pageGeneration('hash-b', 0)).toBe(0);
+  });
+
+  it('revokeThumbnails clears generations and subscribers for the pdfId', async () => {
+    setupObjectUrls();
+    const mod = await import('../src/lib/pdf/thumbnails');
+
+    mod.bumpPageGeneration('hash-a', 0);
+    mod.bumpPageGeneration('hash-b', 0);
+    const seen: number[] = [];
+    mod.subscribePageGeneration('hash-a', 0, (g) => seen.push(g));
+
+    mod.revokeThumbnails('hash-a');
+
+    expect(mod.pageGeneration('hash-a', 0)).toBe(0);
+    expect(mod.pageGeneration('hash-b', 0)).toBe(1);
+
+    mod.bumpPageGeneration('hash-a', 0);
+    expect(seen).toEqual([]);
+  });
+
+  it('retainThumbnails drops generations for pages not in the retained set', async () => {
+    setupObjectUrls();
+    const mod = await import('../src/lib/pdf/thumbnails');
+
+    mod.bumpPageGeneration('hash-a', 0);
+    mod.bumpPageGeneration('hash-a', 1);
+    mod.bumpPageGeneration('hash-a', 2);
+
+    mod.retainThumbnails('hash-a', new Set([1]));
+
+    expect(mod.pageGeneration('hash-a', 0)).toBe(0);
+    expect(mod.pageGeneration('hash-a', 1)).toBe(1);
+    expect(mod.pageGeneration('hash-a', 2)).toBe(0);
+  });
+
+  it('keeps per-page generations independent across identities that alias the same pdf source', async () => {
+    setupObjectUrls();
+    const mod = await import('../src/lib/pdf/thumbnails');
+
+    // Two duplicated sidebar slots with distinct per-page identities (e.g.
+    // pageIndex 10 and 11) that happen to share the same underlying
+    // pdfSourceIndex. The component keys generation subscriptions by the
+    // per-page identity so edits to one duplicate must not bump the other.
+    const seen10: number[] = [];
+    const seen11: number[] = [];
+    const unsub10 = mod.subscribePageGeneration('hash-a', 10, (g) => seen10.push(g));
+    const unsub11 = mod.subscribePageGeneration('hash-a', 11, (g) => seen11.push(g));
+
+    mod.bumpPageGeneration('hash-a', 10);
+    expect(seen10).toEqual([1]);
+    expect(seen11).toEqual([]);
+    expect(mod.pageGeneration('hash-a', 10)).toBe(1);
+    expect(mod.pageGeneration('hash-a', 11)).toBe(0);
+
+    mod.bumpPageGeneration('hash-a', 11);
+    expect(seen10).toEqual([1]);
+    expect(seen11).toEqual([1]);
+    expect(mod.pageGeneration('hash-a', 10)).toBe(1);
+    expect(mod.pageGeneration('hash-a', 11)).toBe(1);
+
+    unsub10();
+    unsub11();
+  });
+});

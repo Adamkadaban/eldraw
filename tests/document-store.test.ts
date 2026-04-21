@@ -190,4 +190,66 @@ describe('documentStore', () => {
     const doc = get(store)!;
     expect(doc.pages[1].background).toBe('#123456');
   });
+
+  it('onPageCommit fires on add/remove/update/clear and on undo/redo', () => {
+    const store = createDocumentStore();
+    store.load(docWithPages([pdfPage(0), pdfPage(1)]));
+    const events: number[] = [];
+    const unsub = store.onPageCommit((i) => events.push(i));
+
+    store.addObject(0, stroke('a'));
+    store.addObject(1, stroke('b'));
+    store.updateObject(0, 'a', { style: { color: '#f00', width: 2, dash: 'solid', opacity: 1 } });
+    store.removeObject(1, 'b');
+    store.undo(0);
+    store.redo(0);
+    store.clearPage(0);
+
+    expect(events).toEqual([0, 1, 0, 1, 0, 0, 0]);
+    unsub();
+  });
+
+  it('onPageCommit does not fire for structural page ops', () => {
+    const store = createDocumentStore();
+    store.load(docWithPages([pdfPage(0), pdfPage(1)]));
+    const events: number[] = [];
+    store.onPageCommit((i) => events.push(i));
+
+    store.insertBlankPageAfter(0, 500, 700);
+    store.movePage(0, 1);
+    store.duplicatePage(0);
+    store.deletePage(0);
+
+    expect(events).toEqual([]);
+  });
+
+  it('onPageCommit does not fire when the store is unchanged by a no-op', () => {
+    const store = createDocumentStore();
+    store.load(docWithPages([pdfPage(0)]));
+    const events: number[] = [];
+    store.onPageCommit((i) => events.push(i));
+
+    // No undo stack yet: these should be silent.
+    store.undo(0);
+    store.redo(0);
+    // Removing a nonexistent object is a no-op.
+    store.removeObject(0, 'does-not-exist');
+    // Clearing an empty page is a no-op.
+    store.clearPage(0);
+
+    expect(events).toEqual([]);
+  });
+
+  it('onPageCommit unsubscribe stops delivery', () => {
+    const store = createDocumentStore();
+    store.load(docWithPages([pdfPage(0)]));
+    const events: number[] = [];
+    const unsub = store.onPageCommit((i) => events.push(i));
+
+    store.addObject(0, stroke('a'));
+    unsub();
+    store.addObject(0, stroke('b'));
+
+    expect(events).toEqual([0]);
+  });
 });

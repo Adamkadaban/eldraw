@@ -9,9 +9,15 @@ function keyOf(pdfId: string, pageIndex: number, maxDim: number): Key {
   return `${pdfId}\u0000${pageIndex}\u0000${maxDim}`;
 }
 
+function pageKey(pdfId: string, pageIndex: number): Key {
+  return `${pdfId}\u0000${pageIndex}`;
+}
+
 const urls = new Map<Key, string>();
 const inflight = new Map<Key, Promise<string>>();
 const generations = new Map<string, number>();
+const pageGenerations = new Map<Key, number>();
+const pageListeners = new Map<Key, Set<(generation: number) => void>>();
 
 function generation(pdfId: string): number {
   return generations.get(pdfId) ?? 0;
@@ -79,6 +85,12 @@ export function revokeThumbnails(pdfId?: string): void {
       urls.delete(k);
     }
   }
+  for (const k of pageGenerations.keys()) {
+    if (!prefix || k.startsWith(prefix)) pageGenerations.delete(k);
+  }
+  for (const k of pageListeners.keys()) {
+    if (!prefix || k.startsWith(prefix)) pageListeners.delete(k);
+  }
 }
 
 /**
@@ -99,4 +111,50 @@ export function retainThumbnails(pdfId: string, keepPageIndexes: ReadonlySet<num
       urls.delete(k);
     }
   }
+  for (const k of pageGenerations.keys()) {
+    if (!k.startsWith(prefix)) continue;
+    const pageIndex = Number(k.slice(prefix.length));
+    if (!keepPageIndexes.has(pageIndex)) {
+      pageGenerations.delete(k);
+      pageListeners.delete(k);
+    }
+  }
+}
+
+/**
+ * Per-page generation counter. Bumped on each committed annotation change
+ * so thumbnail consumers can re-composite only the affected page.
+ */
+export function pageGeneration(pdfId: string, pageIndex: number): number {
+  return pageGenerations.get(pageKey(pdfId, pageIndex)) ?? 0;
+}
+
+export function bumpPageGeneration(pdfId: string, pageIndex: number): void {
+  const k = pageKey(pdfId, pageIndex);
+  const next = (pageGenerations.get(k) ?? 0) + 1;
+  pageGenerations.set(k, next);
+  const listeners = pageListeners.get(k);
+  if (listeners) {
+    for (const cb of listeners) cb(next);
+  }
+}
+
+export function subscribePageGeneration(
+  pdfId: string,
+  pageIndex: number,
+  listener: (generation: number) => void,
+): () => void {
+  const k = pageKey(pdfId, pageIndex);
+  let set = pageListeners.get(k);
+  if (!set) {
+    set = new Set();
+    pageListeners.set(k, set);
+  }
+  set.add(listener);
+  return () => {
+    const s = pageListeners.get(k);
+    if (!s) return;
+    s.delete(listener);
+    if (s.size === 0) pageListeners.delete(k);
+  };
 }
