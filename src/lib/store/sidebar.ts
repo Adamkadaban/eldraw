@@ -1,6 +1,9 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
 import type { ColorPalette, DashStyle, StrokeStyle, ToolKind, ToolPreset } from '$lib/types';
 import { clampFadeMs, DEFAULT_TEMP_INK_FADE_MS } from '$lib/tools/tempInk';
+import type { SnapEdge } from '$lib/sidebar/snap';
+
+export type { SnapEdge };
 
 export type StyledTool = 'pen' | 'highlighter' | 'line';
 
@@ -68,7 +71,18 @@ export interface SidebarState {
   smoothingTempInk: number;
   presets: ToolPreset[];
   floatingPos: { x: number; y: number } | null;
+  hidden: boolean;
+  minimized: boolean;
+  snapEdge: SnapEdge | null;
+  rightBarHidden: boolean;
 }
+
+const VALID_SNAP_EDGES: ReadonlySet<SnapEdge> = new Set<SnapEdge>([
+  'left',
+  'right',
+  'top',
+  'bottom',
+]);
 
 function initialState(): SidebarState {
   return {
@@ -92,6 +106,10 @@ function initialState(): SidebarState {
     smoothingTempInk: DEFAULT_SMOOTHING_TEMP_INK,
     presets: [],
     floatingPos: null,
+    hidden: false,
+    minimized: false,
+    snapEdge: null,
+    rightBarHidden: false,
   };
 }
 
@@ -232,6 +250,35 @@ function createSidebarStore() {
       update((s) => ({ ...s, pinned: !s.pinned }));
     },
 
+    setHidden(hidden: boolean) {
+      update((s) => (s.hidden === hidden ? s : { ...s, hidden }));
+    },
+
+    toggleHidden() {
+      update((s) => ({ ...s, hidden: !s.hidden }));
+    },
+
+    setMinimized(minimized: boolean) {
+      update((s) => (s.minimized === minimized ? s : { ...s, minimized }));
+    },
+
+    toggleMinimized() {
+      update((s) => ({ ...s, minimized: !s.minimized }));
+    },
+
+    setSnapEdge(edge: SnapEdge | null) {
+      if (edge !== null && !VALID_SNAP_EDGES.has(edge)) return;
+      update((s) => (s.snapEdge === edge ? s : { ...s, snapEdge: edge }));
+    },
+
+    setRightBarHidden(hidden: boolean) {
+      update((s) => (s.rightBarHidden === hidden ? s : { ...s, rightBarHidden: hidden }));
+    },
+
+    toggleRightBarHidden() {
+      update((s) => ({ ...s, rightBarHidden: !s.rightBarHidden }));
+    },
+
     setDetached(detached: boolean) {
       update((s) => (s.detached === detached ? s : { ...s, detached }));
     },
@@ -265,6 +312,19 @@ function createSidebarStore() {
           next.smoothingTempInk = clamp(snapshot.smoothingTempInk, 0, 100);
         }
         if (snapshot.presets !== undefined) next.presets = snapshot.presets;
+        if (typeof snapshot.hidden === 'boolean') next.hidden = snapshot.hidden;
+        if (typeof snapshot.minimized === 'boolean') next.minimized = snapshot.minimized;
+        if (typeof snapshot.rightBarHidden === 'boolean') {
+          next.rightBarHidden = snapshot.rightBarHidden;
+        }
+        if (snapshot.snapEdge === null) {
+          next.snapEdge = null;
+        } else if (
+          typeof snapshot.snapEdge === 'string' &&
+          VALID_SNAP_EDGES.has(snapshot.snapEdge as SnapEdge)
+        ) {
+          next.snapEdge = snapshot.snapEdge;
+        }
         return next;
       });
     },
@@ -353,6 +413,7 @@ export const sidebar = createSidebarStore();
 const PRESETS_STORAGE_KEY = 'eldraw.presets.v1';
 const FLOATING_POS_STORAGE_KEY = 'eldraw.sidebar-pos.v1';
 const SMOOTHING_STORAGE_KEY = 'eldraw.smoothing.v1';
+const LAYOUT_STORAGE_KEY = 'eldraw.sidebar-layout.v1';
 
 const VALID_TOOLS: ReadonlySet<ToolKind> = new Set<ToolKind>([
   'pen',
@@ -467,6 +528,34 @@ function loadPersistedSmoothing(): PersistedSmoothing | null {
 let hydrated = false;
 let hydrationUnsubscribe: (() => void) | null = null;
 
+interface PersistedLayout {
+  hidden: boolean;
+  minimized: boolean;
+  snapEdge: SnapEdge | null;
+  rightBarHidden: boolean;
+}
+
+function loadPersistedLayout(): PersistedLayout | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const p = parsed as Record<string, unknown>;
+    const hidden = typeof p.hidden === 'boolean' ? p.hidden : false;
+    const minimized = typeof p.minimized === 'boolean' ? p.minimized : false;
+    const rightBarHidden = typeof p.rightBarHidden === 'boolean' ? p.rightBarHidden : false;
+    let snapEdge: SnapEdge | null = null;
+    if (typeof p.snapEdge === 'string' && VALID_SNAP_EDGES.has(p.snapEdge as SnapEdge)) {
+      snapEdge = p.snapEdge as SnapEdge;
+    }
+    return { hidden, minimized, snapEdge, rightBarHidden };
+  } catch {
+    return null;
+  }
+}
+
 export function hydrateSidebarFromStorage(): () => void {
   if (hydrated) return hydrationUnsubscribe ?? (() => undefined);
   hydrated = true;
@@ -484,6 +573,14 @@ export function hydrateSidebarFromStorage(): () => void {
     sidebar.setSmoothing('temp-ink', smoothing.tempInk);
   }
 
+  const layout = loadPersistedLayout();
+  if (layout) {
+    sidebar.setHidden(layout.hidden);
+    sidebar.setMinimized(layout.minimized);
+    sidebar.setSnapEdge(layout.snapEdge);
+    sidebar.setRightBarHidden(layout.rightBarHidden);
+  }
+
   if (typeof localStorage === 'undefined') {
     hydrationUnsubscribe = () => undefined;
     return hydrationUnsubscribe;
@@ -498,6 +595,15 @@ export function hydrateSidebarFromStorage(): () => void {
           pen: s.smoothingPen,
           highlighter: s.smoothingHighlighter,
           tempInk: s.smoothingTempInk,
+        }),
+      );
+      localStorage.setItem(
+        LAYOUT_STORAGE_KEY,
+        JSON.stringify({
+          hidden: s.hidden,
+          minimized: s.minimized,
+          snapEdge: s.snapEdge,
+          rightBarHidden: s.rightBarHidden,
         }),
       );
     } catch {
@@ -533,6 +639,10 @@ export type SyncableSidebarState = Pick<
   | 'smoothingHighlighter'
   | 'smoothingTempInk'
   | 'presets'
+  | 'hidden'
+  | 'minimized'
+  | 'snapEdge'
+  | 'rightBarHidden'
 >;
 
 /**
@@ -643,6 +753,10 @@ export function pickSyncable(state: SidebarState): SyncableSidebarState {
     smoothingHighlighter: state.smoothingHighlighter,
     smoothingTempInk: state.smoothingTempInk,
     presets: state.presets,
+    hidden: state.hidden,
+    minimized: state.minimized,
+    snapEdge: state.snapEdge,
+    rightBarHidden: state.rightBarHidden,
   };
 }
 

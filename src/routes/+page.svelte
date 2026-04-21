@@ -449,7 +449,7 @@
   class:presenter={isPresenter}
   class:zen={isZen}
   class:sidebar-detached={sidebarDetached}
-  class:has-thumbs={chrome.thumbnails}
+  class:has-thumbs={chrome.thumbnails && !sidebarState.rightBarHidden}
   use:shortcuts
   tabindex="-1"
   role="application"
@@ -620,7 +620,7 @@
     </div>
   </section>
 
-  {#if chrome.thumbnails}
+  {#if chrome.thumbnails && !sidebarState.rightBarHidden}
     <ThumbnailStrip
       {pages}
       currentIndex={pageIndex}
@@ -629,7 +629,19 @@
       onmove={onThumbMove}
       onduplicate={onThumbDuplicate}
       ondelete={onThumbDelete}
+      onhide={() => sidebar.setRightBarHidden(true)}
     />
+  {/if}
+  {#if chrome.thumbnails && sidebarState.rightBarHidden}
+    <button
+      type="button"
+      class="thumb-show-pill"
+      aria-label="Show thumbnail strip"
+      title="Show thumbnail strip"
+      onclick={() => sidebar.setRightBarHidden(false)}
+    >
+      <span aria-hidden="true">☰</span>
+    </button>
   {/if}
 
   {#if isZen && zenHintVisible}
@@ -710,6 +722,24 @@
     pointer-events: none;
     animation: zen-hint-fade 2.4s ease-out forwards;
     z-index: 1000;
+  }
+  .thumb-show-pill {
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    z-index: 11;
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    background: #252525;
+    color: #e8e8e8;
+    border: 1px solid #3a3a3a;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+  .thumb-show-pill:hover {
+    border-color: #7ab7ff;
   }
   @keyframes zen-hint-fade {
     0% {

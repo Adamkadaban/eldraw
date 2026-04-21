@@ -7,7 +7,7 @@
   import DashStyleToggle from './DashStyleToggle.svelte';
   import ToolPresets from './ToolPresets.svelte';
   import ShortcutsEditor from '$lib/settings/ShortcutsEditor.svelte';
-  import { applySnap, clampToViewport } from './snap';
+  import { applySnap, clampToViewport, detectSnapEdge, type SnapEdge } from './snap';
 
   interface Props {
     onToolChange?: (tool: ToolKind) => void;
@@ -144,6 +144,7 @@
   let dragOffset = { x: 0, y: 0 };
   let dragCachedSize: { width: number; height: number } = { width: 220, height: 400 };
   let lastClampedPos: { x: number; y: number } | null = null;
+  let hoverEdge: SnapEdge | null = $state(null);
 
   function viewportSize() {
     return { width: window.innerWidth, height: window.innerHeight };
@@ -176,6 +177,7 @@
     lastClampedPos = { x: rect.left, y: rect.top };
     dragPointerId = event.pointerId;
     dragging = true;
+    hoverEdge = null;
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     event.preventDefault();
   }
@@ -185,6 +187,8 @@
     const raw = { x: event.clientX - dragOffset.x, y: event.clientY - dragOffset.y };
     const clamped = clampToViewport(raw, dragCachedSize, viewportSize());
     lastClampedPos = clamped;
+    hoverEdge = detectSnapEdge(clamped, dragCachedSize, viewportSize());
+    if (sidebarState.snapEdge !== null) sidebar.setSnapEdge(null);
     sidebar.setFloatingPos(clamped);
   }
 
@@ -194,19 +198,27 @@
       x: event.clientX - dragOffset.x,
       y: event.clientY - dragOffset.y,
     };
-    const snapped = applySnap(base, dragCachedSize, viewportSize());
-    sidebar.setFloatingPos(snapped);
-    sidebar.persistFloatingPos();
+    const edge = detectSnapEdge(base, dragCachedSize, viewportSize());
+    if (edge) {
+      sidebar.setSnapEdge(edge);
+    } else {
+      const snapped = applySnap(base, dragCachedSize, viewportSize());
+      sidebar.setFloatingPos(snapped);
+      sidebar.persistFloatingPos();
+    }
+    hoverEdge = null;
     endDrag(event);
   }
 
   function onHeaderPointerCancel(event: PointerEvent) {
     if (!dragging || event.pointerId !== dragPointerId) return;
+    hoverEdge = null;
     endDrag(event);
   }
 
   function reclampToViewport() {
     if (sidebarState.pinned) return;
+    if (sidebarState.snapEdge) return;
     if (!sidebarState.floatingPos) return;
     const size = measureSidebar();
     const clamped = clampToViewport(sidebarState.floatingPos, size, viewportSize());
@@ -231,30 +243,106 @@
   });
 
   const floatingStyle = $derived.by(() => {
-    if (sidebarState.pinned || !sidebarState.floatingPos) return '';
+    if (sidebarState.pinned) return '';
+    if (sidebarState.snapEdge) return '';
+    if (!sidebarState.floatingPos) return '';
     return `left: ${sidebarState.floatingPos.x}px; top: ${sidebarState.floatingPos.y}px;`;
   });
+
+  function showAgain() {
+    sidebar.setHidden(false);
+  }
+
+  function toggleMinimize() {
+    sidebar.toggleMinimized();
+  }
+
+  function toggleHide() {
+    sidebar.toggleHidden();
+  }
+
+  function releaseSnap() {
+    sidebar.setSnapEdge(null);
+  }
 </script>
 
 <aside
   class="sidebar"
   class:pinned={sidebarState.pinned}
-  class:floating={!sidebarState.pinned}
+  class:floating={!sidebarState.pinned && !sidebarState.snapEdge}
   class:dragging
+  class:minimized={!sidebarState.pinned && sidebarState.minimized && !sidebarState.hidden}
+  class:hidden={sidebarState.hidden && !sidebarState.pinned && mode !== 'detached'}
+  class:snapped={!sidebarState.pinned && !!sidebarState.snapEdge}
+  data-snap-edge={sidebarState.snapEdge ?? ''}
   style={floatingStyle}
   bind:this={asideEl}
   aria-label="Tool sidebar"
+  aria-hidden={sidebarState.hidden && !sidebarState.pinned && mode !== 'detached'}
 >
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <header
     class="head"
-    class:grab={!sidebarState.pinned}
+    class:grab={!sidebarState.pinned && !sidebarState.snapEdge}
     onpointerdown={onHeaderPointerDown}
     onpointermove={onHeaderPointerMove}
     onpointerup={onHeaderPointerUp}
     onpointercancel={onHeaderPointerCancel}
   >
     <span class="title">Tools</span>
+    {#if mode !== 'detached'}
+      <button
+        type="button"
+        class="pin primary detach"
+        aria-label="Detach sidebar to its own window"
+        title="Detach to window"
+        onclick={onDetachClick}
+      >
+        <span aria-hidden="true">⇱</span>
+      </button>
+    {:else}
+      <button
+        type="button"
+        class="pin"
+        aria-label="Dock sidebar"
+        title="Dock sidebar"
+        onclick={onDetachClick}
+      >
+        <span aria-hidden="true">⇲</span>
+      </button>
+    {/if}
+    {#if mode !== 'detached' && !sidebarState.pinned}
+      <button
+        type="button"
+        class="pin"
+        aria-pressed={sidebarState.minimized}
+        aria-label={sidebarState.minimized ? 'Expand sidebar' : 'Minimize sidebar'}
+        title={sidebarState.minimized ? 'Expand sidebar' : 'Minimize sidebar'}
+        onclick={toggleMinimize}
+      >
+        <span aria-hidden="true">{sidebarState.minimized ? '▢' : '▬'}</span>
+      </button>
+      {#if sidebarState.snapEdge}
+        <button
+          type="button"
+          class="pin"
+          aria-label="Unsnap sidebar"
+          title="Unsnap"
+          onclick={releaseSnap}
+        >
+          <span aria-hidden="true">◇</span>
+        </button>
+      {/if}
+      <button
+        type="button"
+        class="pin"
+        aria-label="Hide sidebar"
+        title="Hide sidebar"
+        onclick={toggleHide}
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    {/if}
     <button
       type="button"
       class="pin"
@@ -263,15 +351,6 @@
       onclick={() => (shortcutsOpen = true)}
     >
       <span aria-hidden="true">⚙</span>
-    </button>
-    <button
-      type="button"
-      class="pin"
-      aria-label={mode === 'detached' ? 'Dock sidebar' : 'Detach sidebar to its own window'}
-      title={mode === 'detached' ? 'Dock sidebar' : 'Detach to window'}
-      onclick={onDetachClick}
-    >
-      <span aria-hidden="true">{mode === 'detached' ? '⇲' : '⇱'}</span>
     </button>
     {#if mode !== 'detached'}
       <button
@@ -287,100 +366,141 @@
     {/if}
   </header>
 
-  <section class="tools" aria-label="Tools">
-    {#each tools as tool (tool.id)}
-      <button
-        type="button"
-        class="tool"
-        class:active={sidebarState.activeTool === tool.id}
-        disabled={tool.disabled}
-        title={`${tool.label} (${tool.shortcut})`}
-        aria-pressed={sidebarState.activeTool === tool.id}
-        onclick={() => pickTool(tool.id, tool.disabled)}
-      >
-        <span class="icon" aria-hidden="true">{tool.icon}</span>
-        <span class="label">{tool.label.split(' ')[0]}</span>
-        <span class="hint" aria-hidden="true">{tool.shortcut}</span>
-      </button>
-    {/each}
-  </section>
+  {#if !sidebarState.minimized || sidebarState.pinned}
+    <section class="tools" aria-label="Tools">
+      {#each tools as tool (tool.id)}
+        <button
+          type="button"
+          class="tool"
+          class:active={sidebarState.activeTool === tool.id}
+          disabled={tool.disabled}
+          title={`${tool.label} (${tool.shortcut})`}
+          aria-pressed={sidebarState.activeTool === tool.id}
+          onclick={() => pickTool(tool.id, tool.disabled)}
+        >
+          <span class="icon" aria-hidden="true">{tool.icon}</span>
+          <span class="label">{tool.label.split(' ')[0]}</span>
+          <span class="hint" aria-hidden="true">{tool.shortcut}</span>
+        </button>
+      {/each}
+    </section>
+  {:else}
+    <section class="tools mini" aria-label="Tools">
+      {#each tools as tool (tool.id)}
+        <button
+          type="button"
+          class="tool mini"
+          class:active={sidebarState.activeTool === tool.id}
+          disabled={tool.disabled}
+          title={`${tool.label} (${tool.shortcut})`}
+          aria-pressed={sidebarState.activeTool === tool.id}
+          onclick={() => pickTool(tool.id, tool.disabled)}
+        >
+          <span class="icon" aria-hidden="true">{tool.icon}</span>
+        </button>
+      {/each}
+    </section>
+  {/if}
 
-  <section class="section" aria-label="Color">
-    <h3 class="section-title">Color</h3>
-    <ColorPalette
-      palettes={sidebarState.palettes}
-      activeColor={sidebarState.activeColor}
-      onChange={onColor}
-    />
-  </section>
+  {#if !sidebarState.minimized || sidebarState.pinned}
+    <section class="section" aria-label="Color">
+      <h3 class="section-title">Color</h3>
+      <ColorPalette
+        palettes={sidebarState.palettes}
+        activeColor={sidebarState.activeColor}
+        onChange={onColor}
+      />
+    </section>
 
-  <section class="section" aria-label="Width">
-    <WidthPicker value={style.width} color={style.color} onChange={onWidth} />
-  </section>
+    <section class="section" aria-label="Width">
+      <WidthPicker value={style.width} color={style.color} onChange={onWidth} />
+    </section>
 
-  <section class="section" aria-label="Dash">
-    <DashStyleToggle value={style.dash} onChange={onDash} />
-  </section>
+    <section class="section" aria-label="Dash">
+      <DashStyleToggle value={style.dash} onChange={onDash} />
+    </section>
 
-  {#if activeSmoothingTool}
-    <section class="section smoothing" aria-label="Smoothing">
-      <h3 class="section-title">Smoothing</h3>
-      <div class="row">
+    {#if activeSmoothingTool}
+      <section class="section smoothing" aria-label="Smoothing">
+        <h3 class="section-title">Smoothing</h3>
+        <div class="row">
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={smoothing}
+            oninput={onSmoothing}
+            aria-label="Smoothing amount"
+          />
+          <span class="value">{smoothing}%</span>
+        </div>
+      </section>
+    {/if}
+
+    <section class="section" aria-label="Presets">
+      <ToolPresets
+        presets={sidebarState.presets}
+        activeTool={sidebarState.activeTool}
+        onApply={onApplyPreset}
+        onCapture={onCapturePreset}
+        onRemove={onRemovePreset}
+      />
+    </section>
+
+    {#if sidebarState.activeTool === 'laser'}
+      <section class="section" aria-label="Laser">
+        <h3 class="section-title">Laser radius</h3>
         <input
           type="range"
-          min="0"
-          max="100"
+          min="2"
+          max="24"
           step="1"
-          value={smoothing}
-          oninput={onSmoothing}
-          aria-label="Smoothing amount"
+          value={sidebarState.laser.radius}
+          oninput={onLaserRadius}
+          aria-label="Laser radius"
         />
-        <span class="value">{smoothing}%</span>
-      </div>
-    </section>
-  {/if}
+        <span class="value">{sidebarState.laser.radius}px</span>
+      </section>
+    {/if}
 
-  <section class="section" aria-label="Presets">
-    <ToolPresets
-      presets={sidebarState.presets}
-      activeTool={sidebarState.activeTool}
-      onApply={onApplyPreset}
-      onCapture={onCapturePreset}
-      onRemove={onRemovePreset}
-    />
-  </section>
-
-  {#if sidebarState.activeTool === 'laser'}
-    <section class="section" aria-label="Laser">
-      <h3 class="section-title">Laser radius</h3>
-      <input
-        type="range"
-        min="2"
-        max="24"
-        step="1"
-        value={sidebarState.laser.radius}
-        oninput={onLaserRadius}
-        aria-label="Laser radius"
-      />
-      <span class="value">{sidebarState.laser.radius}px</span>
-    </section>
-  {/if}
-
-  {#if sidebarState.activeTool === 'temp-ink'}
-    <section class="section" aria-label="Temp ink fade">
-      <h3 class="section-title">Fade (ms)</h3>
-      <input
-        type="number"
-        min="500"
-        max="30000"
-        step="100"
-        value={sidebarState.tempInkFadeMs}
-        oninput={onTempInkFade}
-        aria-label="Temp ink fade duration in milliseconds"
-      />
-    </section>
+    {#if sidebarState.activeTool === 'temp-ink'}
+      <section class="section" aria-label="Temp ink fade">
+        <h3 class="section-title">Fade (ms)</h3>
+        <input
+          type="number"
+          min="500"
+          max="30000"
+          step="100"
+          value={sidebarState.tempInkFadeMs}
+          oninput={onTempInkFade}
+          aria-label="Temp ink fade duration in milliseconds"
+        />
+      </section>
+    {/if}
   {/if}
 </aside>
+
+{#if sidebarState.hidden && !sidebarState.pinned && mode !== 'detached'}
+  <button
+    type="button"
+    class="show-pill"
+    aria-label="Show sidebar"
+    title="Show sidebar"
+    onclick={showAgain}
+  >
+    <span aria-hidden="true">🛠</span>
+  </button>
+{/if}
+
+{#if dragging && !sidebarState.pinned}
+  <div class="snap-targets" aria-hidden="true">
+    <div class="snap-target left" class:active={hoverEdge === 'left'}></div>
+    <div class="snap-target right" class:active={hoverEdge === 'right'}></div>
+    <div class="snap-target top" class:active={hoverEdge === 'top'}></div>
+    <div class="snap-target bottom" class:active={hoverEdge === 'bottom'}></div>
+  </div>
+{/if}
 
 {#if shortcutsOpen}
   <ShortcutsEditor onClose={() => (shortcutsOpen = false)} />
@@ -424,6 +544,132 @@
   .sidebar.floating.dragging {
     transition: none;
     user-select: none;
+  }
+
+  .sidebar.minimized {
+    width: auto;
+    min-width: 0;
+  }
+  .sidebar.hidden {
+    display: none;
+  }
+  .sidebar.snapped {
+    position: absolute;
+    border-radius: 0;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+    z-index: 10;
+    border: 1px solid #1a1a1a;
+  }
+  .sidebar.snapped[data-snap-edge='left'] {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 220px;
+    border-left: none;
+  }
+  .sidebar.snapped[data-snap-edge='right'] {
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 220px;
+    border-right: none;
+  }
+  .sidebar.snapped[data-snap-edge='top'] {
+    left: 0;
+    right: 0;
+    top: 0;
+    width: auto;
+    border-top: none;
+  }
+  .sidebar.snapped[data-snap-edge='bottom'] {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    border-bottom: none;
+  }
+
+  .pin.primary.detach {
+    background: #2a3847;
+    border-color: #4a7bb5;
+    color: #fff;
+  }
+  .pin.primary.detach:hover {
+    border-color: #7ab7ff;
+  }
+
+  .tools.mini {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .tool.mini {
+    padding: 6px 4px;
+  }
+  .tool.mini .icon {
+    font-size: 16px;
+  }
+
+  .show-pill {
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    z-index: 11;
+    background: #252525;
+    color: #e8e8e8;
+    border: 1px solid #3a3a3a;
+    border-radius: 999px;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+  .show-pill:hover {
+    border-color: #7ab7ff;
+  }
+
+  .snap-targets {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 20;
+  }
+  .snap-target {
+    position: absolute;
+    background: rgba(122, 183, 255, 0.12);
+    border: 2px dashed rgba(122, 183, 255, 0.55);
+    transition:
+      background-color 80ms,
+      border-color 80ms;
+  }
+  .snap-target.active {
+    background: rgba(122, 183, 255, 0.32);
+    border-color: rgba(122, 183, 255, 0.95);
+    border-style: solid;
+  }
+  .snap-target.left {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 48px;
+  }
+  .snap-target.right {
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 48px;
+  }
+  .snap-target.top {
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 48px;
+  }
+  .snap-target.bottom {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 48px;
   }
 
   .head {

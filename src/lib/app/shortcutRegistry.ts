@@ -35,6 +35,9 @@ export type ShortcutId =
   | 'view.togglePresenter'
   | 'view.toggleZen'
   | 'sidebar.togglePin'
+  | 'sidebar.toggleHide'
+  | 'sidebar.toggleMinimize'
+  | 'rightBar.toggleHide'
   | 'commandPalette.open'
   | 'edit.undo'
   | 'edit.redo'
@@ -173,6 +176,27 @@ function buildCommands(): ShortcutCommand[] {
       label: 'Toggle sidebar pin',
       defaultSpec: 'Tab',
       run: () => sidebar.togglePin(),
+      preventDefault: true,
+    },
+    {
+      id: 'sidebar.toggleHide',
+      label: 'Hide / show sidebar',
+      defaultSpec: 'Shift+H',
+      run: () => sidebar.toggleHidden(),
+      preventDefault: true,
+    },
+    {
+      id: 'sidebar.toggleMinimize',
+      label: 'Minimize / expand sidebar',
+      defaultSpec: 'Shift+M',
+      run: () => sidebar.toggleMinimized(),
+      preventDefault: true,
+    },
+    {
+      id: 'rightBar.toggleHide',
+      label: 'Hide / show thumbnail strip',
+      defaultSpec: 'Shift+T',
+      run: () => sidebar.toggleRightBarHidden(),
       preventDefault: true,
     },
     {
