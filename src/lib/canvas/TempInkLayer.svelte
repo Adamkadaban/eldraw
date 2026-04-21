@@ -53,7 +53,7 @@
       const a = fadeOpacity(s, now);
       if (a <= 0) continue;
       c.globalAlpha = a * s.style.opacity;
-      drawLiveStroke(c, s.points, { ...s.style, opacity: 1 }, 'pen', ptToPx);
+      drawLiveStroke(c, s.points, { ...s.style, opacity: 1 }, 'pen', ptToPx, s.streamline);
     }
     c.restore();
 
@@ -84,7 +84,7 @@
       x: px / ptToPx,
       y: py / ptToPx,
       pressure,
-      t: performance.now() - startTime,
+      t: e.timeStamp - startTime,
     };
   }
 
@@ -100,7 +100,7 @@
     if (e.pointerType === 'touch') return;
     canvas.setPointerCapture(e.pointerId);
     activePointerId = e.pointerId;
-    startTime = performance.now();
+    startTime = e.timeStamp;
     liveStyle = { ...style };
     stabilizer = createOneEuroFilter(stabilizationToConfig(stabilization));
     livePoints = [stabilize(toPoint(e))];

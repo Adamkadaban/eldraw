@@ -128,7 +128,7 @@
       x: px / ptToPx,
       y: py / ptToPx,
       pressure,
-      t: performance.now() - startTime,
+      t: e.timeStamp - startTime,
     };
   }
 
@@ -253,7 +253,7 @@
     }
     canvas.setPointerCapture(e.pointerId);
     activePointerId = e.pointerId;
-    startTime = performance.now();
+    startTime = e.timeStamp;
     predictedTail = [];
 
     if (currentTool === 'eraser') {

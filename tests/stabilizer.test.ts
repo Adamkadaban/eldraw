@@ -92,7 +92,7 @@ describe('createOneEuroFilter', () => {
     expect(first.y).toBe(0);
   });
 
-  it('passes through exactly on a straight constant-velocity stream with large dt', () => {
+  it('remains bounded and non-overshooting with a large time delta', () => {
     const filter = createOneEuroFilter(stabilizationToConfig(50));
     const out1 = filter.filter({ x: 0, y: 0 }, 0);
     expect(out1).toEqual({ x: 0, y: 0 });
