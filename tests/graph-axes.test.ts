@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { niceStep, generateTicks, formatTick, tickDecimals } from '$lib/graph/axes';
+import { niceStep, generateTicks, formatTick, tickDecimals, cappedStep } from '$lib/graph/axes';
 
 describe('niceStep', () => {
   const cases: Array<[number, number]> = [
@@ -36,6 +36,40 @@ describe('niceStep', () => {
     expect(niceStep(0, 8)).toBe(1);
     expect(niceStep(-1, 8)).toBe(1);
     expect(niceStep(Infinity, 8)).toBe(1);
+    expect(niceStep(NaN, 8)).toBe(1);
+    expect(niceStep(Number.MIN_VALUE, 8)).toBe(1);
+    expect(niceStep(1e-300, 1e300)).toBe(1);
+    expect(niceStep(10, 0)).toBeGreaterThan(0);
+    expect(niceStep(10, -1)).toBeGreaterThan(0);
+    expect(niceStep(10, NaN)).toBeGreaterThan(0);
+  });
+});
+
+describe('cappedStep', () => {
+  it('returns the input step when the line count is within budget', () => {
+    expect(cappedStep(10, 1, 200)).toBe(1);
+    expect(cappedStep(100, 10, 200)).toBe(10);
+  });
+
+  it('coarsens when range / step exceeds the cap', () => {
+    const step = cappedStep(10_000, 0.01, 200);
+    expect(10_000 / step).toBeLessThanOrEqual(200);
+    expect(step).toBeGreaterThan(0.01);
+  });
+
+  it('keeps the result of the form m × 10^k with m ∈ {1, 2, 5}', () => {
+    const step = cappedStep(10_000, 0.01, 200);
+    const exp = Math.floor(Math.log10(step));
+    const m = Math.round(step / 10 ** exp);
+    expect([1, 2, 5]).toContain(m);
+  });
+
+  it('handles degenerate inputs', () => {
+    expect(cappedStep(0, 1, 200)).toBeGreaterThan(0);
+    expect(cappedStep(NaN, 1, 200)).toBeGreaterThan(0);
+    expect(cappedStep(10, 0, 200)).toBeGreaterThan(0);
+    expect(cappedStep(10, -1, 200)).toBeGreaterThan(0);
+    expect(cappedStep(10, 1, 0)).toBe(1);
   });
 });
 

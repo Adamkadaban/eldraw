@@ -37,7 +37,7 @@
   }
 
   function setGridStep(value: number): void {
-    if (!Number.isFinite(value) || value <= 0) return;
+    if (!Number.isFinite(value) || value < 0) return;
     onUpdate({ gridStep: value });
   }
 

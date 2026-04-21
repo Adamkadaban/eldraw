@@ -26,7 +26,7 @@ export function createGraphObject(bounds: {
     bounds,
     xRange: [-10, 10],
     yRange: [-10, 10],
-    gridStep: 1,
+    gridStep: 0,
     showAxes: true,
     showGrid: true,
     functions: [starter],

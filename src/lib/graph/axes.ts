@@ -14,6 +14,7 @@ export function niceStep(range: number, targetCount: number): number {
   if (!Number.isFinite(targetCount) || targetCount <= 0) return range;
 
   const rough = range / targetCount;
+  if (!Number.isFinite(rough) || rough <= 0) return 1;
   const exponent = Math.floor(Math.log10(rough));
   const pow = 10 ** exponent;
   const mantissa = rough / pow;
@@ -75,4 +76,30 @@ export function formatTick(value: number, step: number): string {
   const rounded = Number(value.toFixed(d));
   if (Object.is(rounded, -0)) return '0';
   return d === 0 ? rounded.toString() : rounded.toFixed(d);
+}
+
+/**
+ * Coarsen `step` until `range / step <= maxLines`. Prevents pathological
+ * line counts when a user sets a tiny grid step against a large range.
+ * Returns a positive step of the form m × 10^k with m ∈ {1, 2, 5}.
+ */
+export function cappedStep(range: number, step: number, maxLines: number): number {
+  if (!Number.isFinite(range) || range <= 0) return Math.max(step, 1);
+  if (!Number.isFinite(step) || step <= 0) return niceStep(range, 8);
+  if (!Number.isFinite(maxLines) || maxLines <= 0) return step;
+  if (range / step <= maxLines) return step;
+
+  const MULTIPLIERS = [1, 2, 5];
+  let exponent = Math.floor(Math.log10(step));
+  let mantissaIdx = 0;
+  for (let safety = 0; safety < 64; safety += 1) {
+    const candidate = MULTIPLIERS[mantissaIdx] * 10 ** exponent;
+    if (candidate >= step && range / candidate <= maxLines) return candidate;
+    mantissaIdx += 1;
+    if (mantissaIdx >= MULTIPLIERS.length) {
+      mantissaIdx = 0;
+      exponent += 1;
+    }
+  }
+  return niceStep(range, 8);
 }
