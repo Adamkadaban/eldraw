@@ -36,7 +36,7 @@
   import { reloadWarning, clearReloadWarning } from '$lib/store/reloadWarning';
   import { reloadPdf } from '$lib/app/actions';
   import OpenFromSlidesDialog from '$lib/ui/OpenFromSlidesDialog.svelte';
-  import { slidesDialogOpen } from '$lib/slides/dialog';
+  import { slidesDialogOpen, openSlidesDialog } from '$lib/slides/dialog';
   import { createSpatialIndex, type SpatialIndex } from '$lib/tools/spatialIndex';
   import { makeEraseFlush } from '$lib/tools/eraserBatch';
   import { createRafBatcher } from '$lib/canvas/inkBatch';
@@ -484,7 +484,7 @@
         <button
           type="button"
           class="topbar-btn"
-          onclick={() => slidesDialogOpen.set(true)}
+          onclick={openSlidesDialog}
           title="Import a public deck from a Google Slides link"
         >
           From Slides…

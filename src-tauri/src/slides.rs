@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use tauri::{AppHandle, Manager};
+use url::Url;
 
 use crate::error::{AppError, AppResult};
 
@@ -84,24 +85,26 @@ pub fn parse_slides_url(input: &str) -> AppResult<SlidesId> {
         return Err(AppError::InvalidInput("empty URL".into()));
     }
 
-    let without_scheme = trimmed
-        .strip_prefix("https://")
-        .or_else(|| trimmed.strip_prefix("http://"))
-        .ok_or_else(|| AppError::InvalidInput("URL must start with http(s)://".into()))?;
+    let parsed =
+        Url::parse(trimmed).map_err(|e| AppError::InvalidInput(format!("invalid URL: {e}")))?;
 
-    let path_start = without_scheme
-        .find('/')
-        .ok_or_else(|| AppError::InvalidInput("URL has no path".into()))?;
-    let host = &without_scheme[..path_start];
+    let scheme = parsed.scheme();
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return Err(AppError::InvalidInput(
+            "URL must start with http(s)://".into(),
+        ));
+    }
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| AppError::InvalidInput("URL has no host".into()))?;
     if !host.eq_ignore_ascii_case("docs.google.com") {
         return Err(AppError::InvalidInput(format!(
             "not a docs.google.com URL (host: {host})"
         )));
     }
 
-    let path = &without_scheme[path_start..];
-    let path = path.split(['?', '#']).next().unwrap_or(path);
-
+    let path = parsed.path();
     let rest = path
         .strip_prefix("/presentation/d/")
         .ok_or_else(|| AppError::InvalidInput("not a Google Slides URL".into()))?;
@@ -139,11 +142,41 @@ fn safe_filename_stem(id: &str) -> String {
         .collect()
 }
 
+fn slides_cache_filename(id: &SlidesId) -> String {
+    let variant = match id.variant {
+        SlidesVariant::Document => "document",
+        SlidesVariant::Published => "published",
+    };
+    format!("{variant}-{}.pdf", safe_filename_stem(&id.id))
+}
+
+fn is_allowed_google_redirect(host: &str) -> bool {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    host == "google.com"
+        || host.ends_with(".google.com")
+        || host == "googleusercontent.com"
+        || host.ends_with(".googleusercontent.com")
+}
+
+fn google_redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() >= 10 {
+            return attempt.error("too many redirects");
+        }
+        let host = attempt.url().host_str().map(str::to_owned);
+        match host {
+            Some(host) if is_allowed_google_redirect(&host) => attempt.follow(),
+            Some(host) => attempt.error(format!("redirect to disallowed host: {host}")),
+            None => attempt.error("redirect target has no host"),
+        }
+    })
+}
+
 async fn download(url: &str) -> AppResult<reqwest::Response> {
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(60))
-        .redirect(reqwest::redirect::Policy::limited(10))
+        .redirect(google_redirect_policy())
         .build()
         .map_err(|e| AppError::InvalidInput(format!("http client: {e}")))?;
 
@@ -218,7 +251,7 @@ pub async fn fetch_slides_pdf(app: AppHandle, url: String) -> AppResult<String> 
     let bytes = fetch_bytes(&id).await?;
 
     let dir = slides_cache_dir(&app)?;
-    let file = dir.join(format!("{}.pdf", safe_filename_stem(&id.id)));
+    let file = dir.join(slides_cache_filename(&id));
     std::fs::write(&file, &bytes)?;
 
     Ok(file.to_string_lossy().into_owned())
@@ -343,5 +376,54 @@ mod tests {
     fn host_match_is_case_insensitive() {
         let id = parse("https://Docs.Google.COM/presentation/d/DECKID/edit");
         assert_eq!(id.id, "DECKID");
+    }
+
+    #[test]
+    fn accepts_uppercase_scheme() {
+        let id = parse("HTTPS://docs.google.com/presentation/d/DECKID/edit");
+        assert_eq!(id.id, "DECKID");
+    }
+
+    #[test]
+    fn accepts_explicit_port() {
+        let id = parse("https://docs.google.com:443/presentation/d/DECKID/edit");
+        assert_eq!(id.id, "DECKID");
+    }
+
+    #[test]
+    fn cache_filename_distinguishes_variants() {
+        let doc = SlidesId {
+            id: "SAMEID".into(),
+            variant: SlidesVariant::Document,
+        };
+        let pubbed = SlidesId {
+            id: "SAMEID".into(),
+            variant: SlidesVariant::Published,
+        };
+        let doc_name = slides_cache_filename(&doc);
+        let pub_name = slides_cache_filename(&pubbed);
+        assert_ne!(doc_name, pub_name);
+        assert_eq!(doc_name, "document-SAMEID.pdf");
+        assert_eq!(pub_name, "published-SAMEID.pdf");
+    }
+
+    #[test]
+    fn allows_google_redirect_hosts() {
+        assert!(is_allowed_google_redirect("google.com"));
+        assert!(is_allowed_google_redirect("docs.google.com"));
+        assert!(is_allowed_google_redirect("DOCS.GOOGLE.COM"));
+        assert!(is_allowed_google_redirect("accounts.google.com"));
+        assert!(is_allowed_google_redirect("googleusercontent.com"));
+        assert!(is_allowed_google_redirect("foo.googleusercontent.com"));
+        assert!(is_allowed_google_redirect("docs.google.com."));
+    }
+
+    #[test]
+    fn rejects_non_google_redirect_hosts() {
+        assert!(!is_allowed_google_redirect("evil.com"));
+        assert!(!is_allowed_google_redirect("google.com.evil.com"));
+        assert!(!is_allowed_google_redirect("notgoogle.com"));
+        assert!(!is_allowed_google_redirect("googleusercontent.com.evil"));
+        assert!(!is_allowed_google_redirect(""));
     }
 }

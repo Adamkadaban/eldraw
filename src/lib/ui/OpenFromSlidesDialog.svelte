@@ -11,7 +11,6 @@
 
   const { open, onCancel, onLoaded }: Props = $props();
 
-  let modalEl: HTMLDivElement | null = $state(null);
   let inputEl: HTMLInputElement | null = $state(null);
   let url = $state('');
   let error = $state<string | null>(null);
@@ -53,7 +52,6 @@
 {#if open}
   <div class="backdrop" role="presentation" onclick={() => !busy && onCancel()}>
     <div
-      bind:this={modalEl}
       class="modal"
       role="dialog"
       aria-modal="true"
@@ -77,6 +75,7 @@
           bind:this={inputEl}
           bind:value={url}
           type="url"
+          aria-label="Google Slides URL"
           placeholder="https://docs.google.com/presentation/d/…"
           autocomplete="off"
           spellcheck="false"
