@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { tick } from 'svelte';
   import { pdf } from '$lib/store/pdf';
   import { listSessions, readSession, readSessionAudio, deleteSession } from './ipc';
   import { replay, replayState } from './store';
@@ -21,6 +21,8 @@
   let entries = $state<SessionListEntry[]>([]);
   let loading = $state(false);
   let error = $state<string | null>(null);
+  let panelEl = $state<HTMLDivElement | null>(null);
+  let previousFocus: HTMLElement | null = null;
 
   async function refresh() {
     const path = pdfState.source?.path;
@@ -46,9 +48,27 @@
     if (open) void refresh();
   });
 
-  onMount(() => {
-    void refresh();
+  $effect(() => {
+    if (!open) return;
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    void tick().then(() => {
+      const first = panelEl?.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      first?.focus();
+    });
+    return () => {
+      previousFocus?.focus();
+      previousFocus = null;
+    };
   });
+
+  function onKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      onClose();
+    }
+  }
 
   async function onOpenReplay(entry: SessionListEntry) {
     const path = pdfState.source?.path;
@@ -93,7 +113,15 @@
 </script>
 
 {#if open}
-  <div class="overlay" role="dialog" aria-label="Sessions">
+  <div
+    class="overlay"
+    role="dialog"
+    aria-label="Sessions"
+    aria-modal="true"
+    bind:this={panelEl}
+    onkeydown={onKeydown}
+    tabindex="-1"
+  >
     <div class="panel">
       <header>
         <h2>Sessions</h2>

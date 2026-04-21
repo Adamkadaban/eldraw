@@ -105,7 +105,7 @@ pub fn list_sessions_impl(pdf_path: &str) -> AppResult<Vec<SessionListEntry>> {
             has_audio,
         });
     }
-    out.sort_by(|a, b| b.meta.created_at.cmp(&a.meta.created_at));
+    out.sort_by_key(|b| std::cmp::Reverse(b.meta.created_at));
     Ok(out)
 }
 

@@ -83,7 +83,7 @@
         aria-label="Seek"
       />
       <div class="markers" aria-hidden="true">
-        {#each markers as m (m.t)}
+        {#each markers as m (`${m.t}-${m.page}`)}
           <span
             class="marker"
             title={`Page ${m.page + 1}`}

@@ -130,45 +130,66 @@ export function createRecorder(deps: RecorderDeps = browserDeps()) {
     pauseStartedAt = null;
     firstChunk = true;
 
-    const recorder = deps.createRecorder(ms, AUDIO_MIME);
-    mediaRecorder = recorder;
+    try {
+      const recorder = deps.createRecorder(ms, AUDIO_MIME);
+      mediaRecorder = recorder;
 
-    recorder.ondataavailable = async (e: BlobEvent) => {
-      if (!currentPdfPath || !sessionId) return;
-      if (!e.data || e.data.size === 0) return;
-      try {
-        const buf = new Uint8Array(await e.data.arrayBuffer());
-        const reset = firstChunk;
-        firstChunk = false;
-        await deps.persistAudioChunk(currentPdfPath, sessionId, buf, reset);
-      } catch (err) {
-        warn('session', `audio chunk write failed ${String(err)}`);
+      recorder.ondataavailable = async (e: BlobEvent) => {
+        if (!currentPdfPath || !sessionId) return;
+        if (!e.data || e.data.size === 0) return;
+        try {
+          const buf = new Uint8Array(await e.data.arrayBuffer());
+          const reset = firstChunk;
+          firstChunk = false;
+          await deps.persistAudioChunk(currentPdfPath, sessionId, buf, reset);
+        } catch (err) {
+          warn('session', `audio chunk write failed ${String(err)}`);
+        }
+      };
+      recorder.onerror = (e) => {
+        warn('session', `MediaRecorder error ${String((e as ErrorEvent).error ?? e)}`);
+      };
+
+      sessionStart = deps.now();
+      const vp = get(viewportStore);
+      lastPage = vp.currentPageIndex;
+      pushSessionEvent({ kind: 'pageChange', t: 0, page: lastPage });
+
+      unsubscribeMutations = documentStore.onMutation(onMutation);
+      unsubscribeViewport = viewportStore.subscribe(onViewport);
+
+      recorder.start(CHUNK_MS);
+      state.set({
+        status: 'recording',
+        sessionId: id,
+        startedAt: sessionStart,
+        elapsedMs: 0,
+        error: null,
+      });
+      tick = setInterval(() => {
+        state.update((s) => (s.status === 'recording' ? { ...s, elapsedMs: currentElapsed() } : s));
+      }, 250);
+      log('session', `recording started id=${id}`);
+    } catch (err) {
+      for (const t of ms.getTracks()) t.stop();
+      unsubscribeMutations?.();
+      unsubscribeMutations = null;
+      unsubscribeViewport?.();
+      unsubscribeViewport = null;
+      if (tick) {
+        clearInterval(tick);
+        tick = null;
       }
-    };
-    recorder.onerror = (e) => {
-      warn('session', `MediaRecorder error ${String((e as ErrorEvent).error ?? e)}`);
-    };
-
-    sessionStart = deps.now();
-    const vp = get(viewportStore);
-    lastPage = vp.currentPageIndex;
-    pushSessionEvent({ kind: 'pageChange', t: 0, page: lastPage });
-
-    unsubscribeMutations = documentStore.onMutation(onMutation);
-    unsubscribeViewport = viewportStore.subscribe(onViewport);
-
-    recorder.start(CHUNK_MS);
-    state.set({
-      status: 'recording',
-      sessionId: id,
-      startedAt: sessionStart,
-      elapsedMs: 0,
-      error: null,
-    });
-    tick = setInterval(() => {
-      state.update((s) => (s.status === 'recording' ? { ...s, elapsedMs: currentElapsed() } : s));
-    }, 250);
-    log('session', `recording started id=${id}`);
+      stream = null;
+      mediaRecorder = null;
+      currentPdfPath = null;
+      sessionId = null;
+      sessionStart = -1;
+      events = [];
+      const msg = err instanceof Error ? err.message : String(err);
+      state.update((s) => ({ ...s, status: 'error', error: msg }));
+      throw err;
+    }
   }
 
   function pause(): void {

@@ -26,8 +26,10 @@ export interface PlayerDeps {
 
 /**
  * Compute the full replay state at time `tMs` by linearly scanning events
- * from `fromIndex`. For a pure seek, pass `fromIndex = 0` and an empty
- * accumulator. Returns the new cursor position and whether a page changed.
+ * from the start of `events` up to (and including) the last event whose
+ * timestamp is `<= tMs`. Returns the cursor (one past the last applied
+ * event), the current page, the per-page object lists, and any strokes
+ * currently mid-animation at `tMs`.
  */
 export function replayStateAt(
   events: readonly SessionEvent[],
@@ -160,6 +162,7 @@ export function createPlayer(): PlayerController {
   let deps: PlayerDeps = {};
   let raf = 0;
   let lastPage = -1;
+  let listenerAbort: AbortController | null = null;
 
   function emit(time: number): void {
     if (!session) return;
@@ -189,6 +192,7 @@ export function createPlayer(): PlayerController {
   }
 
   function load(s: Session, a: HTMLAudioElement, d: PlayerDeps = {}): void {
+    listenerAbort?.abort();
     session = s;
     audio = a;
     deps = d;
@@ -199,28 +203,51 @@ export function createPlayer(): PlayerController {
       durationMs: s.durationMs,
       currentPage: 0,
     });
-    a.addEventListener('play', () => {
-      state.update((v) => ({ ...v, playing: true }));
-      if (raf === 0) loop();
-    });
-    a.addEventListener('pause', () => {
-      state.update((v) => ({ ...v, playing: false }));
-      if (raf !== 0) cancelAnimationFrame(raf);
-      raf = 0;
-      if (audio) emit(audio.currentTime * 1000);
-    });
-    a.addEventListener('seeked', () => {
-      if (audio) emit(audio.currentTime * 1000);
-    });
-    a.addEventListener('timeupdate', () => {
-      if (!audio) return;
-      state.update((v) => ({ ...v, currentTimeMs: audio!.currentTime * 1000 }));
-    });
-    a.addEventListener('ended', () => {
-      state.update((v) => ({ ...v, playing: false }));
-      if (raf !== 0) cancelAnimationFrame(raf);
-      raf = 0;
-    });
+    const ac = new AbortController();
+    listenerAbort = ac;
+    const opts = { signal: ac.signal };
+    a.addEventListener(
+      'play',
+      () => {
+        state.update((v) => ({ ...v, playing: true }));
+        if (raf === 0) loop();
+      },
+      opts,
+    );
+    a.addEventListener(
+      'pause',
+      () => {
+        state.update((v) => ({ ...v, playing: false }));
+        if (raf !== 0) cancelAnimationFrame(raf);
+        raf = 0;
+        if (audio) emit(audio.currentTime * 1000);
+      },
+      opts,
+    );
+    a.addEventListener(
+      'seeked',
+      () => {
+        if (audio) emit(audio.currentTime * 1000);
+      },
+      opts,
+    );
+    a.addEventListener(
+      'timeupdate',
+      () => {
+        if (!audio) return;
+        state.update((v) => ({ ...v, currentTimeMs: audio!.currentTime * 1000 }));
+      },
+      opts,
+    );
+    a.addEventListener(
+      'ended',
+      () => {
+        state.update((v) => ({ ...v, playing: false }));
+        if (raf !== 0) cancelAnimationFrame(raf);
+        raf = 0;
+      },
+      opts,
+    );
     emit(0);
   }
 
@@ -246,6 +273,8 @@ export function createPlayer(): PlayerController {
     audio?.pause();
     if (raf !== 0) cancelAnimationFrame(raf);
     raf = 0;
+    listenerAbort?.abort();
+    listenerAbort = null;
     audio = null;
     session = null;
     deps = {};
