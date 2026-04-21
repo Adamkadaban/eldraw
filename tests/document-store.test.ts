@@ -264,4 +264,37 @@ describe('documentStore', () => {
     expect(a.streamline).toBe(0.792);
     expect(b.streamline).toBeUndefined();
   });
+
+  it('removeObjects drops a batch with one commit and one-step undo', () => {
+    const store = createDocumentStore();
+    const initial = docWithPages([
+      { ...pdfPage(0), objects: [stroke('a'), stroke('b'), stroke('c'), stroke('d')] },
+    ]);
+    store.load(initial);
+    const events: number[] = [];
+    store.onPageCommit((i) => events.push(i));
+
+    store.removeObjects(0, ['a', 'c']);
+    expect(events).toEqual([0]);
+    expect(get(store)!.pages[0].objects.map((o) => o.id)).toEqual(['b', 'd']);
+
+    store.undo(0);
+    expect(get(store)!.pages[0].objects.map((o) => o.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(events).toEqual([0, 0]);
+
+    store.redo(0);
+    expect(get(store)!.pages[0].objects.map((o) => o.id)).toEqual(['b', 'd']);
+  });
+
+  it('removeObjects is a no-op for empty id list and for unknown ids', () => {
+    const store = createDocumentStore();
+    store.load(docWithPages([{ ...pdfPage(0), objects: [stroke('a')] }]));
+    const events: number[] = [];
+    store.onPageCommit((i) => events.push(i));
+
+    store.removeObjects(0, []);
+    store.removeObjects(0, ['zzz']);
+    expect(events).toEqual([]);
+    expect(get(store)!.pages[0].objects.map((o) => o.id)).toEqual(['a']);
+  });
 });

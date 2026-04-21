@@ -121,4 +121,21 @@ export function hitTestObjects(
   return objects.filter((o) => hitTestObject(o, at, radius));
 }
 
+/**
+ * Specialization of `hitTestObjects` for callers that already narrowed the
+ * object set via a spatial index. Same semantics as `hitTestObjects`; the
+ * only difference is intent — `candidates` is expected to be small.
+ */
+export function hitTestObjectsFromCandidates(
+  candidates: readonly AnyObject[],
+  at: { x: number; y: number },
+  radius: number,
+): string[] {
+  const out: string[] = [];
+  for (const o of candidates) {
+    if (hitTestObject(o, at, radius)) out.push(o.id);
+  }
+  return out;
+}
+
 export type { Point };

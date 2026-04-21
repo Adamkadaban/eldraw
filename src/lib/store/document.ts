@@ -12,6 +12,7 @@ export interface DocumentStore {
 
   addObject(pageIndex: number, obj: AnyObject): void;
   removeObject(pageIndex: number, id: ObjectId): void;
+  removeObjects(pageIndex: number, ids: readonly ObjectId[]): void;
   updateObject(pageIndex: number, id: ObjectId, patch: Partial<AnyObject>): void;
 
   insertBlankPageAfter(
@@ -192,6 +193,20 @@ export function createDocumentStore(): DocumentStore {
       const obj = page.objects.find((o) => o.id === id);
       if (!obj) return;
       pushAndApply(pageIndex, { type: 'remove', object: obj });
+    },
+
+    removeObjects(pageIndex, ids) {
+      if (ids.length === 0) return;
+      const doc = get(state);
+      if (!doc) return;
+      const page = doc.pages[pageIndex];
+      if (!page) return;
+      const wanted = new Set(ids);
+      const items = page.objects
+        .map((object, index) => ({ object, index }))
+        .filter(({ object }) => wanted.has(object.id));
+      if (items.length === 0) return;
+      pushAndApply(pageIndex, { type: 'removeMany', items });
     },
 
     updateObject(pageIndex, id, patch) {

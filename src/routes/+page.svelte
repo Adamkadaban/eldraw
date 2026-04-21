@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import {
     CanvasStack,
+    EraseDebugOverlay,
     GraphLayer,
     NumberLineEditor,
     PdfLayer,
@@ -34,7 +35,10 @@
   import { shortcuts } from '$lib/app/shortcuts';
   import { setWindowFullscreenChromeless } from '$lib/app/windowFullscreen';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
-  import { hitTestObjects } from '$lib/tools/eraser';
+  import { createSpatialIndex, type SpatialIndex } from '$lib/tools/spatialIndex';
+  import { makeEraseFlush } from '$lib/tools/eraserBatch';
+  import { createRafBatcher } from '$lib/canvas/inkBatch';
+  import { eraseDebug } from '$lib/store/eraseDebug';
   import { activeGraph, clearActiveGraph, setActiveGraph } from '$lib/store/activeGraph';
   import { createGraphObject } from '$lib/graph/graphObject';
   import GraphEditor from '$lib/graph/GraphEditor.svelte';
@@ -383,12 +387,63 @@
     documentStore.updateObject(pageIndex, editingNumberLineId, patch);
   }
 
-  function onEraseAt(at: { x: number; y: number }): void {
-    const hits = hitTestObjects(pageObjects, at, ERASER_RADIUS);
-    for (const o of hits) {
-      documentStore.removeObject(pageIndex, o.id);
+  let spatialIndex = $state<SpatialIndex | null>(null);
+  $effect(() => {
+    spatialIndex = createSpatialIndex(pageObjects);
+  });
+
+  type EraseSample = {
+    x: number;
+    y: number;
+    pageIndex: number;
+    spatialIndex: SpatialIndex | null;
+  };
+
+  const eraseBatcher = createRafBatcher<EraseSample>((samples) => {
+    const byPage = new Map<
+      number,
+      { index: SpatialIndex | null; points: { x: number; y: number }[] }
+    >();
+    for (const s of samples) {
+      let group = byPage.get(s.pageIndex);
+      if (!group) {
+        group = { index: s.spatialIndex, points: [] };
+        byPage.set(s.pageIndex, group);
+      }
+      group.points.push({ x: s.x, y: s.y });
     }
+    for (const [page, group] of byPage) {
+      makeEraseFlush(
+        () => group.index,
+        ERASER_RADIUS,
+        (ids) => documentStore.removeObjects(page, ids),
+        (hits) => eraseDebug.recordHits(hits),
+      )(group.points);
+    }
+  });
+
+  function onEraseAt(samples: { x: number; y: number }[]): void {
+    if (samples.length === 0) return;
+    eraseDebug.recordPointerMove();
+    const capturedPage = pageIndex;
+    const capturedIndex = spatialIndex;
+    eraseBatcher.pushMany(
+      samples.map((s) => ({
+        x: s.x,
+        y: s.y,
+        pageIndex: capturedPage,
+        spatialIndex: capturedIndex,
+      })),
+    );
   }
+
+  $effect(() => {
+    // Page change: drain pending samples against the page they were sampled on
+    // (they carry their own pageIndex), then clear any residual queue so
+    // future frames start fresh on the new page.
+    void pageIndex;
+    eraseBatcher.flushNow();
+  });
 
   function onCommitGraph(bounds: { x: number; y: number; w: number; h: number }): void {
     const graph = createGraphObject(bounds);
@@ -422,6 +477,7 @@
     registerZenFullscreenBridge({
       setFullscreen: (on) => setWindowFullscreenChromeless(on),
     });
+    eraseDebug.init();
     let unlistenPresenterClose: (() => void) | null = null;
     let unlistenSidebarClose: (() => void) | null = null;
     void onPresenterWindowClosed(() => presenter.setWindowOpen(false)).then((fn) => {
@@ -443,6 +499,7 @@
     stopPresenterBridge?.();
     stopSidebarBridge?.();
     registerZenFullscreenBridge(null);
+    eraseBatcher.cancel();
   });
 </script>
 
@@ -676,6 +733,7 @@
   {/if}
   <CommandPalette />
   <ConfigDialog />
+  <EraseDebugOverlay />
 </main>
 
 <style>
