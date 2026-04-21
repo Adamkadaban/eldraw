@@ -5,6 +5,7 @@
   import WidthPicker from './WidthPicker.svelte';
   import DashStyleToggle from './DashStyleToggle.svelte';
   import ToolPresets from './ToolPresets.svelte';
+  import ShortcutsEditor from '$lib/settings/ShortcutsEditor.svelte';
   import { applySnap, clampToViewport } from './snap';
 
   interface Props {
@@ -78,6 +79,8 @@
     sidebar.togglePin();
     onPinChange?.(sidebar.snapshot().pinned);
   }
+
+  let shortcutsOpen = $state(false);
 
   function onCapturePreset() {
     sidebar.capturePreset();
@@ -215,6 +218,15 @@
     <button
       type="button"
       class="pin"
+      aria-label="Shortcuts settings"
+      title="Customize keyboard shortcuts"
+      onclick={() => (shortcutsOpen = true)}
+    >
+      <span aria-hidden="true">⚙</span>
+    </button>
+    <button
+      type="button"
+      class="pin"
       aria-pressed={sidebarState.pinned}
       aria-label={sidebarState.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
       title={sidebarState.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
@@ -300,6 +312,10 @@
     </section>
   {/if}
 </aside>
+
+{#if shortcutsOpen}
+  <ShortcutsEditor onClose={() => (shortcutsOpen = false)} />
+{/if}
 
 <style>
   .sidebar {

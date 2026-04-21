@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isEditableTarget, matchesEvent, parseShortcut } from '../src/lib/app/shortcutParser';
+import {
+  formatSpec,
+  isEditableTarget,
+  matchesEvent,
+  parseShortcut,
+} from '../src/lib/app/shortcutParser';
 
 function kb(
   key: string,
@@ -17,7 +22,14 @@ function kb(
 describe('parseShortcut', () => {
   it('parses a single character as lowercase key', () => {
     const p = parseShortcut('P');
-    expect(p).toEqual({ key: 'p', ctrl: false, shift: false, alt: false, meta: false });
+    expect(p).toEqual({
+      key: 'p',
+      ctrl: false,
+      shift: false,
+      alt: false,
+      meta: false,
+      modOrMeta: false,
+    });
   });
 
   it('parses Ctrl+Z', () => {
@@ -27,6 +39,7 @@ describe('parseShortcut', () => {
       shift: false,
       alt: false,
       meta: false,
+      modOrMeta: false,
     });
   });
 
@@ -37,6 +50,7 @@ describe('parseShortcut', () => {
       shift: true,
       alt: false,
       meta: false,
+      modOrMeta: false,
     });
   });
 
@@ -63,6 +77,13 @@ describe('parseShortcut', () => {
   it('throws when only modifiers given', () => {
     expect(() => parseShortcut('Ctrl+Shift')).toThrow();
   });
+
+  it('parses Mod as modOrMeta', () => {
+    const p = parseShortcut('Mod+Z');
+    expect(p.modOrMeta).toBe(true);
+    expect(p.ctrl).toBe(false);
+    expect(p.meta).toBe(false);
+  });
 });
 
 describe('matchesEvent', () => {
@@ -80,6 +101,21 @@ describe('matchesEvent', () => {
   it('matches named keys', () => {
     expect(matchesEvent(parseShortcut('ArrowLeft'), kb('ArrowLeft'))).toBe(true);
     expect(matchesEvent(parseShortcut('ArrowLeft'), kb('ArrowRight'))).toBe(false);
+  });
+
+  it('Mod matches either Ctrl or Meta', () => {
+    const p = parseShortcut('Mod+Z');
+    expect(matchesEvent(p, kb('z', { ctrl: true }))).toBe(true);
+    expect(matchesEvent(p, kb('z', { meta: true }))).toBe(true);
+    expect(matchesEvent(p, kb('z'))).toBe(false);
+  });
+
+  it('Space spec matches a Space keydown and round-trips through formatSpec', () => {
+    const p = parseShortcut('Space');
+    expect(p.key).toBe(' ');
+    expect(matchesEvent(p, kb(' '))).toBe(true);
+    expect(formatSpec('Space')).toBe('Space');
+    expect(matchesEvent(parseShortcut('Shift+Space'), kb(' ', { shift: true }))).toBe(true);
   });
 });
 
