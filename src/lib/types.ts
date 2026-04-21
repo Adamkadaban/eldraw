@@ -67,6 +67,11 @@ export interface StrokeObject extends ObjectBase {
   tool: 'pen' | 'highlighter';
   style: StrokeStyle;
   points: Point[];
+  /**
+   * perfect-freehand `streamline` in [0, 1) baked at stroke-start time.
+   * Legacy strokes predate per-stroke smoothing and render as if 0.
+   */
+  streamline?: number;
 }
 
 export interface LineObject extends ObjectBase {

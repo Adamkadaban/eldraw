@@ -8,10 +8,9 @@
     width: number;
     height: number;
     ptToPx: number;
-    streamline?: number;
   }
 
-  let { strokes, width, height, ptToPx, streamline }: Props = $props();
+  let { strokes, width, height, ptToPx }: Props = $props();
 
   let canvas: HTMLCanvasElement;
 
@@ -22,7 +21,7 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.globalCompositeOperation = 'source-over';
     for (const s of strokes) {
-      if (s.tool === 'pen') drawStroke(ctx, s, { ptToPx, streamline });
+      if (s.tool === 'pen') drawStroke(ctx, s, { ptToPx });
     }
   }
 
@@ -33,7 +32,6 @@
     void width;
     void height;
     void ptToPx;
-    void streamline;
     redraw();
   });
 </script>

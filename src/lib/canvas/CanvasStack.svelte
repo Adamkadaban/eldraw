@@ -67,7 +67,7 @@
 
 <div class="stack" style="width: {width}px; height: {height}px;">
   <div class="layer layer-highlight">
-    <HighlightLayer {strokes} {width} {height} {ptToPx} streamline={highlighterStreamline} />
+    <HighlightLayer {strokes} {width} {height} {ptToPx} />
   </div>
 
   <div class="layer layer-objects">
@@ -75,7 +75,7 @@
   </div>
 
   <div class="layer layer-ink">
-    <InkLayer {strokes} {width} {height} {ptToPx} streamline={penStreamline} />
+    <InkLayer {strokes} {width} {height} {ptToPx} />
   </div>
 
   <div class="layer layer-live">

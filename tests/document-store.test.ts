@@ -252,4 +252,16 @@ describe('documentStore', () => {
 
     expect(events).toEqual([0]);
   });
+
+  it('strokes round-trip their baked streamline through document load/save', () => {
+    const store = createDocumentStore();
+    const baked: StrokeObject = { ...stroke('s1'), streamline: 0.792 };
+    const legacy: StrokeObject = stroke('s2');
+    const doc = docWithPages([{ ...pdfPage(0), objects: [baked, legacy] }]);
+    store.load(doc);
+    const serialized = JSON.parse(JSON.stringify(get(store)!));
+    const [a, b] = serialized.pages[0].objects as StrokeObject[];
+    expect(a.streamline).toBe(0.792);
+    expect(b.streamline).toBeUndefined();
+  });
 });

@@ -4,7 +4,11 @@ import type { Point, StrokeObject } from '$lib/types';
 export interface StrokeRenderOptions {
   ptToPx: number;
   simulatePressure?: boolean;
-  /** perfect-freehand `streamline` in [0, 1). Defaults to 0.5. */
+  /**
+   * Fallback perfect-freehand `streamline` used only when the stroke does
+   * not carry its own baked value. Committed strokes should carry their
+   * own; this exists for live rendering where smoothing follows the slider.
+   */
   streamline?: number;
 }
 
@@ -53,6 +57,7 @@ export function drawStroke(
   const { ptToPx } = opts;
   const widthPx = stroke.style.width * ptToPx;
   const input = inputToPx(stroke.points, ptToPx);
+  const streamline = stroke.streamline ?? opts.streamline ?? 0;
 
   const outline =
     stroke.style.dash === 'solid'
@@ -60,7 +65,7 @@ export function drawStroke(
           size: widthPx * 2,
           thinning: 0.6,
           smoothing: 0.5,
-          streamline: opts.streamline ?? 0.5,
+          streamline,
           simulatePressure: opts.simulatePressure ?? false,
           last: true,
         })

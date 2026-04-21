@@ -57,17 +57,34 @@ describe('strokeRenderer streamline wiring', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('defaults streamline to 0.5 when not provided', async () => {
+  it('defaults streamline to 0 when the stroke and options omit it (legacy strokes)', async () => {
     const { drawStroke } = await import('$lib/canvas/strokeRenderer');
     drawStroke(makeCtx(), stroke(), { ptToPx: 1 });
     expect(getStroke).toHaveBeenCalledTimes(1);
-    expect(getStroke.mock.calls[0][1]).toMatchObject({ streamline: 0.5 });
+    expect(getStroke.mock.calls[0][1]).toMatchObject({ streamline: 0 });
   });
 
   it('forwards explicit streamline option to perfect-freehand', async () => {
     const { drawStroke } = await import('$lib/canvas/strokeRenderer');
     drawStroke(makeCtx(), stroke(), { ptToPx: 1, streamline: 0.25 });
     expect(getStroke.mock.calls[0][1]).toMatchObject({ streamline: 0.25 });
+  });
+
+  it('prefers baked stroke.streamline over opts.streamline', async () => {
+    const { drawStroke } = await import('$lib/canvas/strokeRenderer');
+    const baked = { ...stroke(), streamline: streamlineFromSmoothing(80) };
+    drawStroke(makeCtx(), baked, { ptToPx: 1, streamline: streamlineFromSmoothing(0) });
+    expect(getStroke.mock.calls[0][1].streamline).toBeCloseTo(0.792);
+  });
+
+  it('live slider does not change a baked stroke across re-renders', async () => {
+    const { drawStroke } = await import('$lib/canvas/strokeRenderer');
+    const baked = { ...stroke(), streamline: streamlineFromSmoothing(80) };
+    for (const live of [0, 50, 100]) {
+      getStroke.mockClear();
+      drawStroke(makeCtx(), baked, { ptToPx: 1, streamline: streamlineFromSmoothing(live) });
+      expect(getStroke.mock.calls[0][1].streamline).toBeCloseTo(0.792);
+    }
   });
 
   it('drawLiveStroke threads streamline through', async () => {
