@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { overlays } from '$lib/store/overlays';
+  import { isEditableTarget } from '$lib/app/shortcutParser';
   import {
     angleAtPoint,
     angleMarkFromProtractor,
@@ -129,10 +130,14 @@
   function onWindowKey(e: KeyboardEvent) {
     if (e.repeat || e.defaultPrevented) return;
     if (e.key !== 'Enter') return;
+    if (!onstamp) return;
     const target = e.target as HTMLElement | null;
+    if (isEditableTarget(target)) return;
     if (target) {
       const tag = target.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
+      if (tag === 'BUTTON' || tag === 'A') return;
+      const role = target.getAttribute?.('role');
+      if (role === 'button' || role === 'link' || role === 'menuitem') return;
     }
     e.preventDefault();
     stampAngle();

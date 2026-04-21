@@ -127,6 +127,12 @@ describe('angleMarkArcParams', () => {
     const angle = Math.atan2(arc.labelAt.y, arc.labelAt.x);
     expect(angle).toBeCloseTo(Math.PI / 4);
   });
+
+  it('end angle tracks rayB even when degrees disagrees', () => {
+    const skewedRayB = { x: 40 * Math.cos(Math.PI / 3), y: 40 * Math.sin(Math.PI / 3) };
+    const arc = angleMarkArcParams(vertex, rayA, skewedRayB, 90);
+    expect(arc.endAngle).toBeCloseTo(Math.PI / 3);
+  });
 });
 
 describe('angle mark document integration', () => {

@@ -127,7 +127,10 @@ export interface AngleMarkArcParams {
 
 /**
  * Geometry for rendering an angle mark: arc radius defaults to a fraction of
- * the shorter ray length. Sweep follows the sign of `degrees`.
+ * the shorter ray length. Start/end angles come directly from the ray vectors
+ * so the arc always agrees with the rendered rays, even if `degrees` drifts.
+ * `degrees` still drives the sweep sign (anticlockwise flag) and the label
+ * bisector so the label rendering stays consistent with the stored value.
  */
 export function angleMarkArcParams(
   vertex: Vec2,
@@ -142,8 +145,8 @@ export function angleMarkArcParams(
   const dB = Math.hypot(rayB.x - vertex.x, rayB.y - vertex.y);
   const radius = opts.arcRadius ?? Math.min(dA, dB) * arcRadiusFactor;
   const startAngle = Math.atan2(rayA.y - vertex.y, rayA.x - vertex.x);
+  const endAngle = Math.atan2(rayB.y - vertex.y, rayB.x - vertex.x);
   const sweepRad = (degrees * Math.PI) / 180;
-  const endAngle = startAngle + sweepRad;
   const midAngle = startAngle + sweepRad / 2;
   const labelRadius = radius * labelRadiusFactor;
   return {
