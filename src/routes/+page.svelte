@@ -32,7 +32,7 @@
   import { shortcuts } from '$lib/app/shortcuts';
   import { setWindowFullscreenChromeless } from '$lib/app/windowFullscreen';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
-  import { loadPdfFromSource } from '$lib/pdf/loader';
+  import { loadPdfFromSource, stopAutosave } from '$lib/pdf/loader';
   import { reloadWarning, clearReloadWarning } from '$lib/store/reloadWarning';
   import { reloadPdf } from '$lib/app/actions';
   import { createSpatialIndex, type SpatialIndex } from '$lib/tools/spatialIndex';
@@ -454,6 +454,7 @@
     stopSidebarBridge?.();
     registerZenFullscreenBridge(null);
     eraseBatcher.cancel();
+    stopAutosave();
   });
 </script>
 

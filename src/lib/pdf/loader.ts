@@ -11,9 +11,19 @@ import { planReload } from '$lib/pdf/reload';
 
 let autosaveStop: (() => void) | null = null;
 
-function stopAutosave(): void {
+/**
+ * Cancel any running autosave subscription. Callers that own the app
+ * lifetime (e.g. the root route) must invoke this on destroy so HMR and
+ * tests don't leak the underlying store subscription or its debounce timer.
+ */
+export function stopAutosave(): void {
   autosaveStop?.();
   autosaveStop = null;
+}
+
+function restartAutosave(pdfPath: string | null): void {
+  stopAutosave();
+  autosaveStop = startAutosave(pdfPath);
 }
 
 export function buildEmptyDoc(meta: PdfMeta): EldrawDocument {
@@ -56,9 +66,9 @@ async function fetchMetaWithState(source: PdfSource): Promise<PdfMeta | null> {
 }
 
 export async function loadPdfFromSource(source: PdfSource): Promise<PdfMeta | null> {
-  setSource(source);
   const meta = await fetchMetaWithState(source);
   if (!meta) return null;
+  setSource(source);
 
   let sidecar: EldrawDocument | null = null;
   try {
@@ -69,8 +79,7 @@ export async function loadPdfFromSource(source: PdfSource): Promise<PdfMeta | nu
 
   documentStore.load(sidecar ?? buildEmptyDoc(meta));
 
-  stopAutosave();
-  autosaveStop = startAutosave(source.path);
+  restartAutosave(source.path);
   viewport.setPage(0, meta.pageCount);
   return meta;
 }
@@ -90,10 +99,13 @@ export async function reloadCurrentPdf(opts: {
   if (!meta) return null;
 
   const { doc, warning } = planReload(opts.currentDoc, meta, behavior);
-  documentStore.load(doc);
+  if (behavior === 'discard') {
+    documentStore.load(doc);
+  } else {
+    documentStore.replace(doc);
+  }
 
-  stopAutosave();
-  autosaveStop = startAutosave(opts.source.path);
+  restartAutosave(opts.source.path);
 
   const nextPageCount = doc.pages.length;
   if (nextPageCount > 0) {

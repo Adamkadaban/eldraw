@@ -133,6 +133,19 @@ describe('documentStore', () => {
     expect(get(store.canUndo(0))).toBe(false);
   });
 
+  it('replace swaps the document without clearing history', () => {
+    const store = createDocumentStore();
+    store.load(docWithPages([pdfPage(0)]));
+    store.addObject(0, stroke('a'));
+    expect(get(store.canUndo(0))).toBe(true);
+
+    const next = docWithPages([pdfPage(0), pdfPage(1)]);
+    store.replace(next);
+
+    expect(get(store)!.pages).toHaveLength(2);
+    expect(get(store.canUndo(0))).toBe(true);
+  });
+
   it('objectsOnPage derived tracks updates', () => {
     const store = createDocumentStore();
     store.load(docWithPages([pdfPage(0)]));

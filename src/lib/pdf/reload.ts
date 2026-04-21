@@ -35,33 +35,88 @@ function buildDiscardedDoc(previous: EldrawDocument, meta: PdfMeta): EldrawDocum
   };
 }
 
+/**
+ * Rebuild the page list so PDF slots are keyed by `pdfSourceIndex` (not array
+ * position) and blank pages stay anchored to the PDF page they follow.
+ *
+ * When a blank page's anchor no longer exists (PDF shrank past it), the blank
+ * is re-anchored to the last surviving PDF page — or to the front (null
+ * anchor) when the reloaded PDF has no pages at all. Simpler than dropping
+ * user-created blank pages on a PDF shrink.
+ */
 function buildKeptDoc(
   previous: EldrawDocument,
   meta: PdfMeta,
-): { doc: EldrawDocument; truncated: boolean } {
-  const targetLength = Math.min(previous.pages.length, meta.pageCount);
-  const truncated = previous.pages.length > targetLength;
+): { doc: EldrawDocument; droppedPdfPages: number } {
+  const pdfBySource = new Map<number, Page>();
+  const blanksByAnchor = new Map<number | null, Page[]>();
 
-  const kept = previous.pages.slice(0, targetLength).map((page, i) => {
-    if (page.type !== 'pdf') return page;
-    const sourceIndex = page.pdfSourceIndex ?? i;
-    const newDims = meta.pages[sourceIndex];
-    if (!newDims) return page;
-    return { ...page, width: newDims.width, height: newDims.height };
-  });
+  const pushBlank = (anchor: number | null, page: Page) => {
+    const list = blanksByAnchor.get(anchor) ?? [];
+    list.push(page);
+    blanksByAnchor.set(anchor, list);
+  };
 
-  const appended: Page[] = [];
-  for (let i = previous.pages.length; i < meta.pageCount; i += 1) {
-    appended.push(emptyPdfPage(i, meta.pages[i]));
+  let derivedSourceIdx = 0;
+  for (const page of previous.pages) {
+    if (page.type === 'pdf') {
+      const sourceIdx = page.pdfSourceIndex ?? derivedSourceIdx;
+      derivedSourceIdx = Math.max(derivedSourceIdx, sourceIdx + 1);
+      if (!pdfBySource.has(sourceIdx)) pdfBySource.set(sourceIdx, page);
+    } else {
+      pushBlank(page.insertedAfterPdfPage, page);
+    }
   }
 
-  const pages = [...kept, ...appended].map((p, i) =>
-    p.pageIndex === i ? p : { ...p, pageIndex: i },
+  let droppedPdfPages = 0;
+  for (const sourceIdx of pdfBySource.keys()) {
+    if (sourceIdx >= meta.pageCount) droppedPdfPages += 1;
+  }
+
+  const fallbackAnchor: number | null = meta.pageCount > 0 ? meta.pageCount - 1 : null;
+  const staleAnchors = [...blanksByAnchor.keys()].filter(
+    (a): a is number => a !== null && a >= meta.pageCount,
   );
+  for (const anchor of staleAnchors) {
+    const blanks = blanksByAnchor.get(anchor)!;
+    blanksByAnchor.delete(anchor);
+    for (const b of blanks) pushBlank(fallbackAnchor, b);
+  }
+
+  const out: Page[] = [];
+  const appendBlanks = (anchor: number | null) => {
+    const blanks = blanksByAnchor.get(anchor);
+    if (!blanks) return;
+    for (const blank of blanks) {
+      out.push({
+        ...blank,
+        insertedAfterPdfPage: anchor,
+        pageIndex: out.length,
+      });
+    }
+  };
+
+  appendBlanks(null);
+  for (let i = 0; i < meta.pageCount; i += 1) {
+    const dims = meta.pages[i];
+    const prev = pdfBySource.get(i);
+    if (prev) {
+      out.push({
+        ...prev,
+        width: dims.width,
+        height: dims.height,
+        pdfSourceIndex: i,
+        pageIndex: out.length,
+      });
+    } else {
+      out.push({ ...emptyPdfPage(i, dims), pageIndex: out.length });
+    }
+    appendBlanks(i);
+  }
 
   return {
-    doc: { ...previous, pdfHash: meta.hash, pdfPath: meta.path, pages },
-    truncated,
+    doc: { ...previous, pdfHash: meta.hash, pdfPath: meta.path, pages: out },
+    droppedPdfPages,
   };
 }
 
@@ -73,14 +128,12 @@ export function planReload(
   if (behavior === 'discard') {
     return { doc: buildDiscardedDoc(previous, meta), warning: null };
   }
-  const { doc, truncated } = buildKeptDoc(previous, meta);
-  if (!truncated) return { doc, warning: null };
+  const { doc, droppedPdfPages } = buildKeptDoc(previous, meta);
+  if (droppedPdfPages === 0) return { doc, warning: null };
   return {
     doc,
     warning: `PDF now has ${meta.pageCount} page${
       meta.pageCount === 1 ? '' : 's'
-    }; truncated ${previous.pages.length - meta.pageCount} trailing page${
-      previous.pages.length - meta.pageCount === 1 ? '' : 's'
-    } from the document.`,
+    }; dropped ${droppedPdfPages} PDF page${droppedPdfPages === 1 ? '' : 's'} from the document.`,
   };
 }
