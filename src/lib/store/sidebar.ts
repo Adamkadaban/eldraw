@@ -1,8 +1,10 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
 import type { ColorPalette, DashStyle, StrokeStyle, ToolKind, ToolPreset } from '$lib/types';
 import { clampFadeMs, DEFAULT_TEMP_INK_FADE_MS } from '$lib/tools/tempInk';
+import { DEFAULT_STRAIGHT_EDGE_SNAP_STEP } from '$lib/tools/straightEdge';
 import type { SnapEdge } from '$lib/sidebar/snap';
 
+export { DEFAULT_STRAIGHT_EDGE_SNAP_STEP };
 export type { SnapEdge };
 
 export type StyledTool = 'pen' | 'highlighter' | 'line';
@@ -15,7 +17,6 @@ export const DEFAULT_SMOOTHING_PEN = 50;
 export const DEFAULT_SMOOTHING_HIGHLIGHTER = 50;
 export const DEFAULT_SMOOTHING_TEMP_INK = 30;
 
-export const DEFAULT_STRAIGHT_EDGE_SNAP_STEP = 15;
 export const MIN_STRAIGHT_EDGE_SNAP_STEP = 1;
 export const MAX_STRAIGHT_EDGE_SNAP_STEP = 90;
 

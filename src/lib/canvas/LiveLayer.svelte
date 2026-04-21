@@ -12,6 +12,7 @@
   import { createOneEuroFilter, stabilizationToConfig, type OneEuroFilter } from './stabilizer';
   import {
     buildStraightEdgeLine,
+    buildStraightEdgeStroke,
     decideStraightEdgeCommit,
     straightEdgeEndpoint,
     DEFAULT_STRAIGHT_EDGE_SNAP_STEP,
@@ -425,6 +426,16 @@
         );
         log('live', `commit straight-edge ${currentTool} tool`);
         oncommitline?.(line);
+      } else if (decision.kind === 'stroke') {
+        const stroke = buildStraightEdgeStroke(
+          crypto.randomUUID(),
+          Date.now(),
+          decision.from,
+          decision.to,
+          currentStyle,
+        );
+        log('live', `commit straight-edge ${currentTool} tool`);
+        oncommit?.(stroke);
       } else {
         const snapped = rulerSnap
           ? snapStrokeToRuler(points, rulerSnap, rulerSnapThresholdPx / ptToPx)

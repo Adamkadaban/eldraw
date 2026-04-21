@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildStraightEdgeLine,
+  buildStraightEdgeStroke,
   decideStraightEdgeCommit,
   straightEdgeEndpoint,
 } from '$lib/tools/straightEdge';
@@ -85,24 +86,27 @@ describe('decideStraightEdgeCommit', () => {
     expect(angle(decision.from, decision.to)).toBeCloseTo(0, 6);
   });
 
-  it('commits a line when Shift is held at pointer-up for the highlighter', () => {
+  it('commits a 2-point stroke when Shift is held at pointer-up for the highlighter', () => {
     const decision = decideStraightEdgeCommit({ ...baseInput, tool: 'highlighter' });
-    expect(decision.kind).toBe('line');
+    expect(decision.kind).toBe('stroke');
+    if (decision.kind !== 'stroke') return;
+    expect(decision.from).toEqual({ x: 0, y: 0 });
+    expect(angle(decision.from, decision.to)).toBeCloseTo(0, 6);
   });
 
-  it('keeps the stroke commit when Shift is not held at pointer-up', () => {
+  it('keeps the normal stroke commit when Shift is not held at pointer-up', () => {
     const decision = decideStraightEdgeCommit({ ...baseInput, shiftAtPointerUp: false });
-    expect(decision.kind).toBe('stroke');
+    expect(decision.kind).toBe('none');
   });
 
   it('defers to ruler snap when ruler is active', () => {
     const decision = decideStraightEdgeCommit({ ...baseInput, rulerActive: true });
-    expect(decision.kind).toBe('stroke');
+    expect(decision.kind).toBe('none');
   });
 
-  it('does not trigger for non-pen tools', () => {
+  it('does not trigger for non-pen/non-highlighter tools', () => {
     const decision = decideStraightEdgeCommit({ ...baseInput, tool: 'eraser' });
-    expect(decision.kind).toBe('stroke');
+    expect(decision.kind).toBe('none');
   });
 
   it('treats Alt as a snap bypass', () => {
@@ -120,9 +124,9 @@ describe('decideStraightEdgeCommit', () => {
     expect(bypassed.to).toEqual(noisy);
   });
 
-  it('falls back to stroke for zero-length shift drags', () => {
+  it('falls back to normal commit for zero-length shift drags', () => {
     const decision = decideStraightEdgeCommit({ ...baseInput, last: { x: 0, y: 0 } });
-    expect(decision.kind).toBe('stroke');
+    expect(decision.kind).toBe('none');
   });
 });
 
@@ -135,5 +139,20 @@ describe('buildStraightEdgeLine', () => {
     expect(line.arrow).toEqual({ start: false, end: false });
     expect(line.style).toEqual(STYLE);
     expect(line.style).not.toBe(STYLE);
+  });
+});
+
+describe('buildStraightEdgeStroke', () => {
+  it('creates a 2-point highlighter StrokeObject with a fresh style copy', () => {
+    const stroke = buildStraightEdgeStroke('abc', 123, { x: 0, y: 0 }, { x: 50, y: 50 }, STYLE);
+    expect(stroke.type).toBe('stroke');
+    expect(stroke.tool).toBe('highlighter');
+    expect(stroke.id).toBe('abc');
+    expect(stroke.createdAt).toBe(123);
+    expect(stroke.points).toHaveLength(2);
+    expect(stroke.points[0]).toMatchObject({ x: 0, y: 0 });
+    expect(stroke.points[1]).toMatchObject({ x: 50, y: 50 });
+    expect(stroke.style).toEqual(STYLE);
+    expect(stroke.style).not.toBe(STYLE);
   });
 });
