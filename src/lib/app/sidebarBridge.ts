@@ -3,6 +3,7 @@ import {
   pickSyncable,
   sidebar,
   syncableEqual,
+  type SidebarState,
   type SyncableSidebarState,
 } from '$lib/store/sidebar';
 import {
@@ -31,7 +32,7 @@ export function startSidebarBridge(side: Side): () => void {
   let stopped = false;
   let pushInFlight = false;
   let pushPending = false;
-  let lastSeen: SyncableSidebarState = pickSyncable(get(sidebar));
+  let lastSeen: SyncableSidebarState | null = null;
 
   const send = side === 'main' ? sidebarSync : sidebarSyncBack;
   const subscribe = side === 'main' ? onSidebarSync : onSidebarSyncBack;
@@ -47,7 +48,7 @@ export function startSidebarBridge(side: Side): () => void {
       while (!stopped) {
         pushPending = false;
         const snap = pickSyncable(get(sidebar));
-        if (syncableEqual(snap, lastSeen)) break;
+        if (lastSeen !== null && syncableEqual(snap, lastSeen)) break;
         lastSeen = snap;
         try {
           await send(snap as unknown as SidebarSyncPayload);
@@ -62,10 +63,11 @@ export function startSidebarBridge(side: Side): () => void {
   }
 
   const unsubStore = sidebar.subscribe(() => void push());
+  void push();
 
   let unsubEvent: (() => void) | null = null;
   void subscribe((payload) => {
-    const incoming = payload as unknown as SyncableSidebarState;
+    const incoming = pickSyncable(payload as unknown as SidebarState);
     lastSeen = incoming;
     sidebar.applyRemote(incoming);
   }).then((fn) => {

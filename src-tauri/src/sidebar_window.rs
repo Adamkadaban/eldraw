@@ -37,7 +37,7 @@ pub fn open_sidebar_window(app: AppHandle) -> AppResult<()> {
         WebviewUrl::App("sidebar-window".into()),
     )
     .title("eldraw sidebar")
-    .decorations(true)
+    .decorations(false)
     .resizable(true)
     .inner_size(DEFAULT_WIDTH, DEFAULT_HEIGHT)
     .min_inner_size(220.0, 400.0)
