@@ -12,6 +12,13 @@ import {
   insertBlankAfterCurrent,
   toggleFullscreen,
 } from '$lib/app/actions';
+import { hasBackup } from '$lib/config/import';
+import {
+  triggerExportSettings,
+  triggerImportSettings,
+  triggerResetSettings,
+  triggerRestorePreviousSettings,
+} from '$lib/config/commands';
 
 export interface Command {
   id: string;
@@ -162,6 +169,30 @@ export function getCommands(): Command[] {
       title: 'Cycle dash style',
       shortcut: 'D',
       run: () => sidebar.cycleDash(),
+    },
+    {
+      id: 'config.export',
+      title: 'Export settings…',
+      run: triggerExportSettings,
+    },
+    {
+      id: 'config.import',
+      title: 'Import settings…',
+      run: triggerImportSettings,
+    },
+    ...(hasBackup()
+      ? [
+          {
+            id: 'config.restore-previous',
+            title: 'Restore previous settings',
+            run: () => void triggerRestorePreviousSettings(),
+          } satisfies Command,
+        ]
+      : []),
+    {
+      id: 'config.reset',
+      title: 'Reset settings to defaults',
+      run: triggerResetSettings,
     },
   ];
 }

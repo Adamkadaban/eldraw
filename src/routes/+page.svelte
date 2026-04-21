@@ -38,6 +38,7 @@
   import { createGraphObject } from '$lib/graph/graphObject';
   import GraphEditor from '$lib/graph/GraphEditor.svelte';
   import { CommandPalette } from '$lib/command';
+  import ConfigDialog from '$lib/config/ConfigDialog.svelte';
   import { log } from '$lib/log';
   import type {
     AngleMarkObject,
@@ -657,6 +658,7 @@
     </div>
   {/if}
   <CommandPalette />
+  <ConfigDialog />
 </main>
 
 <style>
