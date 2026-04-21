@@ -442,6 +442,7 @@
       <ToolPresets
         presets={sidebarState.presets}
         activeTool={sidebarState.activeTool}
+        activeStyle={style}
         onApply={onApplyPreset}
         onCapture={onCapturePreset}
         onRemove={onRemovePreset}

@@ -38,6 +38,7 @@
         type="button"
         class="option"
         class:active={style === value}
+        data-selected={style === value ? 'true' : undefined}
         title={style}
         aria-pressed={style === value}
         onclick={() => select(style)}
@@ -114,5 +115,6 @@
     border-color: #7ab7ff;
     color: #fff;
     background: #2a3847;
+    box-shadow: 0 0 0 2px rgba(122, 183, 255, 0.35);
   }
 </style>

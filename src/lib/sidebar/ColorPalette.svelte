@@ -43,9 +43,11 @@
             type="button"
             class="swatch"
             class:active={color === activeColor}
+            data-selected={color === activeColor ? 'true' : undefined}
             style="background: {color}"
             title={color}
             aria-label={`${palette.name} ${color}`}
+            aria-pressed={color === activeColor}
             oncontextmenu={(e) => onContext(e, palette.id, color)}
             onclick={() => select(color)}
           ></button>
@@ -91,8 +93,14 @@
     transform: scale(1.08);
   }
   .swatch.active {
-    outline: 2px solid #7ab7ff;
-    outline-offset: 1px;
+    border-color: #ffffff;
+    box-shadow:
+      0 0 0 2px #7ab7ff,
+      0 0 0 4px #ffffff;
+    transform: scale(1.05);
+  }
+  .swatch.active:hover {
+    transform: scale(1.12);
   }
   .add {
     width: 22px;
