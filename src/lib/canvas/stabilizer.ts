@@ -90,13 +90,18 @@ export function createOneEuroFilter(config: OneEuroConfig): OneEuroFilter {
 /**
  * Map the 0..100 stabilization slider to a 1€ filter config.
  *
- * 0 → passthrough (no smoothing, preview bit-identical to raw input).
- * >0 → `minCutoff` drops geometrically from 30 Hz down to 1 Hz so the
- * perceived smoothing tracks the slider near-linearly. `beta` rises
- * quadratically up to 0.05 so slow tremor is filtered hard while fast
- * intended motion still loosens the cutoff and tracks the pen.
- * Reference points: amount=50 → ~5.5 Hz / β≈0.013, amount=100 → 1 Hz / β=0.05.
- * Issue #121.
+ * 0 → passthrough (bit-identical to raw input).
+ * >0 → `minCutoff` drops geometrically from 30 Hz to 0.4 Hz and `beta`
+ * rises quadratically to 1.8e-3. Both values must DECREASE with amount:
+ * a lower minCutoff filters more at rest, and a lower beta keeps the
+ * cutoff from opening up during fast motion. Previous curves pushed both
+ * UP at the top end and left tremor almost unfiltered. Issue #121.
+ *
+ * Reference points:
+ *   amount=25  → minCutoff ≈ 10.2 Hz, β ≈ 1.1e-4
+ *   amount=50  → minCutoff ≈ 3.5 Hz,  β = 4.5e-4
+ *   amount=75  → minCutoff ≈ 1.2 Hz,  β ≈ 1.0e-3
+ *   amount=100 → minCutoff = 0.4 Hz,  β = 1.8e-3
  */
 export function stabilizationToConfig(amount: number): OneEuroConfig {
   const clamped = Math.max(0, Math.min(100, Number.isFinite(amount) ? amount : 0));
@@ -104,7 +109,10 @@ export function stabilizationToConfig(amount: number): OneEuroConfig {
     return { minCutoff: Number.POSITIVE_INFINITY, beta: 0 };
   }
   const norm = clamped / 100;
-  const minCutoff = 30 * Math.pow(1 / 30, norm);
-  const beta = 0.05 * norm * norm;
+  const minCutoffMax = 30;
+  const minCutoffMin = 0.4;
+  const betaMax = 0.0018;
+  const minCutoff = minCutoffMax * Math.pow(minCutoffMin / minCutoffMax, norm);
+  const beta = betaMax * norm * norm;
   return { minCutoff, beta, dCutoff: 1.0 };
 }

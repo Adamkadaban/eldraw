@@ -21,6 +21,27 @@ describe('stabilizationToConfig', () => {
     expect(cfg.beta).toBeGreaterThan(0);
   });
 
+  it('pins strong smoothing at amount=100 (guards against regressing the curve)', () => {
+    const cfg = stabilizationToConfig(100);
+    expect(cfg.minCutoff).toBeLessThanOrEqual(0.5);
+    expect(cfg.beta).toBeLessThanOrEqual(0.01);
+  });
+
+  it('pins mid-range amount=50 between the extremes', () => {
+    const cfg = stabilizationToConfig(50);
+    expect(cfg.minCutoff).toBeGreaterThan(stabilizationToConfig(100).minCutoff);
+    expect(cfg.minCutoff).toBeLessThan(stabilizationToConfig(25).minCutoff);
+    expect(cfg.minCutoff).toBeGreaterThan(1);
+    expect(cfg.minCutoff).toBeLessThan(10);
+    expect(cfg.beta).toBeGreaterThan(stabilizationToConfig(25).beta);
+    expect(cfg.beta).toBeLessThan(stabilizationToConfig(100).beta);
+  });
+
+  it('beta decreases monotonically toward 0 as amount drops', () => {
+    const b = [0.1, 25, 50, 75, 100].map((a) => stabilizationToConfig(a).beta);
+    for (let i = 1; i < b.length; i++) expect(b[i]).toBeGreaterThan(b[i - 1]);
+  });
+
   it('cutoff decreases monotonically as amount rises', () => {
     const c = [0.1, 25, 50, 75, 100].map((a) => stabilizationToConfig(a).minCutoff);
     for (let i = 1; i < c.length; i++) expect(c[i]).toBeLessThan(c[i - 1]);
@@ -67,7 +88,7 @@ describe('createOneEuroFilter', () => {
     let prevIn = 0;
     let prevOut = 0;
     for (let i = 0; i < count; i++) {
-      const x = i * 0.05;
+      const x = i * 0.5;
       const y = rand() * 0.5;
       const out = filter.filter({ x, y }, i * dtMs);
       if (i > 10) {
@@ -98,7 +119,7 @@ describe('createOneEuroFilter', () => {
       const jitter: number[] = [];
       let prev = 0;
       for (let i = 0; i < count; i++) {
-        const out = filter.filter({ x: i * 0.05, y: rand() * 0.5 }, i * dtMs);
+        const out = filter.filter({ x: i * 0.5, y: rand() * 0.5 }, i * dtMs);
         if (i > 10) jitter.push(Math.abs(out.y - prev));
         prev = out.y;
       }
@@ -107,7 +128,7 @@ describe('createOneEuroFilter', () => {
 
     const avg50 = measureJitter(50);
     const avg100 = measureJitter(100);
-    expect(avg100).toBeLessThan(avg50 * 0.7);
+    expect(avg100).toBeLessThan(avg50 * 0.5);
   });
 
   it('reset() clears state so a new stroke starts cold', () => {
