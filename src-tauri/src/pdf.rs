@@ -79,7 +79,7 @@ pub async fn open_pdf(
         u32::try_from(pages.len()).map_err(|_| AppError::Pdf("page count exceeds u32".into()))?;
 
     drop(doc);
-    state.set_open(pdf_path, bytes)?;
+    state.set_open(pdf_path, bytes, hash.clone())?;
 
     Ok(PdfMeta {
         path,

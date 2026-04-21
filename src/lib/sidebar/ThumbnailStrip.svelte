@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import type { Page } from '$lib/types';
-  import { getThumbnail, revokeThumbnails, DEFAULT_MAX_DIM } from '$lib/pdf/thumbnails';
+  import {
+    getThumbnail,
+    retainThumbnails,
+    revokeThumbnails,
+    DEFAULT_MAX_DIM,
+  } from '$lib/pdf/thumbnails';
   import { thumbnailSize } from './thumbnailSize';
 
   interface Props {
@@ -58,6 +63,7 @@
       previewUrls = next;
     } catch {
       // Leave the slot blank on failure; main layer surfaces the error.
+    } finally {
       requested.delete(key);
     }
   }
@@ -102,6 +108,27 @@
         dropState();
         cacheKey = key;
       }
+    });
+  });
+
+  $effect(() => {
+    const activeKeys = new Set<number>();
+    for (const page of pages) {
+      if (page.type === 'pdf') activeKeys.add(sourceKey(page));
+    }
+    untrack(() => {
+      if (!cacheKey) return;
+      let changed = false;
+      const next = new Map(previewUrls);
+      for (const key of next.keys()) {
+        if (!activeKeys.has(key)) {
+          next.delete(key);
+          requested.delete(key);
+          changed = true;
+        }
+      }
+      if (changed) previewUrls = next;
+      retainThumbnails(cacheKey, activeKeys);
     });
   });
 

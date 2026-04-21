@@ -7,11 +7,12 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke }));
 function setupObjectUrls() {
   let counter = 0;
   const revoked: string[] = [];
-  (globalThis as unknown as { URL: typeof URL }).URL.createObjectURL = vi.fn(
-    () => `blob:test/${counter++}`,
-  );
-  (globalThis as unknown as { URL: typeof URL }).URL.revokeObjectURL = vi.fn((url: string) => {
-    revoked.push(url);
+  vi.stubGlobal('URL', {
+    ...globalThis.URL,
+    createObjectURL: vi.fn(() => `blob:test/${counter++}`),
+    revokeObjectURL: vi.fn((url: string) => {
+      revoked.push(url);
+    }),
   });
   return { revoked };
 }

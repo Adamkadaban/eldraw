@@ -23,6 +23,9 @@ pub enum AppError {
 
     #[error("not implemented: {0}")]
     NotImplemented(&'static str),
+
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
 }
 
 impl Serialize for AppError {
