@@ -4,7 +4,17 @@
  * so production is quiet; `warn()` is also gated.
  */
 
-type Scope = 'tool' | 'live' | 'shape' | 'temp-ink' | 'laser' | 'render' | 'page' | 'doc' | 'ipc';
+type Scope =
+  | 'tool'
+  | 'live'
+  | 'shape'
+  | 'temp-ink'
+  | 'laser'
+  | 'render'
+  | 'page'
+  | 'doc'
+  | 'ipc'
+  | 'session';
 
 let enabled = false;
 

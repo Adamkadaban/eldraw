@@ -93,6 +93,10 @@ export interface History {
   pushCommand(pageIndex: number, cmd: Command): void;
   undo(pageIndex: number, page: Page): Page | null;
   redo(pageIndex: number, page: Page): Page | null;
+  /** Top of the undo stack without mutating it. Used to preview the next
+   *  command that would be undone (e.g. for firing mutation events). */
+  peekUndo(pageIndex: number): Command | null;
+  peekRedo(pageIndex: number): Command | null;
   canUndo(pageIndex: number): Readable<boolean>;
   canRedo(pageIndex: number): Readable<boolean>;
   /** Shift all page stacks at index >= `from` up by one to keep them
@@ -158,6 +162,18 @@ export function createHistory(): History {
 
     canRedo(pageIndex) {
       return derived(stacks, ($s) => ($s[pageIndex]?.redo.length ?? 0) > 0);
+    },
+
+    peekUndo(pageIndex) {
+      const s = get(stacks)[pageIndex];
+      if (!s || s.undo.length === 0) return null;
+      return s.undo[s.undo.length - 1];
+    },
+
+    peekRedo(pageIndex) {
+      const s = get(stacks)[pageIndex];
+      if (!s || s.redo.length === 0) return null;
+      return s.redo[s.redo.length - 1];
     },
 
     clear() {
