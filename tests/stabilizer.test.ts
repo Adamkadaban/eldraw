@@ -21,6 +21,27 @@ describe('stabilizationToConfig', () => {
     expect(cfg.beta).toBeGreaterThan(0);
   });
 
+  it('pins strong smoothing at amount=100 (guards against regressing the curve)', () => {
+    const cfg = stabilizationToConfig(100);
+    expect(cfg.minCutoff).toBeLessThanOrEqual(0.5);
+    expect(cfg.beta).toBeLessThanOrEqual(0.01);
+  });
+
+  it('pins mid-range amount=50 between the extremes', () => {
+    const cfg = stabilizationToConfig(50);
+    expect(cfg.minCutoff).toBeGreaterThan(stabilizationToConfig(100).minCutoff);
+    expect(cfg.minCutoff).toBeLessThan(stabilizationToConfig(25).minCutoff);
+    expect(cfg.minCutoff).toBeGreaterThan(1);
+    expect(cfg.minCutoff).toBeLessThan(10);
+    expect(cfg.beta).toBeGreaterThan(stabilizationToConfig(25).beta);
+    expect(cfg.beta).toBeLessThan(stabilizationToConfig(100).beta);
+  });
+
+  it('beta decreases monotonically toward 0 as amount drops', () => {
+    const b = [0.1, 25, 50, 75, 100].map((a) => stabilizationToConfig(a).beta);
+    for (let i = 1; i < b.length; i++) expect(b[i]).toBeGreaterThan(b[i - 1]);
+  });
+
   it('cutoff decreases monotonically as amount rises', () => {
     const c = [0.1, 25, 50, 75, 100].map((a) => stabilizationToConfig(a).minCutoff);
     for (let i = 1; i < c.length; i++) expect(c[i]).toBeLessThan(c[i - 1]);
@@ -50,7 +71,7 @@ describe('createOneEuroFilter', () => {
     expect(out.y).toBe(-7);
   });
 
-  it('significantly reduces jitter on a noisy straight line at max stabilization', () => {
+  it('significantly reduces jitter on a noisy slow stroke at max stabilization', () => {
     const filter = createOneEuroFilter(stabilizationToConfig(100));
     const samplesPerSec = 120;
     const dtMs = 1000 / samplesPerSec;
@@ -80,7 +101,34 @@ describe('createOneEuroFilter', () => {
 
     const avgIn = inputJitter.reduce((a, b) => a + b, 0) / inputJitter.length;
     const avgOut = outputJitter.reduce((a, b) => a + b, 0) / outputJitter.length;
-    expect(avgOut).toBeLessThan(avgIn * 0.5);
+    expect(avgOut).toBeLessThan(avgIn * 0.2);
+  });
+
+  it('amount=100 smooths noticeably more than amount=50 on the same noisy input', () => {
+    const samplesPerSec = 120;
+    const dtMs = 1000 / samplesPerSec;
+    const count = 200;
+
+    const measureJitter = (amount: number) => {
+      const filter = createOneEuroFilter(stabilizationToConfig(amount));
+      let seed = 1;
+      const rand = () => {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        return (seed / 0x100000000) * 2 - 1;
+      };
+      const jitter: number[] = [];
+      let prev = 0;
+      for (let i = 0; i < count; i++) {
+        const out = filter.filter({ x: i * 0.5, y: rand() * 0.5 }, i * dtMs);
+        if (i > 10) jitter.push(Math.abs(out.y - prev));
+        prev = out.y;
+      }
+      return jitter.reduce((a, b) => a + b, 0) / jitter.length;
+    };
+
+    const avg50 = measureJitter(50);
+    const avg100 = measureJitter(100);
+    expect(avg100).toBeLessThan(avg50 * 0.5);
   });
 
   it('reset() clears state so a new stroke starts cold', () => {
