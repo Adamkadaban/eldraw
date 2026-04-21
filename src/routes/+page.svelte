@@ -131,6 +131,7 @@
   let zenHintVisible = $state(false);
   let canvasArea = $state<HTMLDivElement | null>(null);
   let preZenViewport: { scale: number; offsetX: number; offsetY: number } | null = null;
+  let zenFitRaf: number | null = null;
 
   function fitCurrentPage(): void {
     const dims = pageDimsPt();
@@ -145,12 +146,22 @@
       const snap = viewport.snapshot();
       preZenViewport = { scale: snap.scale, offsetX: snap.offsetX, offsetY: snap.offsetY };
       // Wait for chrome to collapse so canvas-area has its zen-mode size.
-      requestAnimationFrame(() => fitCurrentPage());
-    } else if (preZenViewport) {
-      const { scale, offsetX, offsetY } = preZenViewport;
-      viewport.setScale(scale);
-      viewport.setOffset(offsetX, offsetY);
-      preZenViewport = null;
+      zenFitRaf = requestAnimationFrame(() => {
+        zenFitRaf = null;
+        if (!isZen) return;
+        fitCurrentPage();
+      });
+    } else {
+      if (zenFitRaf !== null) {
+        cancelAnimationFrame(zenFitRaf);
+        zenFitRaf = null;
+      }
+      if (preZenViewport) {
+        const { scale, offsetX, offsetY } = preZenViewport;
+        viewport.setScale(scale);
+        viewport.setOffset(offsetX, offsetY);
+        preZenViewport = null;
+      }
     }
   });
   $effect(() => {

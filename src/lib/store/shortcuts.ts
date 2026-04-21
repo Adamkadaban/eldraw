@@ -58,12 +58,18 @@ const MIGRATIONS: Migration[] = [
   },
   (bindings) => {
     const legacyPresenterId = 'view.togglePresenter';
+    const zenToggleId = 'view.toggleZen';
     const loose = bindings as Record<string, string | undefined>;
-    if (loose[legacyPresenterId] === 'F5') {
+    const presenterUsesLegacyF5 = loose[legacyPresenterId] === 'F5';
+    const f5UsedByAnotherBinding = Object.entries(loose).some(
+      ([id, binding]) => binding === 'F5' && id !== legacyPresenterId,
+    );
+
+    if (presenterUsesLegacyF5) {
       delete loose[legacyPresenterId];
     }
-    if (bindings['view.toggleZen'] === 'Shift+Z') {
-      bindings['view.toggleZen'] = 'F5';
+    if (bindings[zenToggleId] === 'Shift+Z' && !f5UsedByAnotherBinding) {
+      bindings[zenToggleId] = 'F5';
     }
   },
 ];

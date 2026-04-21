@@ -71,7 +71,7 @@ describe('viewport', () => {
 
 describe('computeFitScale', () => {
   it('portrait page in landscape viewport is height-limited', () => {
-    // Page 612x792pt (US Letter portrait), viewport 1600x900 minus padding.
+    // Page 612x792pt (US Letter portrait), viewport 1600x900 with no padding.
     const scale = computeFitScale({ width: 612, height: 792 }, { width: 1600, height: 900 }, 0);
     expect(scale).toBeCloseTo(900 / 792, 6);
   });
