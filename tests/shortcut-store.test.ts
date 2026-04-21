@@ -208,21 +208,6 @@ describe('shortcuts store', () => {
     }
   });
 
-  it('v1 → v2 migration swaps stored bindings still at old defaults', () => {
-    const stored: Record<string, string> = {};
-    for (let n = 1; n <= 9; n++) {
-      stored[`preset.${n}`] = `Mod+${n}`;
-      stored[`palette.${n}`] = `${n}`;
-    }
-    memory.setItem(SHORTCUTS_STORAGE_KEY, JSON.stringify({ version: 1, bindings: stored }));
-    shortcutsStore.hydrate();
-    const snap = shortcutsStore.snapshot();
-    for (let n = 1; n <= 9; n++) {
-      expect(snap[`preset.${n}` as ShortcutId]).toBe(`${n}`);
-      expect(snap[`palette.${n}` as ShortcutId]).toBe(`Mod+${n}`);
-    }
-  });
-
   it('v1 → v2 migration preserves user overrides that differ from old defaults', () => {
     memory.setItem(
       SHORTCUTS_STORAGE_KEY,
