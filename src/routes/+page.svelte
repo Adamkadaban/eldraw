@@ -33,7 +33,7 @@
   } from '$lib/ipc/sidebar-window';
   import { shortcuts } from '$lib/app/shortcuts';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
-  import { hitTestStrokes } from '$lib/tools/eraser';
+  import { hitTestObjects } from '$lib/tools/eraser';
   import { activeGraph, clearActiveGraph, setActiveGraph } from '$lib/store/activeGraph';
   import { createGraphObject } from '$lib/graph/graphObject';
   import GraphEditor from '$lib/graph/GraphEditor.svelte';
@@ -376,9 +376,9 @@
   }
 
   function onEraseAt(at: { x: number; y: number }): void {
-    const hits = hitTestStrokes(pageStrokes, at, ERASER_RADIUS);
-    for (const s of hits) {
-      documentStore.removeObject(pageIndex, s.id);
+    const hits = hitTestObjects(pageObjects, at, ERASER_RADIUS);
+    for (const o of hits) {
+      documentStore.removeObject(pageIndex, o.id);
     }
   }
 
