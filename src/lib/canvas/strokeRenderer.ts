@@ -4,6 +4,8 @@ import type { Point, StrokeObject } from '$lib/types';
 export interface StrokeRenderOptions {
   ptToPx: number;
   simulatePressure?: boolean;
+  /** perfect-freehand `streamline` in [0, 1). Defaults to 0.5. */
+  streamline?: number;
 }
 
 function toSvgPath(points: number[][]): string {
@@ -58,7 +60,7 @@ export function drawStroke(
           size: widthPx * 2,
           thinning: 0.6,
           smoothing: 0.5,
-          streamline: 0.5,
+          streamline: opts.streamline ?? 0.5,
           simulatePressure: opts.simulatePressure ?? false,
           last: true,
         })
@@ -102,6 +104,7 @@ export function drawLiveStroke(
   style: StrokeObject['style'],
   tool: 'pen' | 'highlighter',
   ptToPx: number,
+  streamline?: number,
 ): void {
   if (points.length === 0) return;
   const temp: StrokeObject = {
@@ -112,5 +115,5 @@ export function drawLiveStroke(
     style,
     points,
   };
-  drawStroke(ctx, temp, { ptToPx, simulatePressure: false });
+  drawStroke(ctx, temp, { ptToPx, simulatePressure: false, streamline });
 }

@@ -15,7 +15,7 @@
   import { openAndLoadPdf } from '$lib/ipc/pdf';
   import { loadSidecar } from '$lib/ipc';
   import { pdf, clearError } from '$lib/store/pdf';
-  import { sidebar, hydrateSidebarFromStorage } from '$lib/store/sidebar';
+  import { sidebar, hydrateSidebarFromStorage, streamlineFromSmoothing } from '$lib/store/sidebar';
   import { currentDocument, documentStore, pdfPageIndexAt } from '$lib/store/document';
   import { startAutosave } from '$lib/store/autosave';
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
@@ -533,6 +533,9 @@
               laserRadius={sidebarState.laser.radius}
               tempInkStyle={sidebarState.toolStyles.pen}
               tempInkFadeMs={sidebarState.tempInkFadeMs}
+              penStreamline={streamlineFromSmoothing(sidebarState.smoothingPen)}
+              highlighterStreamline={streamlineFromSmoothing(sidebarState.smoothingHighlighter)}
+              tempInkStreamline={streamlineFromSmoothing(sidebarState.smoothingTempInk)}
               rulerSnap={rulerSnapState}
               oncommit={onCommitStroke}
               onerase={onEraseAt}

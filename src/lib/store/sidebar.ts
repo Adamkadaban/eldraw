@@ -4,7 +4,24 @@ import { clampFadeMs, DEFAULT_TEMP_INK_FADE_MS } from '$lib/tools/tempInk';
 
 export type StyledTool = 'pen' | 'highlighter' | 'line';
 
+export type SmoothingTool = 'pen' | 'highlighter' | 'temp-ink';
+
 export const MAX_PRESETS = 9;
+
+export const MAX_STREAMLINE = 0.99;
+export const DEFAULT_SMOOTHING_PEN = 50;
+export const DEFAULT_SMOOTHING_HIGHLIGHTER = 50;
+export const DEFAULT_SMOOTHING_TEMP_INK = 30;
+
+/**
+ * Map a 0..100 smoothing slider value to perfect-freehand's `streamline`
+ * parameter in [0, 0.99]. 0 disables smoothing; 100 is the practical max
+ * (perfect-freehand saturates at 1.0 which stalls the stroke).
+ */
+export function streamlineFromSmoothing(value: number): number {
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+  return (clamped / 100) * MAX_STREAMLINE;
+}
 
 export interface LaserStyle {
   color: string;
@@ -46,6 +63,9 @@ export interface SidebarState {
   activeColor: string;
   laser: LaserStyle;
   tempInkFadeMs: number;
+  smoothingPen: number;
+  smoothingHighlighter: number;
+  smoothingTempInk: number;
   presets: ToolPreset[];
   floatingPos: { x: number; y: number } | null;
 }
@@ -67,6 +87,9 @@ function initialState(): SidebarState {
     activeColor: '#000000',
     laser: { ...DEFAULT_LASER_STYLE },
     tempInkFadeMs: DEFAULT_TEMP_INK_FADE_MS,
+    smoothingPen: DEFAULT_SMOOTHING_PEN,
+    smoothingHighlighter: DEFAULT_SMOOTHING_HIGHLIGHTER,
+    smoothingTempInk: DEFAULT_SMOOTHING_TEMP_INK,
     presets: [],
     floatingPos: null,
   };
@@ -229,6 +252,13 @@ function createSidebarStore() {
         if (snapshot.activeColor !== undefined) next.activeColor = snapshot.activeColor;
         if (snapshot.laser !== undefined) next.laser = snapshot.laser;
         if (snapshot.tempInkFadeMs !== undefined) next.tempInkFadeMs = snapshot.tempInkFadeMs;
+        if (snapshot.smoothingPen !== undefined) next.smoothingPen = snapshot.smoothingPen;
+        if (snapshot.smoothingHighlighter !== undefined) {
+          next.smoothingHighlighter = snapshot.smoothingHighlighter;
+        }
+        if (snapshot.smoothingTempInk !== undefined) {
+          next.smoothingTempInk = snapshot.smoothingTempInk;
+        }
         if (snapshot.presets !== undefined) next.presets = snapshot.presets;
         return next;
       });
@@ -261,6 +291,15 @@ function createSidebarStore() {
 
     setTempInkFadeMs(ms: number) {
       update((s) => ({ ...s, tempInkFadeMs: clampFadeMs(ms) }));
+    },
+
+    setSmoothing(tool: SmoothingTool, value: number) {
+      const clamped = clamp(value, 0, 100);
+      update((s) => {
+        if (tool === 'pen') return { ...s, smoothingPen: clamped };
+        if (tool === 'highlighter') return { ...s, smoothingHighlighter: clamped };
+        return { ...s, smoothingTempInk: clamped };
+      });
     },
 
     capturePreset(): ToolPreset | null {
@@ -438,6 +477,9 @@ export type SyncableSidebarState = Pick<
   | 'activeColor'
   | 'laser'
   | 'tempInkFadeMs'
+  | 'smoothingPen'
+  | 'smoothingHighlighter'
+  | 'smoothingTempInk'
   | 'presets'
 >;
 
@@ -450,6 +492,9 @@ export function pickSyncable(state: SidebarState): SyncableSidebarState {
     activeColor: state.activeColor,
     laser: state.laser,
     tempInkFadeMs: state.tempInkFadeMs,
+    smoothingPen: state.smoothingPen,
+    smoothingHighlighter: state.smoothingHighlighter,
+    smoothingTempInk: state.smoothingTempInk,
     presets: state.presets,
   };
 }
