@@ -7,9 +7,8 @@
   import { cursorForTool } from './cursors';
   import { log } from '$lib/log';
   import { snapPointToRuler, snapStrokeToRuler, type RulerState } from '$lib/geometry/ruler';
-  import { catmullRomSmooth } from './catmullRom';
-  import { simplifyRdp } from './simplify';
   import { createRafBatcher, type Batcher } from './inkBatch';
+  import { createOneEuroFilter, stabilizationToConfig, type OneEuroFilter } from './stabilizer';
 
   interface Props {
     width: number;
@@ -17,8 +16,8 @@
     ptToPx: number;
     rulerSnap?: RulerState | null;
     rulerSnapThresholdPx?: number;
-    penStreamline?: number;
-    highlighterStreamline?: number;
+    penStabilization?: number;
+    highlighterStabilization?: number;
     oncommit?: (stroke: StrokeObject) => void;
     onerase?: (samples: { x: number; y: number }[]) => void;
     ongraph?: (bounds: { x: number; y: number; w: number; h: number }) => void;
@@ -30,16 +29,14 @@
     ptToPx,
     rulerSnap = null,
     rulerSnapThresholdPx = 12,
-    penStreamline,
-    highlighterStreamline,
+    penStabilization = 0,
+    highlighterStabilization = 0,
     oncommit,
     onerase,
     ongraph,
   }: Props = $props();
 
   const MIN_GRAPH_SIZE_PT = 8;
-  const RDP_EPSILON_PX = 0.5;
-  const CATMULL_MAX_CHORD_PX = 6;
   const HAS_RAW_UPDATE = typeof window !== 'undefined' && 'onpointerrawupdate' in window;
 
   let graphStart: { x: number; y: number } | null = null;
@@ -61,6 +58,7 @@
 
   type Sample = { point: Point; predicted: Point[] };
   let batcher: Batcher<Sample> | null = null;
+  let stabilizer: OneEuroFilter | null = null;
 
   const debugEnabled =
     typeof window !== 'undefined' &&
@@ -113,6 +111,7 @@
     predictedTail = [];
     graphStart = null;
     graphEnd = null;
+    stabilizer = null;
     batcher?.cancel();
     clear();
   }
@@ -129,7 +128,7 @@
       x: px / ptToPx,
       y: py / ptToPx,
       pressure,
-      t: performance.now() - startTime,
+      t: e.timeStamp - startTime,
     };
   }
 
@@ -142,6 +141,19 @@
     return { ...p, x: res.point.x, y: res.point.y };
   }
 
+  function stabilizationAmount(): number {
+    if (currentTool === 'highlighter') return highlighterStabilization;
+    if (currentTool === 'pen') return penStabilization;
+    return 0;
+  }
+
+  function applyStabilizer(p: Point): Point {
+    if (!stabilizer) return p;
+    const out = stabilizer.filter({ x: p.x, y: p.y }, p.t);
+    if (out.x === p.x && out.y === p.y) return p;
+    return { ...p, x: out.x, y: out.y };
+  }
+
   function redrawLive() {
     const c = ensureCtx();
     if (!c) return;
@@ -149,13 +161,11 @@
     if (currentTool === 'highlighter') {
       c.globalCompositeOperation = 'multiply';
       const tail = points.concat(predictedTail);
-      const smoothed = catmullRomSmooth(tail, CATMULL_MAX_CHORD_PX / ptToPx);
-      drawLiveStroke(c, smoothed, currentStyle, 'highlighter', ptToPx, highlighterStreamline);
+      drawLiveStroke(c, tail, currentStyle, 'highlighter', ptToPx);
     } else if (currentTool === 'pen') {
       c.globalCompositeOperation = 'source-over';
       const tail = points.concat(predictedTail);
-      const smoothed = catmullRomSmooth(tail, CATMULL_MAX_CHORD_PX / ptToPx);
-      drawLiveStroke(c, smoothed, currentStyle, 'pen', ptToPx, penStreamline);
+      drawLiveStroke(c, tail, currentStyle, 'pen', ptToPx);
     } else if (currentTool === 'graph' && graphStart && graphEnd) {
       drawGraphRect(c);
     }
@@ -215,9 +225,10 @@
 
   function coalescedPoints(e: PointerEvent, rect: DOMRect): Point[] {
     const native = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
-    if (!native || native.length === 0) return [maybeSnap(toPointWithRect(e, rect))];
+    if (!native || native.length === 0)
+      return [applyStabilizer(maybeSnap(toPointWithRect(e, rect)))];
     const out: Point[] = [];
-    for (const c of native) out.push(maybeSnap(toPointWithRect(c, rect)));
+    for (const c of native) out.push(applyStabilizer(maybeSnap(toPointWithRect(c, rect))));
     return out;
   }
 
@@ -242,7 +253,7 @@
     }
     canvas.setPointerCapture(e.pointerId);
     activePointerId = e.pointerId;
-    startTime = performance.now();
+    startTime = e.timeStamp;
     predictedTail = [];
 
     if (currentTool === 'eraser') {
@@ -260,7 +271,8 @@
       return;
     }
 
-    points = [maybeSnap(toPoint(e))];
+    stabilizer = createOneEuroFilter(stabilizationToConfig(stabilizationAmount()));
+    points = [applyStabilizer(maybeSnap(toPoint(e)))];
     redrawLive();
     e.preventDefault();
   }
@@ -336,11 +348,8 @@
       const snapped = rulerSnap
         ? snapStrokeToRuler(points, rulerSnap, rulerSnapThresholdPx / ptToPx)
         : points;
-      const epsilonPt = RDP_EPSILON_PX / ptToPx;
-      const simplified = simplifyRdp(snapped, epsilonPt);
-      const bakedStreamline = currentTool === 'highlighter' ? highlighterStreamline : penStreamline;
-      const stroke = strokeFromInput(simplified, currentStyle, currentTool, bakedStreamline);
-      log('live', `commit ${currentTool} raw=${points.length} simplified=${simplified.length}`);
+      const stroke = strokeFromInput(snapped, currentStyle, currentTool);
+      log('live', `commit ${currentTool} points=${snapped.length}`);
       oncommit?.(stroke);
     }
     if (commit && currentTool === 'graph' && graphStart && graphEnd) {
@@ -355,6 +364,7 @@
     points = [];
     graphStart = null;
     graphEnd = null;
+    stabilizer = null;
     clear();
   }
 

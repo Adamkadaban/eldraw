@@ -14,7 +14,7 @@
   import { Sidebar } from '$lib/sidebar';
   import { ThumbnailStrip } from '$lib/sidebar';
   import { pdf, clearError } from '$lib/store/pdf';
-  import { sidebar, hydrateSidebarFromStorage, streamlineFromSmoothing } from '$lib/store/sidebar';
+  import { sidebar, hydrateSidebarFromStorage } from '$lib/store/sidebar';
   import { currentDocument, documentStore, pdfPageIndexAt } from '$lib/store/document';
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
   import { presenter, presenterStore } from '$lib/store/presenter';
@@ -593,9 +593,9 @@
               laserRadius={sidebarState.laser.radius}
               tempInkStyle={sidebarState.toolStyles.pen}
               tempInkFadeMs={sidebarState.tempInkFadeMs}
-              penStreamline={streamlineFromSmoothing(sidebarState.smoothingPen)}
-              highlighterStreamline={streamlineFromSmoothing(sidebarState.smoothingHighlighter)}
-              tempInkStreamline={streamlineFromSmoothing(sidebarState.smoothingTempInk)}
+              penStabilization={sidebarState.smoothingPen}
+              highlighterStabilization={sidebarState.smoothingHighlighter}
+              tempInkStabilization={sidebarState.smoothingTempInk}
               rulerSnap={rulerSnapState}
               oncommit={onCommitStroke}
               onerase={onEraseAt}

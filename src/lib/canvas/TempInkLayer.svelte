@@ -8,6 +8,7 @@
     type TempInkStroke,
   } from '$lib/tools/tempInk';
   import { drawLiveStroke } from './strokeRenderer';
+  import { createOneEuroFilter, stabilizationToConfig, type OneEuroFilter } from './stabilizer';
 
   interface Props {
     width: number;
@@ -16,10 +17,10 @@
     active: boolean;
     style: StrokeStyle;
     fadeMs: number;
-    streamline?: number;
+    stabilization?: number;
   }
 
-  let { width, height, ptToPx, active, style, fadeMs, streamline }: Props = $props();
+  let { width, height, ptToPx, active, style, fadeMs, stabilization = 0 }: Props = $props();
 
   let canvas: HTMLCanvasElement;
   let strokes: TempInkStroke[] = [];
@@ -28,6 +29,7 @@
   let activePointerId: number | null = null;
   let startTime = 0;
   let rafId: number | null = null;
+  let stabilizer: OneEuroFilter | null = null;
 
   function ctx(): CanvasRenderingContext2D | null {
     return canvas?.getContext('2d') ?? null;
@@ -58,7 +60,7 @@
     if (livePoints.length > 0) {
       c.save();
       c.globalAlpha = liveStyle.opacity;
-      drawLiveStroke(c, livePoints, { ...liveStyle, opacity: 1 }, 'pen', ptToPx, streamline);
+      drawLiveStroke(c, livePoints, { ...liveStyle, opacity: 1 }, 'pen', ptToPx);
       c.restore();
     }
 
@@ -82,8 +84,15 @@
       x: px / ptToPx,
       y: py / ptToPx,
       pressure,
-      t: performance.now() - startTime,
+      t: e.timeStamp - startTime,
     };
+  }
+
+  function stabilize(p: Point): Point {
+    if (!stabilizer) return p;
+    const out = stabilizer.filter({ x: p.x, y: p.y }, p.t);
+    if (out.x === p.x && out.y === p.y) return p;
+    return { ...p, x: out.x, y: out.y };
   }
 
   function onPointerDown(e: PointerEvent) {
@@ -91,16 +100,17 @@
     if (e.pointerType === 'touch') return;
     canvas.setPointerCapture(e.pointerId);
     activePointerId = e.pointerId;
-    startTime = performance.now();
+    startTime = e.timeStamp;
     liveStyle = { ...style };
-    livePoints = [toPoint(e)];
+    stabilizer = createOneEuroFilter(stabilizationToConfig(stabilization));
+    livePoints = [stabilize(toPoint(e))];
     ensureRaf();
     e.preventDefault();
   }
 
   function onPointerMove(e: PointerEvent) {
     if (!active || activePointerId !== e.pointerId) return;
-    livePoints.push(toPoint(e));
+    livePoints.push(stabilize(toPoint(e)));
     ensureRaf();
     e.preventDefault();
   }
@@ -115,10 +125,11 @@
     activePointerId = null;
 
     if (commit && livePoints.length > 0) {
-      const stroke = createTempStroke(livePoints, liveStyle, fadeMs, performance.now(), streamline);
+      const stroke = createTempStroke(livePoints, liveStyle, fadeMs, performance.now());
       strokes = [...strokes, stroke];
     }
     livePoints = [];
+    stabilizer = null;
     ensureRaf();
   }
 

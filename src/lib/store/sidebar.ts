@@ -11,20 +11,9 @@ export type SmoothingTool = 'pen' | 'highlighter' | 'temp-ink';
 
 export const MAX_PRESETS = 9;
 
-export const MAX_STREAMLINE = 0.99;
 export const DEFAULT_SMOOTHING_PEN = 50;
 export const DEFAULT_SMOOTHING_HIGHLIGHTER = 50;
 export const DEFAULT_SMOOTHING_TEMP_INK = 30;
-
-/**
- * Map a 0..100 smoothing slider value to perfect-freehand's `streamline`
- * parameter in [0, 0.99]. 0 disables smoothing; 100 is the practical max
- * (perfect-freehand saturates at 1.0 which stalls the stroke).
- */
-export function streamlineFromSmoothing(value: number): number {
-  const clamped = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
-  return (clamped / 100) * MAX_STREAMLINE;
-}
 
 export interface LaserStyle {
   color: string;

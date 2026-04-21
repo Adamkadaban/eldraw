@@ -421,8 +421,8 @@
     </section>
 
     {#if activeSmoothingTool}
-      <section class="section smoothing" aria-label="Smoothing">
-        <h3 class="section-title">Smoothing</h3>
+      <section class="section smoothing" aria-label="Stabilization">
+        <h3 class="section-title">Stabilization</h3>
         <div class="row">
           <input
             type="range"
@@ -431,7 +431,7 @@
             step="1"
             value={smoothing}
             oninput={onSmoothing}
-            aria-label="Smoothing amount"
+            aria-label="Stabilization amount"
           />
           <span class="value">{smoothing}%</span>
         </div>

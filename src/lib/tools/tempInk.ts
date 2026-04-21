@@ -29,7 +29,11 @@ export interface TempInkStroke {
   /** Wall-clock ms when the stroke finished (or was last extended). */
   endedAt: number;
   fadeMs: number;
-  /** perfect-freehand `streamline` baked when the stroke is committed; `undefined` means no smoothing. */
+  /**
+   * Legacy perfect-freehand `streamline` baked when the stroke was
+   * committed by a pre-stabilization build. New strokes don't set this;
+   * kept optional so loaded data still renders the same. See issue #113.
+   */
   streamline?: number;
 }
 
@@ -44,7 +48,6 @@ export function createTempStroke(
   style: StrokeStyle,
   fadeMs: number,
   endedAt: number,
-  streamline?: number,
 ): TempInkStroke {
   return {
     id: newTempStrokeId(),
@@ -52,7 +55,6 @@ export function createTempStroke(
     points: points.map((p) => ({ ...p })),
     endedAt,
     fadeMs: clampFadeMs(fadeMs),
-    ...(streamline !== undefined ? { streamline } : {}),
   };
 }
 
