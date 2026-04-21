@@ -202,7 +202,7 @@ function buildCommands(): ShortcutCommand[] {
     list.push({
       id: `preset.${n}` as ShortcutId,
       label: `Apply preset ${n}`,
-      defaultSpec: `Mod+${n}`,
+      defaultSpec: `${n}`,
       run: () => sidebar.applyPresetSlot(n),
       preventDefault: true,
     });
@@ -212,7 +212,7 @@ function buildCommands(): ShortcutCommand[] {
     list.push({
       id: `palette.${n}` as ShortcutId,
       label: `Pick palette color ${n}`,
-      defaultSpec: `${n}`,
+      defaultSpec: `Mod+${n}`,
       run: () => pickPaletteSlot(n),
     });
   }

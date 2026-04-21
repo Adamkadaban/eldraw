@@ -10,7 +10,7 @@ const STORAGE_KEY = 'eldraw.shortcuts.v1';
  *
  * Legacy (unversioned) payloads are treated as version 0.
  */
-export const SHORTCUTS_SCHEMA_VERSION = 1;
+export const SHORTCUTS_SCHEMA_VERSION = 2;
 
 export type ShortcutBindings = Record<ShortcutId, string>;
 
@@ -28,11 +28,28 @@ type Migration = (bindings: Partial<Record<ShortcutId, string>>) => void;
  * v0 → v1: command palette default moved from Mod+K to Mod+P (#89). Users
  * whose stored binding still matches the old default are bumped; custom
  * bindings are left alone.
+ *
+ * v1 → v2: number-key bindings swapped (#90). `1`..`9` now select preset
+ * slots (was color slots), `Mod+1`..`Mod+9` now select color slots (was
+ * preset slots). Only stored bindings still matching the old defaults are
+ * rewritten; user customizations are preserved.
  */
 const MIGRATIONS: Migration[] = [
   (bindings) => {
     if (bindings['commandPalette.open'] === 'Mod+K') {
       bindings['commandPalette.open'] = 'Mod+P';
+    }
+  },
+  (bindings) => {
+    for (let n = 1; n <= 9; n++) {
+      const presetId = `preset.${n}` as ShortcutId;
+      const paletteId = `palette.${n}` as ShortcutId;
+      if (bindings[presetId] === `Mod+${n}`) {
+        bindings[presetId] = `${n}`;
+      }
+      if (bindings[paletteId] === `${n}`) {
+        bindings[paletteId] = `Mod+${n}`;
+      }
     }
   },
 ];
