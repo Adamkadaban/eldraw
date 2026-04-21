@@ -283,7 +283,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <header
     class="head"
-    class:grab={!sidebarState.pinned && !sidebarState.snapEdge}
+    class:grab={!sidebarState.pinned}
     onpointerdown={onHeaderPointerDown}
     onpointermove={onHeaderPointerMove}
     onpointerup={onHeaderPointerUp}

@@ -138,4 +138,10 @@ describe('detectSnapEdge', () => {
   it('default edge threshold matches exported constant', () => {
     expect(EDGE_SNAP_THRESHOLD).toBe(40);
   });
+
+  it('prefers left edge when sidebar is larger than viewport at origin', () => {
+    const bigSidebar = { width: 2000, height: 1500 };
+    const smallViewport = { width: 1200, height: 800 };
+    expect(detectSnapEdge({ x: 0, y: 0 }, bigSidebar, smallViewport)).toBe('left');
+  });
 });

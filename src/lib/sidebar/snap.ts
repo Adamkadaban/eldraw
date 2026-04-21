@@ -57,10 +57,12 @@ export function detectSnapEdge(
   viewport: Size,
   threshold: number = EDGE_SNAP_THRESHOLD,
 ): SnapEdge | null {
-  const distLeft = p.x;
-  const distTop = p.y;
-  const distRight = viewport.width - (p.x + size.width);
-  const distBottom = viewport.height - (p.y + size.height);
+  const rightEdge = Math.max(0, viewport.width - size.width);
+  const bottomEdge = Math.max(0, viewport.height - size.height);
+  const distLeft = Math.max(0, p.x);
+  const distTop = Math.max(0, p.y);
+  const distRight = Math.max(0, rightEdge - p.x);
+  const distBottom = Math.max(0, bottomEdge - p.y);
 
   const dists: Array<[SnapEdge, number]> = [
     ['left', distLeft],
@@ -72,7 +74,7 @@ export function detectSnapEdge(
   let best: SnapEdge | null = null;
   let bestDist = threshold;
   for (const [edge, d] of dists) {
-    if (d <= bestDist) {
+    if (d < bestDist) {
       best = edge;
       bestDist = d;
     }

@@ -7,7 +7,6 @@ import {
   SHORTCUTS_SCHEMA_VERSION,
 } from '../src/lib/store/shortcuts';
 import { DEFAULT_BINDINGS } from '../src/lib/app/shortcutRegistry';
-import type { ShortcutId } from '../src/lib/app/shortcutRegistry';
 
 class MemoryStorage {
   private map = new Map<string, string>();
