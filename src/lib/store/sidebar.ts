@@ -39,6 +39,7 @@ const DEFAULT_LINE: StrokeStyle = { color: '#000000', width: 2, dash: 'solid', o
 
 export interface SidebarState {
   pinned: boolean;
+  detached: boolean;
   activeTool: ToolKind;
   toolStyles: Record<StyledTool, StrokeStyle>;
   palettes: ColorPalette[];
@@ -52,6 +53,7 @@ export interface SidebarState {
 function initialState(): SidebarState {
   return {
     pinned: true,
+    detached: false,
     activeTool: 'pen',
     toolStyles: {
       pen: { ...DEFAULT_PEN },
@@ -205,6 +207,31 @@ function createSidebarStore() {
 
     togglePin() {
       update((s) => ({ ...s, pinned: !s.pinned }));
+    },
+
+    setDetached(detached: boolean) {
+      update((s) => (s.detached === detached ? s : { ...s, detached }));
+    },
+
+    /**
+     * Apply a remote snapshot from the paired window. Only touches fields
+     * that are meaningful to share across windows; window-local state like
+     * `detached` and `floatingPos` is preserved so the two windows can
+     * track their own chrome independently.
+     */
+    applyRemote(snapshot: Partial<SidebarState>) {
+      update((s) => {
+        const next: SidebarState = { ...s };
+        if (snapshot.pinned !== undefined) next.pinned = snapshot.pinned;
+        if (snapshot.activeTool !== undefined) next.activeTool = snapshot.activeTool;
+        if (snapshot.toolStyles !== undefined) next.toolStyles = snapshot.toolStyles;
+        if (snapshot.palettes !== undefined) next.palettes = snapshot.palettes;
+        if (snapshot.activeColor !== undefined) next.activeColor = snapshot.activeColor;
+        if (snapshot.laser !== undefined) next.laser = snapshot.laser;
+        if (snapshot.tempInkFadeMs !== undefined) next.tempInkFadeMs = snapshot.tempInkFadeMs;
+        if (snapshot.presets !== undefined) next.presets = snapshot.presets;
+        return next;
+      });
     },
 
     setFloatingPos(pos: { x: number; y: number } | null) {
@@ -401,3 +428,57 @@ export const currentStyle: Readable<StrokeStyle> = derived(sidebar, (s) => {
     : { color: s.activeColor, width: 2, dash: 'solid' as DashStyle, opacity: 1 };
   return { ...base, color: s.activeColor };
 });
+
+export type SyncableSidebarState = Pick<
+  SidebarState,
+  | 'pinned'
+  | 'activeTool'
+  | 'toolStyles'
+  | 'palettes'
+  | 'activeColor'
+  | 'laser'
+  | 'tempInkFadeMs'
+  | 'presets'
+>;
+
+export function pickSyncable(state: SidebarState): SyncableSidebarState {
+  return {
+    pinned: state.pinned,
+    activeTool: state.activeTool,
+    toolStyles: state.toolStyles,
+    palettes: state.palettes,
+    activeColor: state.activeColor,
+    laser: state.laser,
+    tempInkFadeMs: state.tempInkFadeMs,
+    presets: state.presets,
+  };
+}
+
+export function syncableEqual(a: SyncableSidebarState, b: SyncableSidebarState): boolean {
+  return deepEqual(a, b);
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) {
+    return false;
+  }
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (!deepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (Array.isArray(b)) return false;
+  const aObj = a as Record<string, unknown>;
+  const bObj = b as Record<string, unknown>;
+  const aKeys = Object.keys(aObj);
+  const bKeys = Object.keys(bObj);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (!Object.prototype.hasOwnProperty.call(bObj, key)) return false;
+    if (!deepEqual(aObj[key], bObj[key])) return false;
+  }
+  return true;
+}

@@ -12,9 +12,22 @@
     onToolChange?: (tool: ToolKind) => void;
     onStyleChange?: (style: StrokeStyle) => void;
     onPinChange?: (pinned: boolean) => void;
+    onDetachChange?: (detached: boolean) => void;
+    /**
+     * When true, this sidebar is rendered inside the detached window.
+     * The detach button becomes a "dock" button and the pin toggle is
+     * hidden because pinning is a main-window concept only.
+     */
+    mode?: 'inline' | 'detached';
   }
 
-  let { onToolChange, onStyleChange, onPinChange }: Props = $props();
+  let {
+    onToolChange,
+    onStyleChange,
+    onPinChange,
+    onDetachChange,
+    mode = 'inline',
+  }: Props = $props();
 
   interface ToolSpec {
     id: ToolKind;
@@ -78,6 +91,10 @@
   function togglePin() {
     sidebar.togglePin();
     onPinChange?.(sidebar.snapshot().pinned);
+  }
+
+  function onDetachClick() {
+    onDetachChange?.(mode !== 'detached');
   }
 
   let shortcutsOpen = $state(false);
@@ -227,13 +244,24 @@
     <button
       type="button"
       class="pin"
-      aria-pressed={sidebarState.pinned}
-      aria-label={sidebarState.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
-      title={sidebarState.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
-      onclick={togglePin}
+      aria-label={mode === 'detached' ? 'Dock sidebar' : 'Detach sidebar to its own window'}
+      title={mode === 'detached' ? 'Dock sidebar' : 'Detach to window'}
+      onclick={onDetachClick}
     >
-      <span aria-hidden="true">{sidebarState.pinned ? '📌' : '📍'}</span>
+      <span aria-hidden="true">{mode === 'detached' ? '⇲' : '⇱'}</span>
     </button>
+    {#if mode !== 'detached'}
+      <button
+        type="button"
+        class="pin"
+        aria-pressed={sidebarState.pinned}
+        aria-label={sidebarState.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
+        title={sidebarState.pinned ? 'Unpin sidebar' : 'Pin sidebar'}
+        onclick={togglePin}
+      >
+        <span aria-hidden="true">{sidebarState.pinned ? '📌' : '📍'}</span>
+      </button>
+    {/if}
   </header>
 
   <section class="tools" aria-label="Tools">
