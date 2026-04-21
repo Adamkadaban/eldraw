@@ -3,6 +3,8 @@ import type { AnyObject, EldrawDocument, ObjectId, Page } from '$lib/types';
 import { isSafeHexColor } from '$lib/color';
 import { applyCommand, createHistory, type Command, type History } from './history';
 
+export type PageCommitListener = (pageIndex: number) => void;
+
 export interface DocumentStore {
   subscribe: Readable<EldrawDocument | null>['subscribe'];
   load(doc: EldrawDocument): void;
@@ -29,6 +31,14 @@ export interface DocumentStore {
   canRedo(pageIndex: number): Readable<boolean>;
 
   objectsOnPage(pageIndex: number): Readable<AnyObject[]>;
+
+  /**
+   * Subscribe to page annotation commits. Fires on add/remove/update/clear
+   * and on undo/redo — i.e. every mutation that changes a page's `objects`.
+   * Does NOT fire during live strokes (those never touch the store) or
+   * structural page ops (insert/move/duplicate/delete).
+   */
+  onPageCommit(listener: PageCommitListener): () => void;
 
   /** Escape hatch for undo/redo replays that must not re-push history. */
   _internalApply(pageIndex: number, cmd: Command): void;
@@ -136,6 +146,11 @@ function clonePageForDuplicate(p: Page): Page {
 export function createDocumentStore(): DocumentStore {
   const state = writable<EldrawDocument | null>(null);
   const history = createHistory();
+  const commitListeners = new Set<PageCommitListener>();
+
+  function emitCommit(pageIndex: number) {
+    for (const listener of commitListeners) listener(pageIndex);
+  }
 
   function mutatePage(pageIndex: number, fn: (p: Page) => Page) {
     state.update((doc) => {
@@ -149,6 +164,7 @@ export function createDocumentStore(): DocumentStore {
   function pushAndApply(pageIndex: number, cmd: Command) {
     history.pushCommand(pageIndex, cmd);
     mutatePage(pageIndex, (p) => applyCommand(p, cmd));
+    emitCommit(pageIndex);
   }
 
   return {
@@ -264,7 +280,10 @@ export function createDocumentStore(): DocumentStore {
       const page = doc.pages[pageIndex];
       if (!page) return;
       const next = history.undo(pageIndex, page);
-      if (next) mutatePage(pageIndex, () => next);
+      if (next) {
+        mutatePage(pageIndex, () => next);
+        emitCommit(pageIndex);
+      }
     },
 
     redo(pageIndex) {
@@ -273,7 +292,10 @@ export function createDocumentStore(): DocumentStore {
       const page = doc.pages[pageIndex];
       if (!page) return;
       const next = history.redo(pageIndex, page);
-      if (next) mutatePage(pageIndex, () => next);
+      if (next) {
+        mutatePage(pageIndex, () => next);
+        emitCommit(pageIndex);
+      }
     },
 
     canUndo(pageIndex) {
@@ -288,8 +310,16 @@ export function createDocumentStore(): DocumentStore {
       return derived(state, ($doc) => $doc?.pages[pageIndex]?.objects ?? []);
     },
 
+    onPageCommit(listener) {
+      commitListeners.add(listener);
+      return () => {
+        commitListeners.delete(listener);
+      };
+    },
+
     _internalApply(pageIndex, cmd) {
       mutatePage(pageIndex, (p) => applyCommand(p, cmd));
+      emitCommit(pageIndex);
     },
 
     history,

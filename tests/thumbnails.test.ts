@@ -104,3 +104,73 @@ describe('getThumbnail', () => {
     );
   });
 });
+
+describe('page generation', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('starts at 0, bumps to 1, notifies subscribers with the new generation', async () => {
+    setupObjectUrls();
+    const mod = await import('../src/lib/pdf/thumbnails');
+
+    expect(mod.pageGeneration('hash-a', 0)).toBe(0);
+    const seen: number[] = [];
+    const unsub = mod.subscribePageGeneration('hash-a', 0, (g) => seen.push(g));
+
+    mod.bumpPageGeneration('hash-a', 0);
+    mod.bumpPageGeneration('hash-a', 0);
+
+    expect(mod.pageGeneration('hash-a', 0)).toBe(2);
+    expect(seen).toEqual([1, 2]);
+    unsub();
+    mod.bumpPageGeneration('hash-a', 0);
+    expect(seen).toEqual([1, 2]);
+  });
+
+  it('scopes generations per (pdfId, pageIndex)', async () => {
+    setupObjectUrls();
+    const mod = await import('../src/lib/pdf/thumbnails');
+
+    mod.bumpPageGeneration('hash-a', 0);
+    expect(mod.pageGeneration('hash-a', 0)).toBe(1);
+    expect(mod.pageGeneration('hash-a', 1)).toBe(0);
+    expect(mod.pageGeneration('hash-b', 0)).toBe(0);
+  });
+
+  it('revokeThumbnails clears generations and subscribers for the pdfId', async () => {
+    setupObjectUrls();
+    const mod = await import('../src/lib/pdf/thumbnails');
+
+    mod.bumpPageGeneration('hash-a', 0);
+    mod.bumpPageGeneration('hash-b', 0);
+    const seen: number[] = [];
+    mod.subscribePageGeneration('hash-a', 0, (g) => seen.push(g));
+
+    mod.revokeThumbnails('hash-a');
+
+    expect(mod.pageGeneration('hash-a', 0)).toBe(0);
+    expect(mod.pageGeneration('hash-b', 0)).toBe(1);
+
+    mod.bumpPageGeneration('hash-a', 0);
+    expect(seen).toEqual([]);
+  });
+
+  it('retainThumbnails drops generations for pages not in the retained set', async () => {
+    setupObjectUrls();
+    const mod = await import('../src/lib/pdf/thumbnails');
+
+    mod.bumpPageGeneration('hash-a', 0);
+    mod.bumpPageGeneration('hash-a', 1);
+    mod.bumpPageGeneration('hash-a', 2);
+
+    mod.retainThumbnails('hash-a', new Set([1]));
+
+    expect(mod.pageGeneration('hash-a', 0)).toBe(0);
+    expect(mod.pageGeneration('hash-a', 1)).toBe(1);
+    expect(mod.pageGeneration('hash-a', 2)).toBe(0);
+  });
+});
