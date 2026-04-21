@@ -17,7 +17,14 @@ function kb(
 describe('parseShortcut', () => {
   it('parses a single character as lowercase key', () => {
     const p = parseShortcut('P');
-    expect(p).toEqual({ key: 'p', ctrl: false, shift: false, alt: false, meta: false });
+    expect(p).toEqual({
+      key: 'p',
+      ctrl: false,
+      shift: false,
+      alt: false,
+      meta: false,
+      modOrMeta: false,
+    });
   });
 
   it('parses Ctrl+Z', () => {
@@ -27,6 +34,7 @@ describe('parseShortcut', () => {
       shift: false,
       alt: false,
       meta: false,
+      modOrMeta: false,
     });
   });
 
@@ -37,6 +45,7 @@ describe('parseShortcut', () => {
       shift: true,
       alt: false,
       meta: false,
+      modOrMeta: false,
     });
   });
 
@@ -63,6 +72,13 @@ describe('parseShortcut', () => {
   it('throws when only modifiers given', () => {
     expect(() => parseShortcut('Ctrl+Shift')).toThrow();
   });
+
+  it('parses Mod as modOrMeta', () => {
+    const p = parseShortcut('Mod+Z');
+    expect(p.modOrMeta).toBe(true);
+    expect(p.ctrl).toBe(false);
+    expect(p.meta).toBe(false);
+  });
 });
 
 describe('matchesEvent', () => {
@@ -80,6 +96,13 @@ describe('matchesEvent', () => {
   it('matches named keys', () => {
     expect(matchesEvent(parseShortcut('ArrowLeft'), kb('ArrowLeft'))).toBe(true);
     expect(matchesEvent(parseShortcut('ArrowLeft'), kb('ArrowRight'))).toBe(false);
+  });
+
+  it('Mod matches either Ctrl or Meta', () => {
+    const p = parseShortcut('Mod+Z');
+    expect(matchesEvent(p, kb('z', { ctrl: true }))).toBe(true);
+    expect(matchesEvent(p, kb('z', { meta: true }))).toBe(true);
+    expect(matchesEvent(p, kb('z'))).toBe(false);
   });
 });
 
