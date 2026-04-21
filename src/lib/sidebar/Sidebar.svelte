@@ -43,6 +43,7 @@
     { id: 'pen', label: 'Pen', shortcut: 'P', icon: '✏️' },
     { id: 'highlighter', label: 'Highlighter', shortcut: 'H', icon: '🖍️' },
     { id: 'eraser', label: 'Eraser', shortcut: 'E', icon: '🧽' },
+    { id: 'select', label: 'Select', shortcut: 'S', icon: '⬚' },
     { id: 'line', label: 'Line', shortcut: 'L', icon: '／' },
     { id: 'text', label: 'Text', shortcut: 'T', icon: '𝐓' },
     { id: 'rect', label: 'Rectangle', shortcut: 'R', icon: '▭' },

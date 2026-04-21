@@ -24,6 +24,13 @@ function commandToMutations(pageIndex: number, cmd: Command): MutationEvent[] {
       return cmd.items.map((i) => ({ kind: 'add', pageIndex, object: i.object }));
     case 'update':
       return [{ kind: 'update', pageIndex, id: cmd.objectId, after: cmd.after }];
+    case 'updateMany':
+      return cmd.entries.map((e) => ({
+        kind: 'update',
+        pageIndex,
+        id: e.objectId,
+        after: e.after,
+      }));
     case 'clearPage':
       return [{ kind: 'remove', pageIndex, ids: cmd.objects.map((o) => o.id) }];
     case 'restorePage':
@@ -46,6 +53,12 @@ export interface DocumentStore {
   removeObject(pageIndex: number, id: ObjectId): void;
   removeObjects(pageIndex: number, ids: readonly ObjectId[]): void;
   updateObject(pageIndex: number, id: ObjectId, patch: Partial<AnyObject>): void;
+  /**
+   * Apply a batch of object replacements under a single history entry. The
+   * caller provides the full `after` object for each id; the store derives
+   * `before` from the current page state. Unknown ids are skipped.
+   */
+  updateObjects(pageIndex: number, afters: readonly AnyObject[]): void;
 
   insertBlankPageAfter(
     afterArrayIndex: number,
@@ -270,6 +283,23 @@ export function createDocumentStore(): DocumentStore {
       if (!before) return;
       const after = { ...before, ...patch } as AnyObject;
       pushAndApply(pageIndex, { type: 'update', objectId: id, before, after });
+    },
+
+    updateObjects(pageIndex, afters) {
+      if (afters.length === 0) return;
+      const doc = get(state);
+      if (!doc) return;
+      const page = doc.pages[pageIndex];
+      if (!page) return;
+      const byId = new Map(page.objects.map((o) => [o.id, o] as const));
+      const entries: Extract<Command, { type: 'updateMany' }>['entries'] = [];
+      for (const after of afters) {
+        const before = byId.get(after.id);
+        if (!before) continue;
+        entries.push({ objectId: after.id, before, after });
+      }
+      if (entries.length === 0) return;
+      pushAndApply(pageIndex, { type: 'updateMany', entries });
     },
 
     insertBlankPageAfter(afterArrayIndex, width, height, background) {

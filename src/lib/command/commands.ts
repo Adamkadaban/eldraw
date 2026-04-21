@@ -88,6 +88,7 @@ export function getCommands(): Command[] {
     toolCommand('tool.pen', 'Pen', 'pen', 'P'),
     toolCommand('tool.highlighter', 'Highlighter', 'highlighter', 'H'),
     toolCommand('tool.eraser', 'Eraser', 'eraser', 'E'),
+    toolCommand('tool.select', 'Select', 'select', 'S'),
     toolCommand('tool.line', 'Line', 'line', 'L'),
     toolCommand('tool.text', 'Text', 'text', 'T'),
     toolCommand('tool.rect', 'Rectangle', 'rect', 'R'),

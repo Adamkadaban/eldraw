@@ -38,6 +38,8 @@
   import OpenFromSlidesDialog from '$lib/ui/OpenFromSlidesDialog.svelte';
   import { slidesDialogOpen, openSlidesDialog } from '$lib/slides/dialog';
   import { createSpatialIndex, type SpatialIndex } from '$lib/tools/spatialIndex';
+  import SelectionLayer from '$lib/select/SelectionLayer.svelte';
+  import { selection } from '$lib/select/selection';
   import { makeEraseFlush } from '$lib/tools/eraserBatch';
   import { createRafBatcher } from '$lib/canvas/inkBatch';
   import { eraseDebug } from '$lib/store/eraseDebug';
@@ -87,6 +89,9 @@
     if (sidebarState.activeTool === 'ruler' && !overlaysState.rulerVisible) {
       overlays.setRulerVisible(true);
     }
+  });
+  $effect(() => {
+    if (sidebarState.activeTool !== 'select') selection.clear();
   });
   const presenterState = $derived($presenterStore);
   const isPresenter = $derived(presenterState.active);
@@ -753,6 +758,18 @@
               <RulerOverlay ptToPx={size.ptToPx} width={size.width} height={size.height} />
             </div>
           {/if}
+          {#if sidebarState.activeTool === 'select'}
+            <div class="overlay-slot capture">
+              <SelectionLayer
+                {pageIndex}
+                objects={pageObjects}
+                {spatialIndex}
+                width={size.width}
+                height={size.height}
+                ptToPx={size.ptToPx}
+              />
+            </div>
+          {/if}
           {#if replaySt.active}
             <ReplayLayer
               width={size.width}
@@ -1030,6 +1047,9 @@
     pointer-events: none;
   }
   .overlay-slot :global(svg) {
+    pointer-events: auto;
+  }
+  .overlay-slot.capture {
     pointer-events: auto;
   }
   .text-slot {
