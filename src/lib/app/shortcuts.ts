@@ -83,13 +83,12 @@ export const shortcuts: Action<HTMLElement> = () => {
     const lower = event.key.toLowerCase();
 
     if (isTextInput(event.target)) {
-      // Let the input handle typing; only surface document-editing shortcuts so
-      // undo/redo remain reachable while a text field is focused.
-      const editingShortcut = ctrlOrMeta && (lower === 'z' || lower === 'y');
-      if (!editingShortcut) return;
-    } else if (isEditableTarget(event.target)) {
+      // Native text-editing shortcuts (including Ctrl/Cmd+Z/Y) must reach the
+      // input. Document-level undo/redo is intentionally off while a real
+      // text field is focused; the user can blur it and press Ctrl+Z again.
       return;
     }
+    if (isEditableTarget(event.target)) return;
 
     const key = event.key;
 
