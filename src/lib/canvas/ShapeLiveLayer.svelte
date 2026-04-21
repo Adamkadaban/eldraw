@@ -10,6 +10,7 @@
   import { toolStore } from '$lib/store/tool';
   import { currentStyle } from '$lib/store/sidebar';
   import { normalizeBounds } from '$lib/tools/shapes';
+  import { snapAngle15 } from '$lib/tools/lineSnap';
   import { drawLine, drawNumberLine, drawShape } from './objectRenderer';
   import { log } from '$lib/log';
 
@@ -31,6 +32,7 @@
   let activePointerId: number | null = null;
   let start = { x: 0, y: 0 };
   let end = { x: 0, y: 0 };
+  let shiftHeld = false;
   let currentTool: ToolKind = $state('pen');
   let style: StrokeStyle = $state({ color: '#000', width: 2, dash: 'solid', opacity: 1 });
 
@@ -65,13 +67,14 @@
   function previewObject(): LineObject | ShapeObject | NumberLineObject | null {
     if (!isDragKind(currentTool)) return null;
     if (currentTool === 'line') {
+      const to = shiftHeld ? snapAngle15(start, end) : { ...end };
       return {
         id: 'preview',
         createdAt: 0,
         type: 'line',
         style,
         from: { ...start },
-        to: { ...end },
+        to,
         arrow: { start: false, end: false },
       };
     }
@@ -135,6 +138,7 @@
     activePointerId = e.pointerId;
     start = toPagePoint(e);
     end = { ...start };
+    shiftHeld = e.shiftKey;
     redraw();
     e.preventDefault();
   }
@@ -142,12 +146,14 @@
   function onPointerMove(e: PointerEvent) {
     if (activePointerId !== e.pointerId) return;
     end = toPagePoint(e);
+    shiftHeld = e.shiftKey;
     redraw();
     e.preventDefault();
   }
 
   function finish(e: PointerEvent, doCommit: boolean) {
     if (activePointerId !== e.pointerId) return;
+    shiftHeld = e.shiftKey;
     try {
       canvas.releasePointerCapture(e.pointerId);
     } catch {
