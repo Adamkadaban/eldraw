@@ -59,17 +59,24 @@ function pushWithWindow(bucket: Bucket, now: number, windowMs = 1000): number {
 const moveBucket: Bucket = { times: [], count: 0 };
 const hitBucket: Bucket = { times: [], count: 0 };
 
+let enabledFlag = false;
+
 export const eraseDebug: Readable<EraseDebugStats> & {
   init: () => void;
+  isEnabled: () => boolean;
   recordPointerMove: () => void;
   recordHits: (n: number) => void;
 } = {
   subscribe: store.subscribe,
   init() {
-    const enabled = detectEnabled();
-    store.update((s) => ({ ...s, enabled }));
+    enabledFlag = detectEnabled();
+    store.update((s) => ({ ...s, enabled: enabledFlag }));
+  },
+  isEnabled() {
+    return enabledFlag;
   },
   recordPointerMove() {
+    if (!enabledFlag) return;
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const perSec = pushWithWindow(moveBucket, now);
     store.update((s) => ({
@@ -80,7 +87,7 @@ export const eraseDebug: Readable<EraseDebugStats> & {
     }));
   },
   recordHits(n) {
-    if (n <= 0) return;
+    if (!enabledFlag || n <= 0) return;
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     for (let i = 0; i < n; i += 1) pushWithWindow(hitBucket, now);
     store.update((s) => ({

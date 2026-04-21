@@ -392,20 +392,58 @@
     spatialIndex = createSpatialIndex(pageObjects);
   });
 
-  const eraseBatcher = createRafBatcher<{ x: number; y: number }>(
-    makeEraseFlush(
-      () => spatialIndex,
-      ERASER_RADIUS,
-      (ids) => documentStore.removeObjects(pageIndex, ids),
-      (hits) => eraseDebug.recordHits(hits),
-    ),
-  );
+  type EraseSample = {
+    x: number;
+    y: number;
+    pageIndex: number;
+    spatialIndex: SpatialIndex | null;
+  };
+
+  const eraseBatcher = createRafBatcher<EraseSample>((samples) => {
+    const byPage = new Map<
+      number,
+      { index: SpatialIndex | null; points: { x: number; y: number }[] }
+    >();
+    for (const s of samples) {
+      let group = byPage.get(s.pageIndex);
+      if (!group) {
+        group = { index: s.spatialIndex, points: [] };
+        byPage.set(s.pageIndex, group);
+      }
+      group.points.push({ x: s.x, y: s.y });
+    }
+    for (const [page, group] of byPage) {
+      makeEraseFlush(
+        () => group.index,
+        ERASER_RADIUS,
+        (ids) => documentStore.removeObjects(page, ids),
+        (hits) => eraseDebug.recordHits(hits),
+      )(group.points);
+    }
+  });
 
   function onEraseAt(samples: { x: number; y: number }[]): void {
     if (samples.length === 0) return;
     eraseDebug.recordPointerMove();
-    eraseBatcher.pushMany(samples);
+    const capturedPage = pageIndex;
+    const capturedIndex = spatialIndex;
+    eraseBatcher.pushMany(
+      samples.map((s) => ({
+        x: s.x,
+        y: s.y,
+        pageIndex: capturedPage,
+        spatialIndex: capturedIndex,
+      })),
+    );
   }
+
+  $effect(() => {
+    // Page change: drain pending samples against the page they were sampled on
+    // (they carry their own pageIndex), then clear any residual queue so
+    // future frames start fresh on the new page.
+    void pageIndex;
+    eraseBatcher.flushNow();
+  });
 
   function onCommitGraph(bounds: { x: number; y: number; w: number; h: number }): void {
     const graph = createGraphObject(bounds);
@@ -461,6 +499,7 @@
     stopPresenterBridge?.();
     stopSidebarBridge?.();
     registerZenFullscreenBridge(null);
+    eraseBatcher.cancel();
   });
 </script>
 
