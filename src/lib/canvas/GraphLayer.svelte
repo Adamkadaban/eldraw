@@ -3,6 +3,7 @@
   import { parseExpression, parseExpressionXY } from '$lib/graph/parser';
   import { plotFunction } from '$lib/graph/plotter';
   import { marchingSquares, stitchSegments } from '$lib/graph/implicit';
+  import { niceStep, generateTicks, formatTick } from '$lib/graph/axes';
 
   interface Props {
     graphs: GraphObject[];
@@ -16,10 +17,16 @@
   let canvas: HTMLCanvasElement;
 
   const AXIS_COLOR = '#444';
-  const GRID_COLOR = '#d8d8d8';
+  const GRID_MAJOR_COLOR = '#cfcfcf';
+  const GRID_MINOR_COLOR = '#ececec';
+  const LABEL_COLOR = '#555';
   const FRAME_COLOR = '#888';
   const MAX_SAMPLES = 2048;
   const IMPLICIT_MAX_RES = 256;
+  const TARGET_MAJOR_TICKS = 8;
+  const MINOR_SUBDIVISIONS = 5;
+  const LABEL_FONT = '10px system-ui, -apple-system, "Segoe UI", sans-serif';
+  const LABEL_PAD = 3;
 
   function dashFor(d: 'solid' | 'dashed' | 'dotted', strokeWidth: number): number[] {
     if (d === 'dashed') return [strokeWidth * 4, strokeWidth * 3];
@@ -54,18 +61,35 @@
     const xToPx = (x: number) => px + ((x - x0) / xSpan) * pw;
     const yToPx = (y: number) => py + (1 - (y - y0) / ySpan) * ph;
 
-    if (g.showGrid && g.gridStep > 0) {
-      ctx.strokeStyle = GRID_COLOR;
+    const majorXStep = g.gridStep > 0 ? g.gridStep : niceStep(xSpan, TARGET_MAJOR_TICKS);
+    const majorYStep = g.gridStep > 0 ? g.gridStep : niceStep(ySpan, TARGET_MAJOR_TICKS);
+    const minorXStep = majorXStep / MINOR_SUBDIVISIONS;
+    const minorYStep = majorYStep / MINOR_SUBDIVISIONS;
+
+    if (g.showGrid) {
       ctx.lineWidth = 1;
+      ctx.strokeStyle = GRID_MINOR_COLOR;
       ctx.beginPath();
-      const startX = Math.ceil(x0 / g.gridStep) * g.gridStep;
-      for (let x = startX; x <= x1 + 1e-9; x += g.gridStep) {
+      for (const x of generateTicks(x0, x1, minorXStep)) {
         const sx = xToPx(x);
         ctx.moveTo(sx, py);
         ctx.lineTo(sx, py + ph);
       }
-      const startY = Math.ceil(y0 / g.gridStep) * g.gridStep;
-      for (let y = startY; y <= y1 + 1e-9; y += g.gridStep) {
+      for (const y of generateTicks(y0, y1, minorYStep)) {
+        const sy = yToPx(y);
+        ctx.moveTo(px, sy);
+        ctx.lineTo(px + pw, sy);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = GRID_MAJOR_COLOR;
+      ctx.beginPath();
+      for (const x of generateTicks(x0, x1, majorXStep)) {
+        const sx = xToPx(x);
+        ctx.moveTo(sx, py);
+        ctx.lineTo(sx, py + ph);
+      }
+      for (const y of generateTicks(y0, y1, majorYStep)) {
         const sy = yToPx(y);
         ctx.moveTo(px, sy);
         ctx.lineTo(px + pw, sy);
@@ -73,21 +97,59 @@
       ctx.stroke();
     }
 
+    const xAxisVisible = y0 <= 0 && y1 >= 0;
+    const yAxisVisible = x0 <= 0 && x1 >= 0;
+
     if (g.showAxes) {
       ctx.strokeStyle = AXIS_COLOR;
       ctx.lineWidth = 1.25;
       ctx.beginPath();
-      if (y0 <= 0 && y1 >= 0) {
+      if (xAxisVisible) {
         const axisY = yToPx(0);
         ctx.moveTo(px, axisY);
         ctx.lineTo(px + pw, axisY);
       }
-      if (x0 <= 0 && x1 >= 0) {
+      if (yAxisVisible) {
         const axisX = xToPx(0);
         ctx.moveTo(axisX, py);
         ctx.lineTo(axisX, py + ph);
       }
       ctx.stroke();
+
+      ctx.fillStyle = LABEL_COLOR;
+      ctx.font = LABEL_FONT;
+
+      if (xAxisVisible) {
+        const axisY = yToPx(0);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        for (const x of generateTicks(x0, x1, majorXStep)) {
+          if (yAxisVisible && Math.abs(x) < majorXStep * 1e-6) continue;
+          ctx.fillText(formatTick(x, majorXStep), xToPx(x), axisY + LABEL_PAD);
+        }
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText('x', px + pw - LABEL_PAD, axisY - LABEL_PAD);
+      }
+
+      if (yAxisVisible) {
+        const axisX = xToPx(0);
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (const y of generateTicks(y0, y1, majorYStep)) {
+          if (xAxisVisible && Math.abs(y) < majorYStep * 1e-6) continue;
+          ctx.fillText(formatTick(y, majorYStep), axisX - LABEL_PAD, yToPx(y));
+        }
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('y', axisX + LABEL_PAD, py + LABEL_PAD);
+      }
+
+      if (xAxisVisible && yAxisVisible) {
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillText('0', xToPx(0) - LABEL_PAD, yToPx(0) + LABEL_PAD);
+      }
     }
 
     const samples = Math.min(MAX_SAMPLES, Math.max(64, Math.ceil(pw)));
