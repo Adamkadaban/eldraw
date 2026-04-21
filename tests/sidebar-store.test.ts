@@ -4,7 +4,6 @@ import {
   currentStyle,
   PRESET_COLORS,
   sidebar,
-  streamlineFromSmoothing,
   pickSyncable,
   DEFAULT_SMOOTHING_PEN,
   DEFAULT_SMOOTHING_HIGHLIGHTER,
@@ -186,15 +185,6 @@ describe('sidebar store', () => {
     expect(s.smoothingPen).toBe(0);
     expect(s.smoothingHighlighter).toBe(100);
     expect(s.smoothingTempInk).toBe(0);
-  });
-
-  it('streamlineFromSmoothing maps 0 -> 0 and 100 -> 0.99', () => {
-    expect(streamlineFromSmoothing(0)).toBe(0);
-    expect(streamlineFromSmoothing(100)).toBeCloseTo(0.99, 10);
-    expect(streamlineFromSmoothing(50)).toBeCloseTo(0.495, 10);
-    expect(streamlineFromSmoothing(-5)).toBe(0);
-    expect(streamlineFromSmoothing(250)).toBeCloseTo(0.99, 10);
-    expect(streamlineFromSmoothing(Number.NaN)).toBe(0);
   });
 
   it('pickSyncable includes per-tool smoothing for cross-window sync', () => {

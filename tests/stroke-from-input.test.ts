@@ -61,21 +61,9 @@ describe('strokeFromInput', () => {
     expect(s.points[0].t).toBe(0);
   });
 
-  it('omits streamline when caller does not pass one (legacy)', () => {
+  it('does not bake a streamline on new strokes (input is pre-stabilized)', () => {
     const p: Point[] = [{ x: 0, y: 0, pressure: 0.5, t: 0 }];
     const s = strokeFromInput(p, style, 'pen');
     expect(s.streamline).toBeUndefined();
-  });
-
-  it('bakes the caller-provided streamline into the stroke', () => {
-    const p: Point[] = [{ x: 0, y: 0, pressure: 0.5, t: 0 }];
-    const s = strokeFromInput(p, style, 'pen', 0.792);
-    expect(s.streamline).toBe(0.792);
-  });
-
-  it('bakes streamline 0 (no smoothing) when explicitly requested', () => {
-    const p: Point[] = [{ x: 0, y: 0, pressure: 0.5, t: 0 }];
-    const s = strokeFromInput(p, style, 'highlighter', 0);
-    expect(s.streamline).toBe(0);
   });
 });
