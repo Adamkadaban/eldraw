@@ -3,31 +3,33 @@
   import { parseExpression, parseExpressionXY } from '$lib/graph/parser';
   import { plotFunction } from '$lib/graph/plotter';
   import { marchingSquares, stitchSegments } from '$lib/graph/implicit';
-  import { niceStep, generateTicks, formatTick, cappedStep } from '$lib/graph/axes';
+  import { drawGraphFrame } from '$lib/graph/render';
+  import { resolveTheme, type GraphTheme } from '$lib/graph/theme';
+  import { settings } from '$lib/store/settings';
 
   interface Props {
     graphs: GraphObject[];
     width: number;
     height: number;
     ptToPx: number;
+    /** Override the settings-derived theme (used by the preview in settings). */
+    theme?: GraphTheme;
   }
 
-  let { graphs, width, height, ptToPx }: Props = $props();
+  let { graphs, width, height, ptToPx, theme: themeOverride }: Props = $props();
 
   let canvas: HTMLCanvasElement;
 
-  const AXIS_COLOR = '#444';
-  const GRID_MAJOR_COLOR = '#cfcfcf';
-  const GRID_MINOR_COLOR = '#ececec';
-  const LABEL_COLOR = '#555';
-  const FRAME_COLOR = '#888';
   const MAX_SAMPLES = 2048;
   const IMPLICIT_MAX_RES = 256;
-  const TARGET_MAJOR_TICKS = 8;
-  const MINOR_SUBDIVISIONS = 5;
-  const MAX_GRID_LINES_PER_AXIS = 200;
-  const LABEL_FONT = '10px system-ui, -apple-system, "Segoe UI", sans-serif';
-  const LABEL_PAD = 3;
+
+  const resolvedTheme = $derived(
+    themeOverride ??
+      resolveTheme({
+        graphTheme: $settings.graphTheme,
+        graphOverrides: $settings.graphOverrides,
+      }),
+  );
 
   function dashFor(d: 'solid' | 'dashed' | 'dotted', strokeWidth: number): number[] {
     if (d === 'dashed') return [strokeWidth * 4, strokeWidth * 3];
@@ -35,156 +37,34 @@
     return [];
   }
 
-  function drawGraph(ctx: CanvasRenderingContext2D, g: GraphObject) {
+  function drawGraph(ctx: CanvasRenderingContext2D, g: GraphObject, theme: GraphTheme) {
     const px = g.bounds.x * ptToPx;
     const py = g.bounds.y * ptToPx;
     const pw = g.bounds.w * ptToPx;
     const ph = g.bounds.h * ptToPx;
     if (pw < 2 || ph < 2) return;
 
+    const [x0, x1] = g.xRange;
+    const [y0, y1] = g.yRange;
+    if (x1 - x0 <= 0 || y1 - y0 <= 0) return;
+
+    drawGraphFrame(ctx, {
+      rect: { x: px, y: py, w: pw, h: ph },
+      xRange: g.xRange,
+      yRange: g.yRange,
+      theme,
+      gridStep: g.gridStep,
+      showAxes: g.showAxes,
+      showGrid: g.showGrid,
+    });
+
     ctx.save();
     ctx.beginPath();
     ctx.rect(px, py, pw, ph);
     ctx.clip();
 
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(px, py, pw, ph);
-
-    const [x0, x1] = g.xRange;
-    const [y0, y1] = g.yRange;
-    const xSpan = x1 - x0;
-    const ySpan = y1 - y0;
-    if (xSpan <= 0 || ySpan <= 0) {
-      ctx.restore();
-      return;
-    }
-
-    const xToPx = (x: number) => px + ((x - x0) / xSpan) * pw;
-    const yToPx = (y: number) => py + (1 - (y - y0) / ySpan) * ph;
-
-    const userStep = Number.isFinite(g.gridStep) && g.gridStep > 0 ? g.gridStep : null;
-    const majorXStep = cappedStep(
-      xSpan,
-      userStep ?? niceStep(xSpan, TARGET_MAJOR_TICKS),
-      MAX_GRID_LINES_PER_AXIS,
-    );
-    const majorYStep = cappedStep(
-      ySpan,
-      userStep ?? niceStep(ySpan, TARGET_MAJOR_TICKS),
-      MAX_GRID_LINES_PER_AXIS,
-    );
-    const rawMinorX = majorXStep / MINOR_SUBDIVISIONS;
-    const rawMinorY = majorYStep / MINOR_SUBDIVISIONS;
-    const drawMinorX = rawMinorX > 0 && xSpan / rawMinorX <= MAX_GRID_LINES_PER_AXIS;
-    const drawMinorY = rawMinorY > 0 && ySpan / rawMinorY <= MAX_GRID_LINES_PER_AXIS;
-
-    if (g.showGrid) {
-      ctx.lineWidth = 1;
-      if (drawMinorX || drawMinorY) {
-        ctx.strokeStyle = GRID_MINOR_COLOR;
-        ctx.beginPath();
-        if (drawMinorX) {
-          for (const x of generateTicks(x0, x1, rawMinorX)) {
-            const sx = xToPx(x);
-            ctx.moveTo(sx, py);
-            ctx.lineTo(sx, py + ph);
-          }
-        }
-        if (drawMinorY) {
-          for (const y of generateTicks(y0, y1, rawMinorY)) {
-            const sy = yToPx(y);
-            ctx.moveTo(px, sy);
-            ctx.lineTo(px + pw, sy);
-          }
-        }
-        ctx.stroke();
-      }
-
-      ctx.strokeStyle = GRID_MAJOR_COLOR;
-      ctx.beginPath();
-      for (const x of generateTicks(x0, x1, majorXStep)) {
-        const sx = xToPx(x);
-        ctx.moveTo(sx, py);
-        ctx.lineTo(sx, py + ph);
-      }
-      for (const y of generateTicks(y0, y1, majorYStep)) {
-        const sy = yToPx(y);
-        ctx.moveTo(px, sy);
-        ctx.lineTo(px + pw, sy);
-      }
-      ctx.stroke();
-    }
-
-    const xAxisVisible = y0 <= 0 && y1 >= 0;
-    const yAxisVisible = x0 <= 0 && x1 >= 0;
-
-    if (g.showAxes) {
-      ctx.strokeStyle = AXIS_COLOR;
-      ctx.lineWidth = 1.25;
-      ctx.beginPath();
-      if (xAxisVisible) {
-        const axisY = yToPx(0);
-        ctx.moveTo(px, axisY);
-        ctx.lineTo(px + pw, axisY);
-      }
-      if (yAxisVisible) {
-        const axisX = xToPx(0);
-        ctx.moveTo(axisX, py);
-        ctx.lineTo(axisX, py + ph);
-      }
-      ctx.stroke();
-
-      ctx.fillStyle = LABEL_COLOR;
-      ctx.font = LABEL_FONT;
-
-      if (xAxisVisible) {
-        const axisY = yToPx(0);
-        const nearBottom = py + ph - axisY < LABEL_PAD + 12;
-        const tickLabelY = nearBottom
-          ? Math.max(axisY - LABEL_PAD, py + LABEL_PAD)
-          : Math.min(axisY + LABEL_PAD, py + ph - LABEL_PAD);
-        ctx.textAlign = 'center';
-        ctx.textBaseline = nearBottom ? 'bottom' : 'top';
-        for (const x of generateTicks(x0, x1, majorXStep)) {
-          if (yAxisVisible && Math.abs(x) < majorXStep * 1e-6) continue;
-          ctx.fillText(formatTick(x, majorXStep), xToPx(x), tickLabelY);
-        }
-        const nearTop = axisY - py < LABEL_PAD + 12;
-        const xLabelY = nearTop
-          ? Math.min(axisY + LABEL_PAD, py + ph - LABEL_PAD)
-          : Math.max(axisY - LABEL_PAD, py + LABEL_PAD);
-        ctx.textAlign = 'right';
-        ctx.textBaseline = nearTop ? 'top' : 'alphabetic';
-        ctx.fillText('x', px + pw - LABEL_PAD, xLabelY);
-      }
-
-      if (yAxisVisible) {
-        const axisX = xToPx(0);
-        const nearLeft = axisX - px < LABEL_PAD + 16;
-        const nearRight = px + pw - axisX < LABEL_PAD + 16;
-        const tickLabelX = nearLeft
-          ? Math.min(axisX + LABEL_PAD, px + pw - LABEL_PAD)
-          : Math.max(axisX - LABEL_PAD, px + LABEL_PAD);
-        ctx.textAlign = nearLeft ? 'left' : 'right';
-        ctx.textBaseline = 'middle';
-        for (const y of generateTicks(y0, y1, majorYStep)) {
-          if (xAxisVisible && Math.abs(y) < majorYStep * 1e-6) continue;
-          ctx.fillText(formatTick(y, majorYStep), tickLabelX, yToPx(y));
-        }
-        const yLabelX = nearRight
-          ? Math.max(axisX - LABEL_PAD, px + LABEL_PAD)
-          : Math.min(axisX + LABEL_PAD, px + pw - LABEL_PAD);
-        ctx.textAlign = nearRight ? 'right' : 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText('y', yLabelX, py + LABEL_PAD);
-      }
-
-      if (xAxisVisible && yAxisVisible) {
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'top';
-        ctx.fillText('0', xToPx(0) - LABEL_PAD, yToPx(0) + LABEL_PAD);
-      }
-    }
+    const xToPx = (x: number) => px + ((x - x0) / (x1 - x0)) * pw;
+    const yToPx = (y: number) => py + (1 - (y - y0) / (y1 - y0)) * ph;
 
     const samples = Math.min(MAX_SAMPLES, Math.max(64, Math.ceil(pw)));
     const implicitRes = Math.min(IMPLICIT_MAX_RES, Math.max(32, Math.ceil(pw / 4)));
@@ -237,10 +117,6 @@
     }
 
     ctx.restore();
-
-    ctx.strokeStyle = FRAME_COLOR;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
   }
 
   function redraw() {
@@ -248,7 +124,8 @@
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const g of graphs) drawGraph(ctx, g);
+    const theme = resolvedTheme;
+    for (const g of graphs) drawGraph(ctx, g, theme);
   }
 
   $effect(() => {
@@ -256,6 +133,7 @@
     void width;
     void height;
     void ptToPx;
+    void resolvedTheme;
     redraw();
   });
 </script>
