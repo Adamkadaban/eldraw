@@ -10,7 +10,7 @@ const STORAGE_KEY = 'eldraw.shortcuts.v1';
  *
  * Legacy (unversioned) payloads are treated as version 0.
  */
-export const SHORTCUTS_SCHEMA_VERSION = 2;
+export const SHORTCUTS_SCHEMA_VERSION = 3;
 
 export type ShortcutBindings = Record<ShortcutId, string>;
 
@@ -33,6 +33,10 @@ type Migration = (bindings: Partial<Record<ShortcutId, string>>) => void;
  * slots (was color slots), `Mod+1`..`Mod+9` now select color slots (was
  * preset slots). Only stored bindings still matching the old defaults are
  * rewritten; user customizations are preserved.
+ *
+ * v2 → v3: F5 moved from presenter toggle to zen toggle (#122). Stored
+ * bindings still matching the old defaults are rewritten so the new F5
+ * behavior takes effect; user customizations are preserved.
  */
 const MIGRATIONS: Migration[] = [
   (bindings) => {
@@ -50,6 +54,22 @@ const MIGRATIONS: Migration[] = [
       if (bindings[paletteId] === `${n}`) {
         bindings[paletteId] = `Mod+${n}`;
       }
+    }
+  },
+  (bindings) => {
+    const legacyPresenterId = 'view.togglePresenter';
+    const zenToggleId = 'view.toggleZen';
+    const loose = bindings as Record<string, string | undefined>;
+    const presenterUsesLegacyF5 = loose[legacyPresenterId] === 'F5';
+    const f5UsedByAnotherBinding = Object.entries(loose).some(
+      ([id, binding]) => binding === 'F5' && id !== legacyPresenterId,
+    );
+
+    if (presenterUsesLegacyF5) {
+      delete loose[legacyPresenterId];
+    }
+    if (bindings[zenToggleId] === 'Shift+Z' && !f5UsedByAnotherBinding) {
+      bindings[zenToggleId] = 'F5';
     }
   },
 ];

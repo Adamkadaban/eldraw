@@ -119,7 +119,7 @@ export function getCommands(): Command[] {
     {
       id: 'view.toggle-zen',
       title: 'Toggle zen mode',
-      shortcut: 'Shift+Z',
+      shortcut: 'F5',
       run: () => zen.toggle(),
     },
     {
@@ -131,7 +131,6 @@ export function getCommands(): Command[] {
     {
       id: 'presenter.toggle',
       title: 'Toggle presenter view',
-      shortcut: 'F5',
       run: () => presenter.toggle(),
     },
     {

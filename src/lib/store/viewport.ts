@@ -3,6 +3,34 @@ import { get, writable, type Readable } from 'svelte/store';
 export const MIN_SCALE = 0.25;
 export const MAX_SCALE = 4.0;
 const ZOOM_STEP = 1.1;
+const FIT_PADDING_PX = 24;
+
+export interface PageDims {
+  width: number;
+  height: number;
+}
+
+export interface ViewportPx {
+  width: number;
+  height: number;
+}
+
+/**
+ * Compute the zoom that makes the entire page visible inside the viewport,
+ * letterboxing on the axis with extra room. Returns the clamped scale.
+ * The optional padding accounts for the .page-frame margin so the fit does
+ * not overflow into scrollbars.
+ */
+export function computeFitScale(
+  page: PageDims,
+  view: ViewportPx,
+  padding: number = FIT_PADDING_PX,
+): number {
+  if (page.width <= 0 || page.height <= 0) return 1;
+  const availW = Math.max(1, view.width - padding * 2);
+  const availH = Math.max(1, view.height - padding * 2);
+  return clampScale(Math.min(availW / page.width, availH / page.height));
+}
 
 export interface ViewportState {
   scale: number;
@@ -39,6 +67,17 @@ function createViewport() {
 
     zoomOut(): void {
       update((s) => ({ ...s, scale: clampScale(s.scale / ZOOM_STEP) }));
+    },
+
+    /**
+     * Fit the page to the viewport (letterbox on the larger axis) and
+     * recenter. Caller supplies the page size in points and the viewport
+     * pixel size; .page-frame's auto margin handles the visual centering,
+     * so we just zero the offset.
+     */
+    fitPageToViewport(page: PageDims, view: ViewportPx): void {
+      const scale = computeFitScale(page, view);
+      update((s) => ({ ...s, scale, offsetX: 0, offsetY: 0 }));
     },
 
     setOffset(offsetX: number, offsetY: number): void {

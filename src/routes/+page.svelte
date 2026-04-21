@@ -129,6 +129,41 @@
   }
 
   let zenHintVisible = $state(false);
+  let canvasArea = $state<HTMLDivElement | null>(null);
+  let preZenViewport: { scale: number; offsetX: number; offsetY: number } | null = null;
+  let zenFitRaf: number | null = null;
+
+  function fitCurrentPage(): void {
+    const dims = pageDimsPt();
+    if (!dims || !canvasArea) return;
+    const rect = canvasArea.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    viewport.fitPageToViewport(dims, { width: rect.width, height: rect.height });
+  }
+
+  $effect(() => {
+    if (isZen) {
+      const snap = viewport.snapshot();
+      preZenViewport = { scale: snap.scale, offsetX: snap.offsetX, offsetY: snap.offsetY };
+      // Wait for chrome to collapse so canvas-area has its zen-mode size.
+      zenFitRaf = requestAnimationFrame(() => {
+        zenFitRaf = null;
+        if (!isZen) return;
+        fitCurrentPage();
+      });
+    } else {
+      if (zenFitRaf !== null) {
+        cancelAnimationFrame(zenFitRaf);
+        zenFitRaf = null;
+      }
+      if (preZenViewport) {
+        const { scale, offsetX, offsetY } = preZenViewport;
+        viewport.setScale(scale);
+        viewport.setOffset(offsetX, offsetY);
+        preZenViewport = null;
+      }
+    }
+  });
   $effect(() => {
     if (!isZen) {
       zenHintVisible = false;
@@ -544,6 +579,25 @@
           <button type="button" aria-label="Zoom out" onclick={() => viewport.zoomOut()}>−</button>
           <span class="zoom-indicator">{Math.round(view.scale * 100)}%</span>
           <button type="button" aria-label="Zoom in" onclick={() => viewport.zoomIn()}>+</button>
+          <button
+            type="button"
+            class="zoom-fit"
+            aria-label="Fit page to screen"
+            title="Fit page"
+            disabled={!pageDimsPt()}
+            onclick={fitCurrentPage}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
+              <path
+                d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
         </div>
         <button
           type="button"
@@ -558,7 +612,7 @@
       </header>
     {/if}
 
-    <div class="canvas-area" onwheel={onWheel}>
+    <div class="canvas-area" bind:this={canvasArea} onwheel={onWheel}>
       {#if canvasSize()}
         {@const size = canvasSize()!}
         <div
@@ -698,7 +752,7 @@
   {/if}
 
   {#if isZen && zenHintVisible}
-    <div class="zen-hint" role="status">Zen mode — Shift+Z or Esc to exit</div>
+    <div class="zen-hint" role="status">Zen mode — F5, Shift+Z, or Esc to exit</div>
   {/if}
 
   {#if editor && editorInitial}
@@ -879,6 +933,15 @@
   .zoom button:disabled {
     opacity: 0.4;
     cursor: default;
+  }
+  .zoom-fit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #bbb;
+  }
+  .zoom-fit:hover:not(:disabled) {
+    color: #fff;
   }
   .page-indicator,
   .zoom-indicator {
