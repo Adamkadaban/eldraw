@@ -109,4 +109,42 @@ describe('isGraphPresetName', () => {
     expect(isGraphPresetName(42)).toBe(false);
     expect(isGraphPresetName(null)).toBe(false);
   });
+  it('rejects inherited Object.prototype properties', () => {
+    expect(isGraphPresetName('toString')).toBe(false);
+    expect(isGraphPresetName('__proto__')).toBe(false);
+    expect(isGraphPresetName('hasOwnProperty')).toBe(false);
+  });
+  it('falls back to default when preset name is an inherited property', () => {
+    const t = resolveTheme({
+      // @ts-expect-error — exercising the runtime guard
+      graphTheme: 'toString',
+    });
+    expect(t).toEqual(GRAPH_THEME_PRESETS[DEFAULT_GRAPH_PRESET]);
+  });
+});
+
+describe('mergeTheme hardening', () => {
+  it('does not null-stomp nested plain-object fields', () => {
+    const t = resolveTheme({
+      graphTheme: 'classic',
+      // @ts-expect-error — gridMinor is required to be an object; exercising runtime guard
+      graphOverrides: { gridMinor: null },
+    });
+    expect(t.gridMinor).toEqual(GRAPH_THEME_PRESETS.classic.gridMinor);
+    expect(t.gridMinor.subdivisions).toBe(GRAPH_THEME_PRESETS.classic.gridMinor.subdivisions);
+  });
+
+  it('does not pollute Object.prototype via __proto__ key', () => {
+    const before = (Object.prototype as Record<string, unknown>).polluted;
+    const payload = JSON.parse('{"__proto__": {"polluted": true}}') as Record<string, unknown>;
+    mergeTheme(GRAPH_THEME_PRESETS.classic, payload as never);
+    expect((Object.prototype as Record<string, unknown>).polluted).toBe(before);
+  });
+
+  it('ignores constructor and prototype keys', () => {
+    const payload = { constructor: { bad: true }, prototype: { bad: true } };
+    const t = mergeTheme(GRAPH_THEME_PRESETS.classic, payload as never);
+    expect((t as unknown as Record<string, unknown>).constructor).toBe(Object);
+    expect((t as unknown as Record<string, unknown>).prototype).toBeUndefined();
+  });
 });

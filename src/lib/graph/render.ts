@@ -254,9 +254,11 @@ export function drawGraphFrame(ctx: CanvasRenderingContext2D, opts: DrawFrameOpt
   ctx.restore();
 
   if (theme.frameEnabled) {
+    ctx.save();
     ctx.strokeStyle = theme.frameColor;
     ctx.lineWidth = 1;
     ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
+    ctx.restore();
   }
 }
 

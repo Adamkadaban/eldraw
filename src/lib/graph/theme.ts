@@ -212,7 +212,7 @@ export interface AppearanceThemeInput {
 export function resolveTheme(appearance: AppearanceThemeInput | undefined | null): GraphTheme {
   const name = appearance?.graphTheme;
   const base =
-    name && name in GRAPH_THEME_PRESETS
+    name && Object.hasOwn(GRAPH_THEME_PRESETS, name)
       ? GRAPH_THEME_PRESETS[name]
       : GRAPH_THEME_PRESETS[DEFAULT_GRAPH_PRESET];
   const overrides = appearance?.graphOverrides;
@@ -240,18 +240,21 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function mergeInto(target: Record<string, unknown>, patch: Record<string, unknown>): void {
   for (const key of Object.keys(patch)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
     const incoming = patch[key];
     if (incoming === undefined) continue;
     const current = target[key];
-    if (isPlainObject(current) && isPlainObject(incoming)) {
-      mergeInto(current, incoming);
-    } else {
-      target[key] = incoming;
+    if (isPlainObject(current)) {
+      if (isPlainObject(incoming)) {
+        mergeInto(current, incoming);
+      }
+      continue;
     }
+    target[key] = incoming;
   }
 }
 
 /** Does this value look like a valid preset name? */
 export function isGraphPresetName(v: unknown): v is GraphPresetName {
-  return typeof v === 'string' && v in GRAPH_THEME_PRESETS;
+  return typeof v === 'string' && Object.hasOwn(GRAPH_THEME_PRESETS, v);
 }

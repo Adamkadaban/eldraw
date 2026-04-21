@@ -19,6 +19,10 @@
     { expr: 'sin(x)', color: '#d94d4d', width: 2 },
     { expr: '0.5*x', color: '#2e6fcf', width: 2 },
   ];
+  const PREVIEW_COMPILED = PREVIEW_DEMO_EXPRS.map((d) => ({
+    ...d,
+    parsed: parseExpression(d.expr),
+  }));
 
   let canvas: HTMLCanvasElement | null = $state(null);
   let knobsOpen = $state(false);
@@ -99,12 +103,11 @@
     const xToPx = (x: number) => ((x - xRange[0]) / (xRange[1] - xRange[0])) * rect.w;
     const yToPx = (y: number) => (1 - (y - yRange[0]) / (yRange[1] - yRange[0])) * rect.h;
 
-    for (const demo of PREVIEW_DEMO_EXPRS) {
-      const parsed = parseExpression(demo.expr);
-      if (!parsed.ok) continue;
+    for (const demo of PREVIEW_COMPILED) {
+      if (!demo.parsed.ok) continue;
       ctx.strokeStyle = demo.color;
       ctx.lineWidth = Math.max(theme.curveDefaultWidth, demo.width);
-      const segments = plotFunction(parsed.fn, { xRange, yRange, samples: 400 });
+      const segments = plotFunction(demo.parsed.fn, { xRange, yRange, samples: 400 });
       for (const seg of segments) {
         if (seg.length < 2) continue;
         ctx.beginPath();
