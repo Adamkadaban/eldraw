@@ -32,6 +32,7 @@
     penStabilization?: number;
     highlighterStabilization?: number;
     tempInkStabilization?: number;
+    straightEdgeSnapStep?: number;
     rulerSnap?: RulerState | null;
     rulerSnapThresholdPx?: number;
     overlay?: Snippet;
@@ -55,6 +56,7 @@
     penStabilization,
     highlighterStabilization,
     tempInkStabilization,
+    straightEdgeSnapStep,
     rulerSnap = null,
     rulerSnapThresholdPx,
     overlay,
@@ -87,7 +89,9 @@
       {rulerSnapThresholdPx}
       {penStabilization}
       {highlighterStabilization}
+      {straightEdgeSnapStep}
       {oncommit}
+      oncommitline={oncommitobject}
       {onerase}
       {ongraph}
     />
