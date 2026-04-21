@@ -50,7 +50,7 @@ describe('createOneEuroFilter', () => {
     expect(out.y).toBe(-7);
   });
 
-  it('significantly reduces jitter on a noisy straight line at max stabilization', () => {
+  it('significantly reduces jitter on a noisy slow stroke at max stabilization', () => {
     const filter = createOneEuroFilter(stabilizationToConfig(100));
     const samplesPerSec = 120;
     const dtMs = 1000 / samplesPerSec;
@@ -67,7 +67,7 @@ describe('createOneEuroFilter', () => {
     let prevIn = 0;
     let prevOut = 0;
     for (let i = 0; i < count; i++) {
-      const x = i * 0.5;
+      const x = i * 0.05;
       const y = rand() * 0.5;
       const out = filter.filter({ x, y }, i * dtMs);
       if (i > 10) {
@@ -80,7 +80,34 @@ describe('createOneEuroFilter', () => {
 
     const avgIn = inputJitter.reduce((a, b) => a + b, 0) / inputJitter.length;
     const avgOut = outputJitter.reduce((a, b) => a + b, 0) / outputJitter.length;
-    expect(avgOut).toBeLessThan(avgIn * 0.5);
+    expect(avgOut).toBeLessThan(avgIn * 0.2);
+  });
+
+  it('amount=100 smooths noticeably more than amount=50 on the same noisy input', () => {
+    const samplesPerSec = 120;
+    const dtMs = 1000 / samplesPerSec;
+    const count = 200;
+
+    const measureJitter = (amount: number) => {
+      const filter = createOneEuroFilter(stabilizationToConfig(amount));
+      let seed = 1;
+      const rand = () => {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        return (seed / 0x100000000) * 2 - 1;
+      };
+      const jitter: number[] = [];
+      let prev = 0;
+      for (let i = 0; i < count; i++) {
+        const out = filter.filter({ x: i * 0.05, y: rand() * 0.5 }, i * dtMs);
+        if (i > 10) jitter.push(Math.abs(out.y - prev));
+        prev = out.y;
+      }
+      return jitter.reduce((a, b) => a + b, 0) / jitter.length;
+    };
+
+    const avg50 = measureJitter(50);
+    const avg100 = measureJitter(100);
+    expect(avg100).toBeLessThan(avg50 * 0.7);
   });
 
   it('reset() clears state so a new stroke starts cold', () => {
