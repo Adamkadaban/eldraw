@@ -83,17 +83,17 @@ describe('sidebar detached window bridge', () => {
     stop();
   });
 
-  it('applies remote snapshots and does not bounce them back', async () => {
+  it('main applies remote snapshots from detached and does not bounce them back', async () => {
     const { startSidebarBridge } = await import('../src/lib/app/sidebarBridge');
     const { sidebar } = await import('../src/lib/store/sidebar');
-    const { SIDEBAR_SYNC_EVENT } = await import('../src/lib/ipc/sidebar-window');
+    const { SIDEBAR_SYNC_BACK_EVENT } = await import('../src/lib/ipc/sidebar-window');
 
     sidebar.reset();
     const stop = startSidebarBridge('main');
     await flush();
 
     invoke.mockClear();
-    dispatch(SIDEBAR_SYNC_EVENT, {
+    dispatch(SIDEBAR_SYNC_BACK_EVENT, {
       pinned: true,
       activeTool: 'line',
       toolStyles: get(sidebar).toolStyles,
@@ -110,7 +110,71 @@ describe('sidebar detached window bridge', () => {
 
     expect(get(sidebar).activeTool).toBe('line');
     expect(get(sidebar).activeColor).toBe('#abcdef');
-    const echoes = invoke.mock.calls.filter((c) => c[0] === 'sidebar_sync');
+    const echoes = invoke.mock.calls.filter(
+      (c) => c[0] === 'sidebar_sync' || c[0] === 'sidebar_sync_back',
+    );
+    expect(echoes.length).toBe(0);
+
+    stop();
+  });
+
+  it('detached pushes local changes via sidebar_sync_back', async () => {
+    const { startSidebarBridge } = await import('../src/lib/app/sidebarBridge');
+    const { sidebar } = await import('../src/lib/store/sidebar');
+
+    sidebar.reset();
+    const stop = startSidebarBridge('detached');
+    await flush();
+
+    invoke.mockClear();
+    sidebar.setTool('highlighter');
+    sidebar.setActiveColor('#112233');
+    await flush();
+
+    const syncBack = invoke.mock.calls.filter((c) => c[0] === 'sidebar_sync_back');
+    expect(syncBack.length).toBeGreaterThan(0);
+    const last = syncBack[syncBack.length - 1][1] as {
+      payload: { activeTool: string; activeColor: string };
+    };
+    expect(last.payload.activeTool).toBe('highlighter');
+    expect(last.payload.activeColor).toBe('#112233');
+
+    const forwardEchoes = invoke.mock.calls.filter((c) => c[0] === 'sidebar_sync');
+    expect(forwardEchoes.length).toBe(0);
+
+    stop();
+  });
+
+  it('detached applies remote snapshots from main and does not bounce them back', async () => {
+    const { startSidebarBridge } = await import('../src/lib/app/sidebarBridge');
+    const { sidebar } = await import('../src/lib/store/sidebar');
+    const { SIDEBAR_SYNC_EVENT } = await import('../src/lib/ipc/sidebar-window');
+
+    sidebar.reset();
+    const stop = startSidebarBridge('detached');
+    await flush();
+
+    invoke.mockClear();
+    dispatch(SIDEBAR_SYNC_EVENT, {
+      pinned: true,
+      activeTool: 'eraser',
+      toolStyles: get(sidebar).toolStyles,
+      palettes: get(sidebar).palettes,
+      activeColor: '#778899',
+      laser: get(sidebar).laser,
+      tempInkFadeMs: get(sidebar).tempInkFadeMs,
+      smoothingPen: get(sidebar).smoothingPen,
+      smoothingHighlighter: get(sidebar).smoothingHighlighter,
+      smoothingTempInk: get(sidebar).smoothingTempInk,
+      presets: [],
+    });
+    await flush();
+
+    expect(get(sidebar).activeTool).toBe('eraser');
+    expect(get(sidebar).activeColor).toBe('#778899');
+    const echoes = invoke.mock.calls.filter(
+      (c) => c[0] === 'sidebar_sync' || c[0] === 'sidebar_sync_back',
+    );
     expect(echoes.length).toBe(0);
 
     stop();

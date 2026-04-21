@@ -35,8 +35,12 @@ export function startSidebarBridge(side: Side): () => void {
   let applyingRemote = false;
   let lastSeen: SyncableSidebarState | null = null;
 
+  // `sidebar-sync` flows main → detached; `sidebar-sync-back` flows
+  // detached → main. Each side sends on its outbound channel and listens
+  // on the peer's outbound channel — listening on its own would only echo
+  // its own pushes.
   const send = side === 'main' ? sidebarSync : sidebarSyncBack;
-  const subscribe = side === 'main' ? onSidebarSync : onSidebarSyncBack;
+  const subscribe = side === 'main' ? onSidebarSyncBack : onSidebarSync;
 
   async function push(): Promise<void> {
     if (stopped) return;
