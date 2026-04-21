@@ -1,10 +1,15 @@
-import { get } from 'svelte/store';
 import { sidebar, styleKeyFor } from '$lib/store/sidebar';
-import { documentStore, currentDocument } from '$lib/store/document';
+import { documentStore } from '$lib/store/document';
 import { viewport } from '$lib/store/viewport';
 import { presenter } from '$lib/store/presenter';
 import { zen } from '$lib/store/zen';
-import { sampleCanvasBackground } from '$lib/canvas/bgSample';
+import { commandPalette } from '$lib/command/store';
+import {
+  currentPage,
+  currentPageCount,
+  insertBlankAfterCurrent,
+  toggleFullscreen,
+} from './actions';
 
 export type ShortcutId =
   | 'tool.pen'
@@ -30,6 +35,7 @@ export type ShortcutId =
   | 'view.togglePresenter'
   | 'view.toggleZen'
   | 'sidebar.togglePin'
+  | 'commandPalette.open'
   | 'edit.undo'
   | 'edit.redo'
   | 'preset.1'
@@ -59,15 +65,6 @@ export interface ShortcutCommand {
   preventDefault?: boolean;
 }
 
-function currentPage(): number {
-  return viewport.snapshot().currentPageIndex;
-}
-
-function currentPageCount(): number {
-  const doc = get(currentDocument);
-  return doc?.pages.length ?? 0;
-}
-
 function currentWidth(): number | null {
   const snap = sidebar.snapshot();
   const key = styleKeyFor(snap.activeTool);
@@ -79,34 +76,6 @@ function adjustWidth(delta: number): void {
   if (w === null) return;
   const next = Math.max(1, Math.min(40, Math.round(w + delta)));
   sidebar.setWidth(next);
-}
-
-function toggleFullscreen(): void {
-  if (typeof document === 'undefined') return;
-  if (document.fullscreenElement) {
-    void document.exitFullscreen();
-  } else {
-    void document.documentElement.requestFullscreen();
-  }
-}
-
-function sampleCurrentPageBackground(): string | undefined {
-  if (typeof document === 'undefined') return undefined;
-  const canvas = document.querySelector<HTMLCanvasElement>(
-    '.pdf-slot canvas[aria-label="Rendered PDF page"]',
-  );
-  if (!canvas) return undefined;
-  return sampleCanvasBackground(canvas) ?? undefined;
-}
-
-function insertBlankAfterCurrent(): void {
-  const doc = get(currentDocument);
-  if (!doc) return;
-  const idx = currentPage();
-  const page = doc.pages[idx];
-  if (!page) return;
-  const background = page.type === 'pdf' ? sampleCurrentPageBackground() : page.background;
-  documentStore.insertBlankPageAfter(idx, page.width, page.height, background);
 }
 
 function pickPaletteSlot(slot: number): void {
@@ -204,6 +173,13 @@ function buildCommands(): ShortcutCommand[] {
       label: 'Toggle sidebar pin',
       defaultSpec: 'Tab',
       run: () => sidebar.togglePin(),
+      preventDefault: true,
+    },
+    {
+      id: 'commandPalette.open',
+      label: 'Open command palette',
+      defaultSpec: 'Mod+K',
+      run: () => commandPalette.toggle(),
       preventDefault: true,
     },
     {
