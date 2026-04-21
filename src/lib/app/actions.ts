@@ -2,6 +2,9 @@ import { get } from 'svelte/store';
 import { viewport } from '$lib/store/viewport';
 import { documentStore, currentDocument } from '$lib/store/document';
 import { sampleCanvasBackground } from '$lib/canvas/bgSample';
+import { pdf } from '$lib/store/pdf';
+import { reloadCurrentPdf } from '$lib/pdf/loader';
+import { warn } from '$lib/log';
 
 /**
  * Shared action helpers used by both the global shortcut registry and the
@@ -43,4 +46,15 @@ export function insertBlankAfterCurrent(): void {
   if (!page) return;
   const background = page.type === 'pdf' ? sampleCurrentPageBackground() : page.background;
   documentStore.insertBlankPageAfter(idx, page.width, page.height, background);
+}
+
+export async function reloadPdf(): Promise<void> {
+  const doc = get(currentDocument);
+  const source = get(pdf).source;
+  if (!doc || !source) return;
+  try {
+    await reloadCurrentPdf({ currentDoc: doc, source });
+  } catch (err) {
+    warn('ipc', 'reload_pdf', err);
+  }
 }

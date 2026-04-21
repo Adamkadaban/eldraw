@@ -1,13 +1,15 @@
 import { writable, type Readable } from 'svelte/store';
 import type { PdfMeta } from '$lib/types';
+import type { PdfSource } from '$lib/pdf/source';
 
 export interface PdfState {
   meta: PdfMeta | null;
+  source: PdfSource | null;
   error: string | null;
   loading: boolean;
 }
 
-const initial: PdfState = { meta: null, error: null, loading: false };
+const initial: PdfState = { meta: null, source: null, error: null, loading: false };
 
 const internal = writable<PdfState>(initial);
 
@@ -18,7 +20,11 @@ export function setLoading(loading: boolean): void {
 }
 
 export function setMeta(meta: PdfMeta): void {
-  internal.set({ meta, error: null, loading: false });
+  internal.update((s) => ({ ...s, meta, error: null, loading: false }));
+}
+
+export function setSource(source: PdfSource | null): void {
+  internal.update((s) => ({ ...s, source }));
 }
 
 export function setError(error: string): void {
