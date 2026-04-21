@@ -7,6 +7,7 @@
   import DashStyleToggle from './DashStyleToggle.svelte';
   import ToolPresets from './ToolPresets.svelte';
   import ShortcutsEditor from '$lib/settings/ShortcutsEditor.svelte';
+  import AppearanceSettings from '$lib/settings/AppearanceSettings.svelte';
   import { applySnap, clampToViewport, detectSnapEdge, type SnapEdge } from './snap';
 
   interface Props {
@@ -121,6 +122,7 @@
   }
 
   let shortcutsOpen = $state(false);
+  let appearanceOpen = $state(false);
 
   function onCapturePreset() {
     sidebar.capturePreset();
@@ -346,6 +348,15 @@
     <button
       type="button"
       class="pin"
+      aria-label="Appearance settings"
+      title="Appearance"
+      onclick={() => (appearanceOpen = true)}
+    >
+      <span aria-hidden="true">🎨</span>
+    </button>
+    <button
+      type="button"
+      class="pin"
       aria-label="Shortcuts settings"
       title="Customize keyboard shortcuts"
       onclick={() => (shortcutsOpen = true)}
@@ -505,6 +516,10 @@
 
 {#if shortcutsOpen}
   <ShortcutsEditor onClose={() => (shortcutsOpen = false)} />
+{/if}
+
+{#if appearanceOpen}
+  <AppearanceSettings onClose={() => (appearanceOpen = false)} />
 {/if}
 
 <style>
