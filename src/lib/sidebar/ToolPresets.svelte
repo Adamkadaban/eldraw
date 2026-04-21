@@ -1,16 +1,17 @@
 <script lang="ts">
-  import type { ToolKind, ToolPreset } from '$lib/types';
+  import type { StrokeStyle, ToolKind, ToolPreset } from '$lib/types';
   import { MAX_PRESETS, canPresetTool } from '$lib/store/sidebar';
 
   interface Props {
     presets: ToolPreset[];
     activeTool: ToolKind;
+    activeStyle?: StrokeStyle;
     onApply?: (id: string) => void;
     onCapture?: () => void;
     onRemove?: (id: string) => void;
   }
 
-  let { presets, activeTool, onApply, onCapture, onRemove }: Props = $props();
+  let { presets, activeTool, activeStyle, onApply, onCapture, onRemove }: Props = $props();
 
   const ICON: Record<string, string> = {
     pen: '✏️',
@@ -25,6 +26,17 @@
 
   function dashTitle(dash: string): string {
     return dash === 'solid' ? '' : ` ${dash}`;
+  }
+
+  function isPresetActive(preset: ToolPreset): boolean {
+    if (!activeStyle) return false;
+    if (preset.tool !== activeTool) return false;
+    return (
+      preset.style.color === activeStyle.color &&
+      preset.style.width === activeStyle.width &&
+      preset.style.dash === activeStyle.dash &&
+      Math.abs(preset.style.opacity - activeStyle.opacity) < 1e-6
+    );
   }
 </script>
 
@@ -49,10 +61,14 @@
   {:else}
     <div class="grid" role="list">
       {#each presets as preset, i (preset.id)}
+        {@const active = isPresetActive(preset)}
         <div class="slot" role="listitem">
           <button
             type="button"
             class="chip"
+            class:active
+            data-selected={active ? 'true' : undefined}
+            aria-pressed={active}
             title={`${preset.tool} ${preset.style.width}px${dashTitle(preset.style.dash)} — Ctrl+${i + 1}`}
             onclick={() => onApply?.(preset.id)}
           >
@@ -151,6 +167,12 @@
   }
   .chip:hover {
     border-color: #7ab7ff;
+  }
+  .chip.active {
+    border-color: #7ab7ff;
+    background: #2a3847;
+    color: #fff;
+    box-shadow: 0 0 0 2px rgba(122, 183, 255, 0.35);
   }
   .dot {
     display: inline-block;
