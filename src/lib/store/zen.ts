@@ -36,3 +36,28 @@ function createZen() {
 export const zen = createZen();
 
 export const zenStore: Readable<ZenState> = { subscribe: zen.subscribe };
+
+export interface ChromeVisibility {
+  topbar: boolean;
+  sidebar: boolean;
+  thumbnails: boolean;
+}
+
+/**
+ * Decide which chrome sections render for the current view flags.
+ * Zen mode hides everything except the canvas; presenter behaves the same.
+ * A detached sidebar lives in its own window, so it never renders inline.
+ */
+export function chromeVisibility(flags: {
+  zen: boolean;
+  presenter: boolean;
+  sidebarDetached: boolean;
+  hasPages: boolean;
+}): ChromeVisibility {
+  const chromeHidden = flags.zen || flags.presenter;
+  return {
+    topbar: !chromeHidden,
+    sidebar: !chromeHidden && !flags.sidebarDetached,
+    thumbnails: !chromeHidden && flags.hasPages,
+  };
+}

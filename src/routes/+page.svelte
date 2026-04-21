@@ -20,7 +20,7 @@
   import { startAutosave } from '$lib/store/autosave';
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
   import { presenter, presenterStore } from '$lib/store/presenter';
-  import { zenStore } from '$lib/store/zen';
+  import { zenStore, chromeVisibility } from '$lib/store/zen';
   import { overlays } from '$lib/store/overlays';
   import { startToolBridge } from '$lib/app/toolBridge';
   import { startPresenterBridge } from '$lib/app/presenterBridge';
@@ -84,9 +84,15 @@
   });
   const zenState = $derived($zenStore);
   const isZen = $derived(zenState.active);
-  const chromeHidden = $derived(isPresenter || isZen);
   const sidebarDetached = $derived(sidebarState.detached);
-  const sidebarHidden = $derived(chromeHidden || sidebarDetached);
+  const chrome = $derived(
+    chromeVisibility({
+      zen: isZen,
+      presenter: isPresenter,
+      sidebarDetached,
+      hasPages: (doc?.pages.length ?? 0) > 0,
+    }),
+  );
 
   $effect(() => {
     if (sidebarDetached && !stopSidebarBridge) {
@@ -438,21 +444,21 @@
 
 <main
   class="app"
-  class:pinned={sidebarState.pinned && !sidebarDetached}
+  class:pinned={sidebarState.pinned && chrome.sidebar}
   class:presenter={isPresenter}
   class:zen={isZen}
   class:sidebar-detached={sidebarDetached}
-  class:has-thumbs={!chromeHidden && pages.length > 0}
+  class:has-thumbs={chrome.thumbnails}
   use:shortcuts
   tabindex="-1"
   role="application"
 >
-  {#if !sidebarHidden}
+  {#if chrome.sidebar}
     <Sidebar onDetachChange={onSidebarDetachChange} />
   {/if}
 
   <section class="main">
-    {#if !chromeHidden}
+    {#if chrome.topbar}
       <header class="topbar">
         <button type="button" class="topbar-btn" onclick={openFromDialog}>Open PDF…</button>
         <div class="pager">
@@ -610,7 +616,7 @@
     </div>
   </section>
 
-  {#if !chromeHidden && pages.length > 0}
+  {#if chrome.thumbnails}
     <ThumbnailStrip
       {pages}
       currentIndex={pageIndex}
@@ -674,15 +680,17 @@
   .app.pinned.has-thumbs {
     grid-template-columns: 220px 1fr 160px;
   }
-  .app.presenter {
-    grid-template-columns: 1fr;
-    background: #000;
-  }
-  .app.presenter .canvas-area {
-    background: #000;
-  }
+  .app.presenter,
   .app.zen {
     grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+  .app.presenter {
+    background: #000;
+  }
+  .app.presenter .canvas-area,
+  .app.zen .canvas-area {
+    background: #000;
   }
   .zen-hint {
     position: fixed;
