@@ -4,6 +4,7 @@ import {
   shortcutsStore,
   shortcutBindings,
   SHORTCUTS_STORAGE_KEY,
+  SHORTCUTS_SCHEMA_VERSION,
 } from '../src/lib/store/shortcuts';
 import { DEFAULT_BINDINGS } from '../src/lib/app/shortcutRegistry';
 
@@ -56,7 +57,8 @@ describe('shortcuts store', () => {
     const raw = memory.getItem(SHORTCUTS_STORAGE_KEY);
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw as string);
-    expect(parsed['tool.pen']).toBe('Shift+P');
+    expect(parsed.version).toBe(SHORTCUTS_SCHEMA_VERSION);
+    expect(parsed.bindings['tool.pen']).toBe('Shift+P');
   });
 
   it('resetBinding restores only that command to default', () => {
@@ -111,5 +113,47 @@ describe('shortcuts store', () => {
     const snap = shortcutsStore.snapshot();
     expect(snap['tool.pen']).toBe(DEFAULT_BINDINGS['tool.pen']);
     expect(snap['tool.eraser']).toBe('Alt+E');
+  });
+
+  it('command palette default is Mod+P', () => {
+    expect(DEFAULT_BINDINGS['commandPalette.open']).toBe('Mod+P');
+  });
+
+  it('migrates legacy unversioned Mod+K to Mod+P for commandPalette.open', () => {
+    memory.setItem(
+      SHORTCUTS_STORAGE_KEY,
+      JSON.stringify({ 'commandPalette.open': 'Mod+K', 'tool.pen': 'Shift+P' }),
+    );
+    shortcutsStore.hydrate();
+    const snap = shortcutsStore.snapshot();
+    expect(snap['commandPalette.open']).toBe('Mod+P');
+    expect(snap['tool.pen']).toBe('Shift+P');
+  });
+
+  it('leaves non-default custom commandPalette bindings untouched during migration', () => {
+    memory.setItem(SHORTCUTS_STORAGE_KEY, JSON.stringify({ 'commandPalette.open': 'Mod+Shift+K' }));
+    shortcutsStore.hydrate();
+    expect(shortcutsStore.snapshot()['commandPalette.open']).toBe('Mod+Shift+K');
+  });
+
+  it('does not re-run migrations on already-versioned payloads', () => {
+    // User explicitly set Mod+K after the migration landed — must be preserved.
+    memory.setItem(
+      SHORTCUTS_STORAGE_KEY,
+      JSON.stringify({
+        version: SHORTCUTS_SCHEMA_VERSION,
+        bindings: { 'commandPalette.open': 'Mod+K' },
+      }),
+    );
+    shortcutsStore.hydrate();
+    expect(shortcutsStore.snapshot()['commandPalette.open']).toBe('Mod+K');
+  });
+
+  it('persists with current schema version and bindings wrapper', () => {
+    shortcutsStore.setBinding('commandPalette.open', 'Mod+K');
+    const raw = memory.getItem(SHORTCUTS_STORAGE_KEY);
+    const parsed = JSON.parse(raw as string);
+    expect(parsed.version).toBe(SHORTCUTS_SCHEMA_VERSION);
+    expect(parsed.bindings['commandPalette.open']).toBe('Mod+K');
   });
 });

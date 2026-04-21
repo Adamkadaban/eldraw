@@ -178,7 +178,7 @@ function buildCommands(): ShortcutCommand[] {
     {
       id: 'commandPalette.open',
       label: 'Open command palette',
-      defaultSpec: 'Mod+K',
+      defaultSpec: 'Mod+P',
       run: () => commandPalette.toggle(),
       preventDefault: true,
     },

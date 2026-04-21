@@ -3,18 +3,82 @@ import { DEFAULT_BINDINGS, SHORTCUT_IDS, type ShortcutId } from '$lib/app/shortc
 
 const STORAGE_KEY = 'eldraw.shortcuts.v1';
 
+/**
+ * Current migration version for the persisted bindings payload.
+ * Bump this and append a step to `MIGRATIONS` when changing a default that
+ * users may already have stored as their "accepted" binding.
+ *
+ * Legacy (unversioned) payloads are treated as version 0.
+ */
+export const SHORTCUTS_SCHEMA_VERSION = 1;
+
 export type ShortcutBindings = Record<ShortcutId, string>;
+
+interface StoredPayload {
+  version: number;
+  bindings: Partial<Record<ShortcutId, string>>;
+}
+
+type Migration = (bindings: Partial<Record<ShortcutId, string>>) => void;
+
+/**
+ * Ordered migration steps indexed by the version they produce.
+ * Step at index i migrates from version i to version i+1.
+ *
+ * v0 → v1: command palette default moved from Mod+K to Mod+P (#89). Users
+ * whose stored binding still matches the old default are bumped; custom
+ * bindings are left alone.
+ */
+const MIGRATIONS: Migration[] = [
+  (bindings) => {
+    if (bindings['commandPalette.open'] === 'Mod+K') {
+      bindings['commandPalette.open'] = 'Mod+P';
+    }
+  },
+];
 
 function cloneDefaults(): ShortcutBindings {
   return { ...DEFAULT_BINDINGS };
 }
 
+function isStoredPayload(raw: unknown): raw is StoredPayload {
+  return (
+    !!raw &&
+    typeof raw === 'object' &&
+    typeof (raw as { version?: unknown }).version === 'number' &&
+    typeof (raw as { bindings?: unknown }).bindings === 'object' &&
+    (raw as { bindings: unknown }).bindings !== null
+  );
+}
+
+function extractStoredBindings(raw: unknown): {
+  version: number;
+  bindings: Partial<Record<ShortcutId, string>>;
+} {
+  if (isStoredPayload(raw)) {
+    return {
+      version: raw.version,
+      bindings: { ...(raw.bindings as Partial<Record<ShortcutId, string>>) },
+    };
+  }
+  if (raw && typeof raw === 'object') {
+    return { version: 0, bindings: { ...(raw as Partial<Record<ShortcutId, string>>) } };
+  }
+  return { version: SHORTCUTS_SCHEMA_VERSION, bindings: {} };
+}
+
+function runMigrations(bindings: Partial<Record<ShortcutId, string>>, fromVersion: number): void {
+  for (let v = Math.max(0, fromVersion); v < SHORTCUTS_SCHEMA_VERSION; v++) {
+    MIGRATIONS[v]?.(bindings);
+  }
+}
+
 function sanitize(raw: unknown): ShortcutBindings {
   const result = cloneDefaults();
-  if (!raw || typeof raw !== 'object') return result;
-  const record = raw as Record<string, unknown>;
+  const { version, bindings } = extractStoredBindings(raw);
+  runMigrations(bindings, version);
   for (const id of SHORTCUT_IDS) {
-    const v = record[id];
+    const v = bindings[id];
     if (typeof v === 'string' && v.length > 0) {
       result[id] = v;
     }
@@ -36,7 +100,11 @@ function readStorage(): ShortcutBindings {
 function writeStorage(bindings: ShortcutBindings): void {
   if (typeof localStorage === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(bindings));
+    const payload: StoredPayload = {
+      version: SHORTCUTS_SCHEMA_VERSION,
+      bindings: { ...bindings },
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {
     // Storage may be unavailable (private mode, quota). Non-fatal.
   }
