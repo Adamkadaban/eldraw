@@ -31,6 +31,7 @@
   import GraphEditor from '$lib/graph/GraphEditor.svelte';
   import { log } from '$lib/log';
   import type {
+    AngleMarkObject,
     AnyObject,
     EldrawDocument,
     GraphObject,
@@ -292,6 +293,27 @@
     if (obj.type === 'numberline') editingNumberLineId = obj.id;
   }
 
+  function onStampAngle(shape: {
+    vertex: { x: number; y: number };
+    rayA: { x: number; y: number };
+    rayB: { x: number; y: number };
+    degrees: number;
+  }): void {
+    const mark: AngleMarkObject = {
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+      type: 'angleMark',
+      vertex: shape.vertex,
+      rayA: shape.rayA,
+      rayB: shape.rayB,
+      degrees: shape.degrees,
+      color: '#b38600',
+      width: 1.5,
+      showLabel: true,
+    };
+    documentStore.addObject(pageIndex, mark);
+  }
+
   const editingNumberLine = $derived<NumberLineObject | null>(
     editingNumberLineId
       ? (pageObjects.find(
@@ -494,7 +516,12 @@
           {/if}
           {#if sidebarState.activeTool === 'protractor'}
             <div class="overlay-slot">
-              <ProtractorOverlay ptToPx={size.ptToPx} width={size.width} height={size.height} />
+              <ProtractorOverlay
+                ptToPx={size.ptToPx}
+                width={size.width}
+                height={size.height}
+                onstamp={onStampAngle}
+              />
             </div>
           {/if}
           {#if rulerVisible}

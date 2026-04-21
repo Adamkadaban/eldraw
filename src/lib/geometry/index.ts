@@ -2,9 +2,13 @@ export { rotate, translate, distance, angleDeg, normalizeDeg, type Vec2 } from '
 export {
   protractorTicks,
   angleAtPoint,
+  angleMarkFromProtractor,
+  angleMarkArcParams,
   type ProtractorState,
   type ProtractorTick,
   type TickOptions,
+  type AngleMarkShape,
+  type AngleMarkArcParams,
 } from './protractor';
 export {
   rulerTicks,

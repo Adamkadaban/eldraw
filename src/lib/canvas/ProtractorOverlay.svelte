@@ -1,14 +1,34 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { overlays } from '$lib/store/overlays';
-  import { angleAtPoint, protractorTicks, type Vec2 } from '$lib/geometry';
+  import { isEditableTarget } from '$lib/app/shortcutParser';
+  import {
+    angleAtPoint,
+    angleMarkFromProtractor,
+    protractorTicks,
+    type AngleMarkShape,
+    type Vec2,
+  } from '$lib/geometry';
 
   interface Props {
     ptToPx: number;
     width: number;
     height: number;
+    /** Default span to stamp when no live cursor reading is available. */
+    defaultSpanDegrees?: number;
+    /** Ray length for stamped marks, in PDF points. */
+    rayLengthPt?: number;
+    onstamp?: (shape: AngleMarkShape) => void;
   }
 
-  let { ptToPx, width, height }: Props = $props();
+  let {
+    ptToPx,
+    width,
+    height,
+    defaultSpanDegrees = 90,
+    rayLengthPt = 40,
+    onstamp,
+  }: Props = $props();
 
   const proto = $derived($overlays.protractor);
   const ticks = $derived(protractorTicks(proto));
@@ -79,6 +99,54 @@
       overlays.setProtractorShape(proto.shape === 'semi' ? 'full' : 'semi');
     }
   }
+
+  function currentStampSpan(): number {
+    if (cursorAngle !== null && cursorAngle > 0.5 && cursorAngle < 359.5) {
+      return cursorAngle;
+    }
+    return defaultSpanDegrees;
+  }
+
+  function stampAngle() {
+    if (!onstamp) return;
+    const shape = angleMarkFromProtractor(proto, currentStampSpan(), rayLengthPt);
+    onstamp(shape);
+  }
+
+  function onStampClick(e: MouseEvent) {
+    e.stopPropagation();
+    stampAngle();
+  }
+
+  function onStampKey(e: KeyboardEvent) {
+    if (e.repeat) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      stampAngle();
+    }
+  }
+
+  function onWindowKey(e: KeyboardEvent) {
+    if (e.repeat || e.defaultPrevented) return;
+    if (e.key !== 'Enter') return;
+    if (!onstamp) return;
+    const target = e.target as HTMLElement | null;
+    if (isEditableTarget(target)) return;
+    if (target) {
+      const tag = target.tagName;
+      if (tag === 'BUTTON' || tag === 'A') return;
+      const role = target.getAttribute?.('role');
+      if (role === 'button' || role === 'link' || role === 'menuitem') return;
+    }
+    e.preventDefault();
+    stampAngle();
+  }
+
+  onMount(() => {
+    window.addEventListener('keydown', onWindowKey);
+    return () => window.removeEventListener('keydown', onWindowKey);
+  });
 
   const cx = $derived(proto.center.x * ptToPx);
   const cy = $derived(proto.center.y * ptToPx);
@@ -192,6 +260,28 @@
       {proto.shape === 'semi' ? '180°' : '360°'}
     </text>
   </g>
+
+  <g
+    class="stamp-btn"
+    role="button"
+    tabindex="0"
+    aria-label="Stamp angle mark"
+    transform={`translate(${cx + 16}, ${cy + 14})`}
+    onclick={onStampClick}
+    onkeydown={onStampKey}
+  >
+    <rect width="52" height="20" rx="4" fill="#fff" stroke="#b38600" stroke-width="1" />
+    <text
+      x="26"
+      y="10"
+      font-size="10"
+      fill="#8a6600"
+      text-anchor="middle"
+      dominant-baseline="middle"
+    >
+      stamp ∠
+    </text>
+  </g>
 </svg>
 
 <style>
@@ -212,6 +302,12 @@
     cursor: pointer;
   }
   .shape-toggle:hover rect {
+    fill: #fff6dc;
+  }
+  .stamp-btn {
+    cursor: pointer;
+  }
+  .stamp-btn:hover rect {
     fill: #fff6dc;
   }
 </style>

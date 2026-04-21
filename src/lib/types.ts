@@ -130,13 +130,28 @@ export interface TextObject extends ObjectBase {
   color: string;
 }
 
+export interface AngleMarkObject extends ObjectBase {
+  type: 'angleMark';
+  vertex: { x: number; y: number };
+  /** Endpoint of the first ray (not the vertex). Defines the arc's start. */
+  rayA: { x: number; y: number };
+  /** Endpoint of the second ray. Sweep goes CCW in math convention from rayA. */
+  rayB: { x: number; y: number };
+  /** Signed sweep in degrees from rayA to rayB. Positive = screen-clockwise. */
+  degrees: number;
+  color: string;
+  width: number;
+  showLabel: boolean;
+}
+
 export type AnyObject =
   | StrokeObject
   | LineObject
   | ShapeObject
   | NumberLineObject
   | GraphObject
-  | TextObject;
+  | TextObject
+  | AngleMarkObject;
 
 export type PageKind = 'pdf' | 'blank';
 
