@@ -185,18 +185,24 @@
 </svg>
 
 <style>
+  /* The outer SVG covers the whole canvas so ticks/labels can render
+     anywhere. It must not swallow pointer events — only the interactive
+     children below opt back in via pointer-events: auto. See #112. */
   .ruler {
     position: absolute;
     inset: 0;
-    pointer-events: auto;
+    pointer-events: none;
   }
   .body {
     cursor: grab;
+    pointer-events: auto;
   }
   .end-handle {
     cursor: grab;
+    pointer-events: auto;
   }
   .close {
     cursor: pointer;
+    pointer-events: auto;
   }
 </style>
