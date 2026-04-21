@@ -1,4 +1,6 @@
-import type { Point, StrokeObject } from '$lib/types';
+import type { AnyObject, Point, StrokeObject } from '$lib/types';
+import { hitTestLine, hitTestNumberLine, hitTestShape } from '$lib/tools/shapes';
+import { hitTestTextObject } from '$lib/text/hitTest';
 
 interface Vec {
   x: number;
@@ -58,6 +60,65 @@ export function hitTestStrokes(
   radius: number,
 ): StrokeObject[] {
   return strokes.filter((s) => hitTestStroke(s, at, radius));
+}
+
+function hitTestBounds(
+  bounds: { x: number; y: number; w: number; h: number },
+  at: Vec,
+  radius: number,
+): boolean {
+  return (
+    at.x >= bounds.x - radius &&
+    at.x <= bounds.x + bounds.w + radius &&
+    at.y >= bounds.y - radius &&
+    at.y <= bounds.y + bounds.h + radius
+  );
+}
+
+/**
+ * Unified hit-test for any overlay object. The eraser uses this to decide
+ * whether a pointer sample covers an object. Curve-accurate hit-testing for
+ * graphs is a future improvement; a bounding-box test is acceptable today.
+ */
+export function hitTestObject(
+  obj: AnyObject,
+  at: { x: number; y: number },
+  radius: number,
+): boolean {
+  switch (obj.type) {
+    case 'stroke':
+      return hitTestStroke(obj, at, radius);
+    case 'line':
+      return hitTestLine(obj, at, radius);
+    case 'shape':
+      return hitTestShape(obj, at, radius);
+    case 'numberline':
+      return hitTestNumberLine(obj, at, radius);
+    case 'graph':
+      return hitTestBounds(obj.bounds, at, radius);
+    case 'text':
+      return hitTestTextObject(obj, at, radius);
+    case 'angleMark': {
+      const half = obj.width / 2;
+      const dA = distanceToSegment(at, obj.vertex, obj.rayA);
+      if (dA <= half + radius) return true;
+      const dB = distanceToSegment(at, obj.vertex, obj.rayB);
+      return dB <= half + radius;
+    }
+    default: {
+      const _exhaustiveCheck: never = obj;
+      void _exhaustiveCheck;
+      return false;
+    }
+  }
+}
+
+export function hitTestObjects(
+  objects: readonly AnyObject[],
+  at: { x: number; y: number },
+  radius: number,
+): AnyObject[] {
+  return objects.filter((o) => hitTestObject(o, at, radius));
 }
 
 export type { Point };
