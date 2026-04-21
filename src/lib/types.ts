@@ -68,7 +68,7 @@ export interface StrokeObject extends ObjectBase {
   style: StrokeStyle;
   points: Point[];
   /**
-   * perfect-freehand `streamline` in [0, 1) baked at stroke-start time.
+   * perfect-freehand `streamline` in [0, 1) baked when the stroke is committed.
    * Legacy strokes predate per-stroke smoothing and render as if 0.
    */
   streamline?: number;

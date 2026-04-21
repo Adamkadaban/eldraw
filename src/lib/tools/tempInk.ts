@@ -29,7 +29,7 @@ export interface TempInkStroke {
   /** Wall-clock ms when the stroke finished (or was last extended). */
   endedAt: number;
   fadeMs: number;
-  /** Baked perfect-freehand streamline; `undefined` means no smoothing. */
+  /** perfect-freehand `streamline` baked when the stroke is committed; `undefined` means no smoothing. */
   streamline?: number;
 }
 

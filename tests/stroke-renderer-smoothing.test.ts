@@ -72,18 +72,20 @@ describe('strokeRenderer streamline wiring', () => {
 
   it('prefers baked stroke.streamline over opts.streamline', async () => {
     const { drawStroke } = await import('$lib/canvas/strokeRenderer');
-    const baked = { ...stroke(), streamline: streamlineFromSmoothing(80) };
+    const expected = streamlineFromSmoothing(80);
+    const baked = { ...stroke(), streamline: expected };
     drawStroke(makeCtx(), baked, { ptToPx: 1, streamline: streamlineFromSmoothing(0) });
-    expect(getStroke.mock.calls[0][1].streamline).toBeCloseTo(0.792);
+    expect(getStroke.mock.calls[0][1].streamline).toBeCloseTo(expected);
   });
 
   it('live slider does not change a baked stroke across re-renders', async () => {
     const { drawStroke } = await import('$lib/canvas/strokeRenderer');
-    const baked = { ...stroke(), streamline: streamlineFromSmoothing(80) };
+    const expected = streamlineFromSmoothing(80);
+    const baked = { ...stroke(), streamline: expected };
     for (const live of [0, 50, 100]) {
       getStroke.mockClear();
       drawStroke(makeCtx(), baked, { ptToPx: 1, streamline: streamlineFromSmoothing(live) });
-      expect(getStroke.mock.calls[0][1].streamline).toBeCloseTo(0.792);
+      expect(getStroke.mock.calls[0][1].streamline).toBeCloseTo(expected);
     }
   });
 
