@@ -20,7 +20,7 @@
   import { startAutosave } from '$lib/store/autosave';
   import { viewport, viewportStore, MIN_SCALE, MAX_SCALE } from '$lib/store/viewport';
   import { presenter, presenterStore } from '$lib/store/presenter';
-  import { zenStore, chromeVisibility } from '$lib/store/zen';
+  import { zenStore, chromeVisibility, registerZenFullscreenBridge } from '$lib/store/zen';
   import { overlays } from '$lib/store/overlays';
   import { startToolBridge } from '$lib/app/toolBridge';
   import { startPresenterBridge } from '$lib/app/presenterBridge';
@@ -32,6 +32,7 @@
     onSidebarWindowClosed,
   } from '$lib/ipc/sidebar-window';
   import { shortcuts } from '$lib/app/shortcuts';
+  import { setWindowFullscreenChromeless } from '$lib/app/windowFullscreen';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
   import { hitTestObjects } from '$lib/tools/eraser';
   import { activeGraph, clearActiveGraph, setActiveGraph } from '$lib/store/activeGraph';
@@ -418,6 +419,9 @@
   onMount(() => {
     stopHydration = hydrateSidebarFromStorage();
     stopBridge = startToolBridge();
+    registerZenFullscreenBridge({
+      setFullscreen: (on) => setWindowFullscreenChromeless(on),
+    });
     let unlistenPresenterClose: (() => void) | null = null;
     let unlistenSidebarClose: (() => void) | null = null;
     void onPresenterWindowClosed(() => presenter.setWindowOpen(false)).then((fn) => {
@@ -438,6 +442,7 @@
     stopHydration?.();
     stopPresenterBridge?.();
     stopSidebarBridge?.();
+    registerZenFullscreenBridge(null);
   });
 </script>
 

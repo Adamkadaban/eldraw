@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { CanvasStack, GraphLayer, PdfLayer, TextLayer } from '$lib/canvas';
   import { onPresenterSync, closePresenterWindow } from '$lib/ipc/presenter';
+  import { setWindowFullscreenChromeless } from '$lib/app/windowFullscreen';
   import { presenterMirror, presenterMirrorStore } from '$lib/store/presenterMirror';
   import { pdfPageIndexAt } from '$lib/store/document';
   import type { AnyObject, GraphObject, StrokeObject, TextObject } from '$lib/types';
@@ -43,7 +44,10 @@
 
   function onKey(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-      void closePresenterWindow();
+      void (async () => {
+        await setWindowFullscreenChromeless(false);
+        await closePresenterWindow();
+      })();
     }
   }
 
@@ -53,6 +57,7 @@
   }
 
   onMount(async () => {
+    await setWindowFullscreenChromeless(true);
     unlisten = await onPresenterSync((payload) => presenterMirror.apply(payload));
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', onResize);
@@ -62,6 +67,7 @@
   onDestroy(() => {
     unlisten?.();
     presenterMirror.reset();
+    void setWindowFullscreenChromeless(false);
     if (typeof window !== 'undefined') {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);
