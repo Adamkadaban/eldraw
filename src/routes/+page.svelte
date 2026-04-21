@@ -35,6 +35,8 @@
   import { loadPdfFromSource, stopAutosave } from '$lib/pdf/loader';
   import { reloadWarning, clearReloadWarning } from '$lib/store/reloadWarning';
   import { reloadPdf } from '$lib/app/actions';
+  import OpenFromSlidesDialog from '$lib/ui/OpenFromSlidesDialog.svelte';
+  import { slidesDialogOpen, openSlidesDialog } from '$lib/slides/dialog';
   import { createSpatialIndex, type SpatialIndex } from '$lib/tools/spatialIndex';
   import { makeEraseFlush } from '$lib/tools/eraserBatch';
   import { createRafBatcher } from '$lib/canvas/inkBatch';
@@ -479,6 +481,14 @@
     {#if chrome.topbar}
       <header class="topbar">
         <button type="button" class="topbar-btn" onclick={openFromDialog}>Open PDF…</button>
+        <button
+          type="button"
+          class="topbar-btn"
+          onclick={openSlidesDialog}
+          title="Import a public deck from a Google Slides link"
+        >
+          From Slides…
+        </button>
         <div class="pager">
           <button
             type="button"
@@ -725,6 +735,14 @@
   {/if}
   <CommandPalette />
   <ConfigDialog />
+  <OpenFromSlidesDialog
+    open={$slidesDialogOpen}
+    onCancel={() => slidesDialogOpen.set(false)}
+    onLoaded={async (path) => {
+      slidesDialogOpen.set(false);
+      await loadPdfFromSource({ kind: 'file', path });
+    }}
+  />
   <EraseDebugOverlay />
 </main>
 
