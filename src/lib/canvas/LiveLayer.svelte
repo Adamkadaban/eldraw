@@ -20,7 +20,7 @@
     penStreamline?: number;
     highlighterStreamline?: number;
     oncommit?: (stroke: StrokeObject) => void;
-    onerase?: (at: { x: number; y: number }) => void;
+    onerase?: (samples: { x: number; y: number }[]) => void;
     ongraph?: (bounds: { x: number; y: number; w: number; h: number }) => void;
   }
 
@@ -247,7 +247,7 @@
 
     if (currentTool === 'eraser') {
       const p = toPoint(e);
-      onerase?.({ x: p.x, y: p.y });
+      onerase?.([{ x: p.x, y: p.y }]);
       return;
     }
 
@@ -271,10 +271,12 @@
     if (currentTool === 'eraser') {
       const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
       const events = coalesced && coalesced.length > 0 ? coalesced : [e];
+      const samples: { x: number; y: number }[] = [];
       for (const ev of events) {
         const p = toPointWithRect(ev, rect);
-        onerase?.({ x: p.x, y: p.y });
+        samples.push({ x: p.x, y: p.y });
       }
+      onerase?.(samples);
       return;
     }
     if (currentTool === 'graph') {

@@ -36,7 +36,7 @@
     rulerSnapThresholdPx?: number;
     overlay?: Snippet;
     oncommit?: (stroke: StrokeObject) => void;
-    onerase?: (at: { x: number; y: number }) => void;
+    onerase?: (samples: { x: number; y: number }[]) => void;
     oncommitobject?: (obj: LineObject | ShapeObject | NumberLineObject) => void;
     ongraph?: (bounds: { x: number; y: number; w: number; h: number }) => void;
   }

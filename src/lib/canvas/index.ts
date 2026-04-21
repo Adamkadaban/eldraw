@@ -13,3 +13,4 @@ export { default as LaserLayer } from './LaserLayer.svelte';
 export { default as TempInkLayer } from './TempInkLayer.svelte';
 export { default as ProtractorOverlay } from './ProtractorOverlay.svelte';
 export { default as RulerOverlay } from './RulerOverlay.svelte';
+export { default as EraseDebugOverlay } from './EraseDebugOverlay.svelte';

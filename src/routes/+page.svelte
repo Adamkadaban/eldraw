@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import {
     CanvasStack,
+    EraseDebugOverlay,
     GraphLayer,
     NumberLineEditor,
     PdfLayer,
@@ -34,7 +35,10 @@
   import { shortcuts } from '$lib/app/shortcuts';
   import { setWindowFullscreenChromeless } from '$lib/app/windowFullscreen';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
-  import { hitTestObjects } from '$lib/tools/eraser';
+  import { createSpatialIndex, type SpatialIndex } from '$lib/tools/spatialIndex';
+  import { makeEraseFlush } from '$lib/tools/eraserBatch';
+  import { createRafBatcher } from '$lib/canvas/inkBatch';
+  import { eraseDebug } from '$lib/store/eraseDebug';
   import { activeGraph, clearActiveGraph, setActiveGraph } from '$lib/store/activeGraph';
   import { createGraphObject } from '$lib/graph/graphObject';
   import GraphEditor from '$lib/graph/GraphEditor.svelte';
@@ -383,11 +387,24 @@
     documentStore.updateObject(pageIndex, editingNumberLineId, patch);
   }
 
-  function onEraseAt(at: { x: number; y: number }): void {
-    const hits = hitTestObjects(pageObjects, at, ERASER_RADIUS);
-    for (const o of hits) {
-      documentStore.removeObject(pageIndex, o.id);
-    }
+  let spatialIndex = $state<SpatialIndex | null>(null);
+  $effect(() => {
+    spatialIndex = createSpatialIndex(pageObjects);
+  });
+
+  const eraseBatcher = createRafBatcher<{ x: number; y: number }>(
+    makeEraseFlush(
+      () => spatialIndex,
+      ERASER_RADIUS,
+      (ids) => documentStore.removeObjects(pageIndex, ids),
+      (hits) => eraseDebug.recordHits(hits),
+    ),
+  );
+
+  function onEraseAt(samples: { x: number; y: number }[]): void {
+    if (samples.length === 0) return;
+    eraseDebug.recordPointerMove();
+    eraseBatcher.pushMany(samples);
   }
 
   function onCommitGraph(bounds: { x: number; y: number; w: number; h: number }): void {
@@ -422,6 +439,7 @@
     registerZenFullscreenBridge({
       setFullscreen: (on) => setWindowFullscreenChromeless(on),
     });
+    eraseDebug.init();
     let unlistenPresenterClose: (() => void) | null = null;
     let unlistenSidebarClose: (() => void) | null = null;
     void onPresenterWindowClosed(() => presenter.setWindowOpen(false)).then((fn) => {
@@ -676,6 +694,7 @@
   {/if}
   <CommandPalette />
   <ConfigDialog />
+  <EraseDebugOverlay />
 </main>
 
 <style>

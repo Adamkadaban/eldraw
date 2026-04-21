@@ -1,9 +1,21 @@
 import { derived, writable, get, type Readable } from 'svelte/store';
 import type { AnyObject, ObjectId, Page } from '$lib/types';
 
+/**
+ * A removal or re-insertion entry carries both the object and the index it
+ * occupied before being removed, so one undo restores the batch in the exact
+ * order it had on-page.
+ */
+export interface IndexedObject {
+  object: AnyObject;
+  index: number;
+}
+
 export type Command =
   | { type: 'add'; object: AnyObject }
   | { type: 'remove'; object: AnyObject }
+  | { type: 'removeMany'; items: IndexedObject[] }
+  | { type: 'insertMany'; items: IndexedObject[] }
   | { type: 'update'; objectId: ObjectId; before: AnyObject; after: AnyObject }
   | { type: 'clearPage'; objects: AnyObject[] }
   | { type: 'restorePage'; objects: AnyObject[] };
@@ -16,6 +28,18 @@ export function applyCommand(page: Page, cmd: Command): Page {
       return { ...page, objects: [...page.objects, cmd.object] };
     case 'remove':
       return { ...page, objects: page.objects.filter((o) => o.id !== cmd.object.id) };
+    case 'removeMany': {
+      const drop = new Set(cmd.items.map((i) => i.object.id));
+      return { ...page, objects: page.objects.filter((o) => !drop.has(o.id)) };
+    }
+    case 'insertMany': {
+      const sorted = [...cmd.items].sort((a, b) => a.index - b.index);
+      const next = [...page.objects];
+      for (const { object, index } of sorted) {
+        next.splice(Math.min(index, next.length), 0, object);
+      }
+      return { ...page, objects: next };
+    }
     case 'update':
       return {
         ...page,
@@ -34,6 +58,10 @@ export function invertCommand(cmd: Command): Command {
       return { type: 'remove', object: cmd.object };
     case 'remove':
       return { type: 'add', object: cmd.object };
+    case 'removeMany':
+      return { type: 'insertMany', items: cmd.items };
+    case 'insertMany':
+      return { type: 'removeMany', items: cmd.items };
     case 'update':
       return {
         type: 'update',
