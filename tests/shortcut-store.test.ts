@@ -156,4 +156,32 @@ describe('shortcuts store', () => {
     expect(parsed.version).toBe(SHORTCUTS_SCHEMA_VERSION);
     expect(parsed.bindings['commandPalette.open']).toBe('Mod+K');
   });
+
+  it('treats fractional schema version as legacy and runs migrations from v0', () => {
+    memory.setItem(
+      SHORTCUTS_STORAGE_KEY,
+      JSON.stringify({
+        version: 0.5,
+        bindings: { 'commandPalette.open': 'Mod+K', 'tool.pen': 'Shift+P' },
+      }),
+    );
+    shortcutsStore.hydrate();
+    const snap = shortcutsStore.snapshot();
+    expect(snap['commandPalette.open']).toBe('Mod+P');
+    expect(snap['tool.pen']).toBe('Shift+P');
+  });
+
+  it('treats negative schema version as legacy and runs migrations from v0', () => {
+    memory.setItem(
+      SHORTCUTS_STORAGE_KEY,
+      JSON.stringify({
+        version: -1,
+        bindings: { 'commandPalette.open': 'Mod+K', 'tool.eraser': 'Alt+E' },
+      }),
+    );
+    shortcutsStore.hydrate();
+    const snap = shortcutsStore.snapshot();
+    expect(snap['commandPalette.open']).toBe('Mod+P');
+    expect(snap['tool.eraser']).toBe('Alt+E');
+  });
 });

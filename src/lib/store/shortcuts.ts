@@ -41,23 +41,28 @@ function cloneDefaults(): ShortcutBindings {
   return { ...DEFAULT_BINDINGS };
 }
 
-function isStoredPayload(raw: unknown): raw is StoredPayload {
-  return (
-    !!raw &&
-    typeof raw === 'object' &&
-    typeof (raw as { version?: unknown }).version === 'number' &&
-    typeof (raw as { bindings?: unknown }).bindings === 'object' &&
-    (raw as { bindings: unknown }).bindings !== null
-  );
+function hasWrapperShape(
+  raw: unknown,
+): raw is { version: unknown; bindings: Record<string, unknown> } {
+  if (!raw || typeof raw !== 'object') return false;
+  const obj = raw as Record<string, unknown>;
+  return 'version' in obj && typeof obj.bindings === 'object' && obj.bindings !== null;
+}
+
+function isValidVersion(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0;
 }
 
 function extractStoredBindings(raw: unknown): {
   version: number;
   bindings: Partial<Record<ShortcutId, string>>;
 } {
-  if (isStoredPayload(raw)) {
+  if (hasWrapperShape(raw)) {
+    // Corrupt/invalid versions (fractional, negative, NaN, non-numeric) are
+    // treated as legacy v0 so all migrations re-run against the bindings.
+    const version = isValidVersion(raw.version) ? raw.version : 0;
     return {
-      version: raw.version,
+      version,
       bindings: { ...(raw.bindings as Partial<Record<ShortcutId, string>>) },
     };
   }
