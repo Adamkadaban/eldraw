@@ -23,6 +23,7 @@
   import { zenStore } from '$lib/store/zen';
   import { overlays } from '$lib/store/overlays';
   import { startToolBridge } from '$lib/app/toolBridge';
+  import { startPresenterBridge } from '$lib/app/presenterBridge';
   import { shortcuts } from '$lib/app/shortcuts';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
   import { hitTestStrokes } from '$lib/tools/eraser';
@@ -48,6 +49,7 @@
 
   let stopBridge: (() => void) | null = null;
   let stopAutosave: (() => void) | null = null;
+  let stopPresenterBridge: (() => void) | null = null;
 
   const pdfState = $derived($pdf);
   const meta = $derived<PdfMeta | null>(pdfState.meta);
@@ -64,6 +66,14 @@
   });
   const presenterState = $derived($presenterStore);
   const isPresenter = $derived(presenterState.active);
+  $effect(() => {
+    if (presenterState.windowOpen && !stopPresenterBridge) {
+      stopPresenterBridge = startPresenterBridge();
+    } else if (!presenterState.windowOpen && stopPresenterBridge) {
+      stopPresenterBridge();
+      stopPresenterBridge = null;
+    }
+  });
   const zenState = $derived($zenStore);
   const isZen = $derived(zenState.active);
   const chromeHidden = $derived(isPresenter || isZen);
@@ -370,6 +380,7 @@
     stopBridge?.();
     stopAutosave?.();
     stopHydration?.();
+    stopPresenterBridge?.();
   });
 </script>
 

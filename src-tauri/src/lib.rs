@@ -2,6 +2,7 @@ mod error;
 mod export;
 mod model;
 mod pdf;
+mod presenter;
 mod state;
 mod storage;
 mod thumbnails;
@@ -24,6 +25,10 @@ pub fn run() {
             storage::acquire_lock,
             storage::release_lock,
             export::export_flattened_pdf,
+            presenter::open_presenter_window,
+            presenter::close_presenter_window,
+            presenter::presenter_sync,
+            presenter::list_monitors,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

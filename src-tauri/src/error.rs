@@ -26,6 +26,15 @@ pub enum AppError {
 
     #[error("invalid input: {0}")]
     InvalidInput(String),
+
+    #[error("window: {0}")]
+    Window(String),
+}
+
+impl From<tauri::Error> for AppError {
+    fn from(e: tauri::Error) -> Self {
+        AppError::Window(e.to_string())
+    }
 }
 
 impl Serialize for AppError {

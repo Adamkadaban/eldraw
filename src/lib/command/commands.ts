@@ -4,6 +4,8 @@ import { documentStore } from '$lib/store/document';
 import { viewport } from '$lib/store/viewport';
 import { presenter } from '$lib/store/presenter';
 import { zen } from '$lib/store/zen';
+import { closePresenterWindow, listMonitors, openPresenterWindow } from '$lib/ipc/presenter';
+import { warn } from '$lib/log';
 import {
   currentPage,
   currentPageCount,
@@ -16,6 +18,55 @@ export interface Command {
   title: string;
   shortcut?: string;
   run: () => void;
+}
+
+/**
+ * Enumerate monitors and let the user pick one via `window.prompt`. Falls
+ * back to the first non-primary monitor (or the primary if only one exists)
+ * when running non-interactively. The command-palette UI is minimal; a
+ * proper monitor picker lives behind the sidebar "Open presenter…" button.
+ */
+async function promptAndOpenPresenterWindow(): Promise<void> {
+  try {
+    const monitors = await listMonitors();
+    if (monitors.length === 0) {
+      await openPresenterWindow(null);
+      presenter.setWindowOpen(true);
+      return;
+    }
+    if (monitors.length === 1 || typeof window === 'undefined') {
+      const external = monitors.find((m) => !m.isPrimary);
+      await openPresenterWindow(external?.index ?? monitors[0].index);
+      presenter.setWindowOpen(true);
+      return;
+    }
+    const lines = monitors.map(
+      (m) =>
+        `${m.index}: ${m.name ?? 'display'} ${m.width}x${m.height}${m.isPrimary ? ' (primary)' : ''}`,
+    );
+    const defaultIndex = monitors.find((m) => !m.isPrimary)?.index ?? monitors[0].index;
+    const raw = window.prompt(
+      `Open presenter on monitor:\n${lines.join('\n')}`,
+      String(defaultIndex),
+    );
+    if (raw === null) return;
+    const parsed = Number.parseInt(raw.trim(), 10);
+    const idx = Number.isFinite(parsed) ? parsed : defaultIndex;
+    await openPresenterWindow(idx);
+    presenter.setWindowOpen(true);
+  } catch (err) {
+    warn('ipc', 'open_presenter_window', err);
+  }
+}
+
+async function closePresenter(): Promise<void> {
+  try {
+    await closePresenterWindow();
+  } catch (err) {
+    warn('ipc', 'close_presenter_window', err);
+  } finally {
+    presenter.setWindowOpen(false);
+  }
 }
 
 function toolCommand(id: string, title: string, tool: ToolKind, shortcut?: string): Command {
@@ -77,6 +128,16 @@ export function getCommands(): Command[] {
       id: 'presenter.exit',
       title: 'Exit presenter view',
       run: () => presenter.exit(),
+    },
+    {
+      id: 'presenter.openWindow',
+      title: 'Open presenter on another monitor…',
+      run: () => void promptAndOpenPresenterWindow(),
+    },
+    {
+      id: 'presenter.closeWindow',
+      title: 'Close presenter window',
+      run: () => void closePresenter(),
     },
     {
       id: 'page.next',
