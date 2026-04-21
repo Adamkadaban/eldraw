@@ -51,7 +51,7 @@
       const a = fadeOpacity(s, now);
       if (a <= 0) continue;
       c.globalAlpha = a * s.style.opacity;
-      drawLiveStroke(c, s.points, { ...s.style, opacity: 1 }, 'pen', ptToPx, streamline);
+      drawLiveStroke(c, s.points, { ...s.style, opacity: 1 }, 'pen', ptToPx, s.streamline);
     }
     c.restore();
 
@@ -115,7 +115,7 @@
     activePointerId = null;
 
     if (commit && livePoints.length > 0) {
-      const stroke = createTempStroke(livePoints, liveStyle, fadeMs, performance.now());
+      const stroke = createTempStroke(livePoints, liveStyle, fadeMs, performance.now(), streamline);
       strokes = [...strokes, stroke];
     }
     livePoints = [];

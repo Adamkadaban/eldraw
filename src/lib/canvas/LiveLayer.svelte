@@ -203,7 +203,8 @@
       const finalPoints = rulerSnap
         ? snapStrokeToRuler(points, rulerSnap, rulerSnapThresholdPx / ptToPx)
         : points;
-      const stroke = strokeFromInput(finalPoints, currentStyle, currentTool);
+      const bakedStreamline = currentTool === 'highlighter' ? highlighterStreamline : penStreamline;
+      const stroke = strokeFromInput(finalPoints, currentStyle, currentTool, bakedStreamline);
       log('live', `commit ${currentTool} stroke points=${points.length}`);
       oncommit?.(stroke);
     }
