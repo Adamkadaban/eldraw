@@ -3,6 +3,9 @@
   import { CanvasStack, GraphLayer, PdfLayer, TextLayer } from '$lib/canvas';
   import { onPresenterSync, closePresenterWindow } from '$lib/ipc/presenter';
   import { setWindowFullscreenChromeless } from '$lib/app/windowFullscreen';
+  // Teardown deliberately leaves fullscreen/decorations to Rust's
+  // `close_presenter_window`: restoring decorations from JS before close
+  // causes a decorated-window flash.
   import { presenterMirror, presenterMirrorStore } from '$lib/store/presenterMirror';
   import { pdfPageIndexAt } from '$lib/store/document';
   import type { AnyObject, GraphObject, StrokeObject, TextObject } from '$lib/types';
@@ -44,10 +47,7 @@
 
   function onKey(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-      void (async () => {
-        await setWindowFullscreenChromeless(false);
-        await closePresenterWindow();
-      })();
+      void closePresenterWindow();
     }
   }
 
@@ -67,7 +67,6 @@
   onDestroy(() => {
     unlisten?.();
     presenterMirror.reset();
-    void setWindowFullscreenChromeless(false);
     if (typeof window !== 'undefined') {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);

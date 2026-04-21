@@ -30,3 +30,26 @@ export async function setWindowFullscreenChromeless(on: boolean): Promise<void> 
     warn('ipc', `setWindowFullscreenChromeless(${on}) failed`, err);
   }
 }
+
+/**
+ * Exits OS fullscreen without restoring window decorations.
+ *
+ * Use this for windows that will be closed immediately after (e.g. the
+ * presenter window, whose teardown is handled by Rust's
+ * `close_presenter_window`). Restoring decorations here causes a brief
+ * decorated-window flash between the fullscreen exit and the close.
+ */
+export async function exitWindowFullscreen(): Promise<void> {
+  let w: ReturnType<typeof getCurrentWindow>;
+  try {
+    w = getCurrentWindow();
+  } catch (err) {
+    warn('ipc', 'getCurrentWindow unavailable', err);
+    return;
+  }
+  try {
+    await w.setFullscreen(false);
+  } catch (err) {
+    warn('ipc', 'exitWindowFullscreen failed', err);
+  }
+}
