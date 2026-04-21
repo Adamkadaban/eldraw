@@ -535,6 +535,101 @@ export type SyncableSidebarState = Pick<
   | 'presets'
 >;
 
+/**
+ * Current migration version for sidebar state serialized into a portable
+ * config export. Bump and append a step to `SIDEBAR_MIGRATIONS` when a
+ * field's meaning changes in a way old exports need to be translated.
+ */
+export const SIDEBAR_SCHEMA_VERSION = 1;
+
+type SidebarMigration = (state: Record<string, unknown>) => void;
+const SIDEBAR_MIGRATIONS: SidebarMigration[] = [];
+
+function isStrokeStyle(value: unknown): value is StrokeStyle {
+  if (!value || typeof value !== 'object') return false;
+  const s = value as Record<string, unknown>;
+  return (
+    typeof s.color === 'string' &&
+    typeof s.width === 'number' &&
+    Number.isFinite(s.width) &&
+    typeof s.dash === 'string' &&
+    VALID_DASH.has(s.dash as DashStyle) &&
+    typeof s.opacity === 'number' &&
+    Number.isFinite(s.opacity)
+  );
+}
+
+function isColorPalette(value: unknown): value is ColorPalette {
+  if (!value || typeof value !== 'object') return false;
+  const p = value as Record<string, unknown>;
+  if (typeof p.id !== 'string' || typeof p.name !== 'string') return false;
+  if (!Array.isArray(p.colors)) return false;
+  return p.colors.every((c): c is string => typeof c === 'string');
+}
+
+function sanitizeImportedSidebar(raw: Record<string, unknown>): Partial<SyncableSidebarState> {
+  const out: Partial<SyncableSidebarState> = {};
+  if (typeof raw.pinned === 'boolean') out.pinned = raw.pinned;
+  if (typeof raw.activeTool === 'string' && VALID_TOOLS.has(raw.activeTool as ToolKind)) {
+    out.activeTool = raw.activeTool as ToolKind;
+  }
+  if (raw.toolStyles && typeof raw.toolStyles === 'object') {
+    const ts = raw.toolStyles as Record<string, unknown>;
+    if (isStrokeStyle(ts.pen) && isStrokeStyle(ts.highlighter) && isStrokeStyle(ts.line)) {
+      out.toolStyles = {
+        pen: {
+          ...ts.pen,
+          width: clamp(ts.pen.width, 0.25, 64),
+          opacity: clamp(ts.pen.opacity, 0, 1),
+        },
+        highlighter: {
+          ...ts.highlighter,
+          width: clamp(ts.highlighter.width, 0.25, 64),
+          opacity: clamp(ts.highlighter.opacity, 0, 1),
+        },
+        line: {
+          ...ts.line,
+          width: clamp(ts.line.width, 0.25, 64),
+          opacity: clamp(ts.line.opacity, 0, 1),
+        },
+      };
+    }
+  }
+  if (Array.isArray(raw.palettes) && raw.palettes.every(isColorPalette)) {
+    out.palettes = raw.palettes.map((p) => ({ ...p, colors: [...p.colors] }));
+  }
+  if (typeof raw.activeColor === 'string') out.activeColor = raw.activeColor;
+  if (raw.laser && typeof raw.laser === 'object') {
+    const l = raw.laser as Record<string, unknown>;
+    if (typeof l.color === 'string' && typeof l.radius === 'number' && Number.isFinite(l.radius)) {
+      out.laser = { color: l.color, radius: clamp(l.radius, MIN_LASER_RADIUS, MAX_LASER_RADIUS) };
+    }
+  }
+  if (typeof raw.tempInkFadeMs === 'number' && Number.isFinite(raw.tempInkFadeMs)) {
+    out.tempInkFadeMs = clampFadeMs(raw.tempInkFadeMs);
+  }
+  if (typeof raw.smoothingPen === 'number' && Number.isFinite(raw.smoothingPen)) {
+    out.smoothingPen = clamp(raw.smoothingPen, 0, 100);
+  }
+  if (typeof raw.smoothingHighlighter === 'number' && Number.isFinite(raw.smoothingHighlighter)) {
+    out.smoothingHighlighter = clamp(raw.smoothingHighlighter, 0, 100);
+  }
+  if (typeof raw.smoothingTempInk === 'number' && Number.isFinite(raw.smoothingTempInk)) {
+    out.smoothingTempInk = clamp(raw.smoothingTempInk, 0, 100);
+  }
+  if (Array.isArray(raw.presets)) {
+    out.presets = raw.presets.filter(isValidPreset).map(sanitizePreset).slice(0, MAX_PRESETS);
+  }
+  return out;
+}
+
+function runSidebarMigrations(state: Record<string, unknown>, fromVersion: number): void {
+  const from = Number.isInteger(fromVersion) && fromVersion >= 0 ? fromVersion : 0;
+  for (let v = from; v < SIDEBAR_SCHEMA_VERSION; v++) {
+    SIDEBAR_MIGRATIONS[v]?.(state);
+  }
+}
+
 export function pickSyncable(state: SidebarState): SyncableSidebarState {
   return {
     pinned: state.pinned,
@@ -549,6 +644,30 @@ export function pickSyncable(state: SidebarState): SyncableSidebarState {
     smoothingTempInk: state.smoothingTempInk,
     presets: state.presets,
   };
+}
+
+export function getPersistableSidebarPayload(): { version: number; state: SyncableSidebarState } {
+  return { version: SIDEBAR_SCHEMA_VERSION, state: pickSyncable(get(sidebar)) };
+}
+
+/**
+ * Apply a sidebar payload from a portable config file. Runs the migration
+ * ladder against a mutable copy, then validates and merges field-by-field.
+ * Unknown or invalid fields are dropped (existing live state is kept) so
+ * older or tampered exports never leave the store in a broken state.
+ */
+export function applyImportedSidebarPayload(payload: { version?: unknown; state?: unknown }): void {
+  const rawState =
+    payload.state && typeof payload.state === 'object'
+      ? { ...(payload.state as Record<string, unknown>) }
+      : {};
+  const version =
+    typeof payload.version === 'number' && Number.isInteger(payload.version) && payload.version >= 0
+      ? payload.version
+      : 0;
+  runSidebarMigrations(rawState, version);
+  const sanitized = sanitizeImportedSidebar(rawState);
+  sidebar.applyRemote(sanitized);
 }
 
 export function syncableEqual(a: SyncableSidebarState, b: SyncableSidebarState): boolean {

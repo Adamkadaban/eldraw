@@ -158,6 +158,26 @@ function createShortcutsStore() {
       set(readStorage());
     },
 
+    /**
+     * Shape used by the portable config export. Always writes the current
+     * schema version so consumers can decide whether to run migrations.
+     */
+    getPersistablePayload(): { version: number; bindings: ShortcutBindings } {
+      let current: ShortcutBindings = cloneDefaults();
+      subscribe((v) => (current = v))();
+      return { version: SHORTCUTS_SCHEMA_VERSION, bindings: { ...current } };
+    },
+
+    /**
+     * Apply a payload loaded from a config file. Runs the same migration
+     * ladder as storage hydration so older exports upgrade cleanly.
+     */
+    applyImportedPayload(payload: { version?: unknown; bindings?: unknown }): void {
+      const next = sanitize(payload);
+      persist(next);
+      set(next);
+    },
+
     /** Test-only: drop persisted state and restore defaults in memory. */
     _reset(): void {
       if (typeof localStorage !== 'undefined') {
