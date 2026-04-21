@@ -47,28 +47,36 @@
   let destroyed = false;
   let cacheKey: string | null = null;
   let observer: IntersectionObserver | null = null;
-  const slotToKey = new WeakMap<Element, number>();
+  const slotToIdentity = new WeakMap<Element, number>();
 
-  function sourceKey(page: Page): number {
+  /** Per-document-page identity. Distinguishes duplicated PDF pages that
+   *  share the same pdfSourceIndex so their composites don't collide. */
+  function pageIdentity(page: Page): number {
+    return page.pageIndex;
+  }
+
+  /** Raw PDF thumbnail cache key. Shared across duplicates so pdfium is
+   *  only asked to render each source page once. */
+  function rawSourceKey(page: Page): number {
     return page.pdfSourceIndex ?? page.pageIndex;
   }
 
-  function findPageBySource(key: number): Page | undefined {
-    return pages.find((p) => p.type === 'pdf' && sourceKey(p) === key);
+  function findPageByIdentity(identity: number): Page | undefined {
+    return pages.find((p) => p.type === 'pdf' && pageIdentity(p) === identity);
   }
 
-  function setPreviewUrl(key: number, url: string) {
+  function setPreviewUrl(identity: number, url: string) {
     const next = new Map(previewUrls);
-    next.set(key, url);
+    next.set(identity, url);
     previewUrls = next;
   }
 
-  function revokeComposited(key: number) {
-    const url = compositedUrls.get(key);
+  function revokeComposited(identity: number) {
+    const url = compositedUrls.get(identity);
     if (!url) return;
     URL.revokeObjectURL(url);
-    compositedUrls.delete(key);
-    compositedGenerations.delete(key);
+    compositedUrls.delete(identity);
+    compositedGenerations.delete(identity);
   }
 
   function dropState() {
@@ -82,12 +90,12 @@
     previewUrls = new Map();
   }
 
-  function ensureGenerationSub(pdfId: string, key: number) {
-    if (generationSubs.has(key)) return;
-    const unsub = subscribePageGeneration(pdfId, key, () => {
-      void composite(key);
+  function ensureGenerationSub(pdfId: string, identity: number) {
+    if (generationSubs.has(identity)) return;
+    const unsub = subscribePageGeneration(pdfId, identity, () => {
+      void composite(identity);
     });
-    generationSubs.set(key, unsub);
+    generationSubs.set(identity, unsub);
   }
 
   function loadImage(url: string): Promise<HTMLImageElement> {
@@ -99,18 +107,18 @@
     });
   }
 
-  async function composite(key: number) {
-    if (destroyed || !docKey || compositing.has(key)) return;
-    const page = findPageBySource(key);
+  async function composite(identity: number) {
+    if (destroyed || !docKey || compositing.has(identity)) return;
+    const page = findPageByIdentity(identity);
     if (!page || page.type !== 'pdf') return;
     const scopedKey = docKey;
-    const startGeneration = pageGeneration(scopedKey, key);
+    const startGeneration = pageGeneration(scopedKey, identity);
     const objects = page.objects;
     const dims = thumbnailPixelSize(page, DEFAULT_MAX_DIM);
     if (dims.width < 1 || dims.height < 1) return;
-    compositing.add(key);
+    compositing.add(identity);
     try {
-      const rawUrl = await getThumbnail(scopedKey, key, DEFAULT_MAX_DIM);
+      const rawUrl = await getThumbnail(scopedKey, rawSourceKey(page), DEFAULT_MAX_DIM);
       if (destroyed || scopedKey !== cacheKey) return;
       const img = await loadImage(rawUrl);
       if (destroyed || scopedKey !== cacheKey) return;
@@ -126,26 +134,26 @@
       });
       if (!blob || destroyed || scopedKey !== cacheKey) return;
       const url = URL.createObjectURL(blob);
-      revokeComposited(key);
-      compositedUrls.set(key, url);
-      compositedGenerations.set(key, startGeneration);
-      setPreviewUrl(key, url);
-      if (pageGeneration(scopedKey, key) !== startGeneration) {
-        void composite(key);
+      revokeComposited(identity);
+      compositedUrls.set(identity, url);
+      compositedGenerations.set(identity, startGeneration);
+      setPreviewUrl(identity, url);
+      if (pageGeneration(scopedKey, identity) !== startGeneration) {
+        void composite(identity);
       }
     } catch {
       // leave previous preview in place
     } finally {
-      compositing.delete(key);
+      compositing.delete(identity);
     }
   }
 
-  function request(key: number) {
+  function request(identity: number) {
     if (!docKey || destroyed) return;
-    ensureGenerationSub(docKey, key);
-    const currentGen = pageGeneration(docKey, key);
-    if (compositedGenerations.get(key) === currentGen && compositedUrls.has(key)) return;
-    void composite(key);
+    ensureGenerationSub(docKey, identity);
+    const currentGen = pageGeneration(docKey, identity);
+    if (compositedGenerations.get(identity) === currentGen && compositedUrls.has(identity)) return;
+    void composite(identity);
   }
 
   function ensureObserver(): IntersectionObserver | null {
@@ -154,8 +162,8 @@
       (entries) => {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
-          const key = slotToKey.get(entry.target);
-          if (key !== undefined) request(key);
+          const identity = slotToIdentity.get(entry.target);
+          if (identity !== undefined) request(identity);
         }
       },
       { rootMargin: '200px' },
@@ -165,18 +173,18 @@
 
   function observe(el: Element, page: Page) {
     if (page.type !== 'pdf') return { destroy() {} };
-    const key = sourceKey(page);
+    const identity = pageIdentity(page);
     const io = ensureObserver();
     if (!io) {
-      request(key);
+      request(identity);
       return { destroy() {} };
     }
-    slotToKey.set(el, key);
+    slotToIdentity.set(el, identity);
     io.observe(el);
     return {
       destroy() {
         io.unobserve(el);
-        slotToKey.delete(el);
+        slotToIdentity.delete(el);
       },
     };
   }
@@ -185,7 +193,7 @@
     if (!docKey) return;
     const page = pages[pageIndex];
     if (!page || page.type !== 'pdf') return;
-    bumpPageGeneration(docKey, sourceKey(page));
+    bumpPageGeneration(docKey, pageIdentity(page));
   });
 
   $effect(() => {
@@ -199,29 +207,34 @@
   });
 
   $effect(() => {
-    const activeKeys = new Set<number>();
+    const activeIdentities = new Set<number>();
+    const activeSourceKeys = new Set<number>();
     for (const page of pages) {
-      if (page.type === 'pdf') activeKeys.add(sourceKey(page));
+      if (page.type !== 'pdf') continue;
+      activeIdentities.add(pageIdentity(page));
+      activeSourceKeys.add(rawSourceKey(page));
     }
     untrack(() => {
       if (!cacheKey) return;
       let changed = false;
       const next = new Map(previewUrls);
-      for (const key of next.keys()) {
-        if (!activeKeys.has(key)) {
-          next.delete(key);
-          revokeComposited(key);
-          compositing.delete(key);
-          const unsub = generationSubs.get(key);
+      for (const identity of next.keys()) {
+        if (!activeIdentities.has(identity)) {
+          next.delete(identity);
+          revokeComposited(identity);
+          compositing.delete(identity);
+          const unsub = generationSubs.get(identity);
           if (unsub) {
             unsub();
-            generationSubs.delete(key);
+            generationSubs.delete(identity);
           }
           changed = true;
         }
       }
       if (changed) previewUrls = next;
-      retainThumbnails(cacheKey, activeKeys);
+      const retain = new Set<number>(activeIdentities);
+      for (const k of activeSourceKeys) retain.add(k);
+      retainThumbnails(cacheKey, retain);
     });
   });
 
@@ -241,7 +254,7 @@
 
   function previewFor(page: Page): string | undefined {
     if (page.type !== 'pdf') return undefined;
-    return previewUrls.get(sourceKey(page));
+    return previewUrls.get(pageIdentity(page));
   }
 </script>
 

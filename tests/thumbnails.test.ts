@@ -173,4 +173,33 @@ describe('page generation', () => {
     expect(mod.pageGeneration('hash-a', 1)).toBe(1);
     expect(mod.pageGeneration('hash-a', 2)).toBe(0);
   });
+
+  it('keeps per-page generations independent across identities that alias the same pdf source', async () => {
+    setupObjectUrls();
+    const mod = await import('../src/lib/pdf/thumbnails');
+
+    // Two duplicated sidebar slots with distinct per-page identities (e.g.
+    // pageIndex 10 and 11) that happen to share the same underlying
+    // pdfSourceIndex. The component keys generation subscriptions by the
+    // per-page identity so edits to one duplicate must not bump the other.
+    const seen10: number[] = [];
+    const seen11: number[] = [];
+    const unsub10 = mod.subscribePageGeneration('hash-a', 10, (g) => seen10.push(g));
+    const unsub11 = mod.subscribePageGeneration('hash-a', 11, (g) => seen11.push(g));
+
+    mod.bumpPageGeneration('hash-a', 10);
+    expect(seen10).toEqual([1]);
+    expect(seen11).toEqual([]);
+    expect(mod.pageGeneration('hash-a', 10)).toBe(1);
+    expect(mod.pageGeneration('hash-a', 11)).toBe(0);
+
+    mod.bumpPageGeneration('hash-a', 11);
+    expect(seen10).toEqual([1]);
+    expect(seen11).toEqual([1]);
+    expect(mod.pageGeneration('hash-a', 10)).toBe(1);
+    expect(mod.pageGeneration('hash-a', 11)).toBe(1);
+
+    unsub10();
+    unsub11();
+  });
 });
