@@ -118,7 +118,10 @@
   }
 
   function toPoint(e: PointerEvent): Point {
-    const rect = canvas.getBoundingClientRect();
+    return toPointWithRect(e, canvas.getBoundingClientRect());
+  }
+
+  function toPointWithRect(e: PointerEvent, rect: DOMRect): Point {
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
     const pressure = e.pressure > 0 ? e.pressure : 0.5;
@@ -210,19 +213,19 @@
     return batcher;
   }
 
-  function coalescedPoints(e: PointerEvent): Point[] {
+  function coalescedPoints(e: PointerEvent, rect: DOMRect): Point[] {
     const native = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
-    if (!native || native.length === 0) return [maybeSnap(toPoint(e))];
+    if (!native || native.length === 0) return [maybeSnap(toPointWithRect(e, rect))];
     const out: Point[] = [];
-    for (const c of native) out.push(maybeSnap(toPoint(c)));
+    for (const c of native) out.push(maybeSnap(toPointWithRect(c, rect)));
     return out;
   }
 
-  function predictedPoints(e: PointerEvent): Point[] {
+  function predictedPoints(e: PointerEvent, rect: DOMRect): Point[] {
     const native = typeof e.getPredictedEvents === 'function' ? e.getPredictedEvents() : [];
     if (!native || native.length === 0) return [];
     const out: Point[] = [];
-    for (const c of native) out.push(maybeSnap(toPoint(c)));
+    for (const c of native) out.push(maybeSnap(toPointWithRect(c, rect)));
     return out;
   }
 
@@ -264,17 +267,18 @@
 
   function handleMoveLike(e: PointerEvent) {
     if (activePointerId !== e.pointerId) return;
+    const rect = canvas.getBoundingClientRect();
     if (currentTool === 'eraser') {
       const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
       const events = coalesced && coalesced.length > 0 ? coalesced : [e];
       for (const ev of events) {
-        const p = toPoint(ev);
+        const p = toPointWithRect(ev, rect);
         onerase?.({ x: p.x, y: p.y });
       }
       return;
     }
     if (currentTool === 'graph') {
-      const p = toPoint(e);
+      const p = toPointWithRect(e, rect);
       graphEnd = { x: p.x, y: p.y };
       redrawLive();
       e.preventDefault();
@@ -282,8 +286,8 @@
     }
     if (currentTool !== 'pen' && currentTool !== 'highlighter') return;
 
-    const cps = coalescedPoints(e);
-    const predicted = predictedPoints(e);
+    const cps = coalescedPoints(e, rect);
+    const predicted = predictedPoints(e, rect);
     const b = ensureBatcher();
     // getCoalescedEvents can return 10+ samples for a single pointermove at
     // high stylus rates; we flatten them into the batcher so every sample is
@@ -304,6 +308,11 @@
 
   function onPointerRawUpdate(e: PointerEvent) {
     if (!HAS_RAW_UPDATE) return;
+    // Raw updates are only consumed for pen/highlighter; eraser/graph/shape
+    // and all other tools continue to use pointermove. Without this gate,
+    // both listeners would fire for every motion event and double-handle
+    // erase samples and graph rect updates.
+    if (currentTool !== 'pen' && currentTool !== 'highlighter') return;
     handleMoveLike(e);
   }
 

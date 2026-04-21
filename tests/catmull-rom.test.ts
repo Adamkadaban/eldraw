@@ -28,13 +28,13 @@ describe('catmullRomSmooth', () => {
     for (let i = 1; i < keepIdx.length; i++) expect(keepIdx[i]).toBeGreaterThan(keepIdx[i - 1]);
   });
 
-  it('no-op when every chord is within maxChordPx', () => {
+  it('no-op when every chord is within maxChordPt', () => {
     const input = [p(0, 0), p(1, 0), p(2, 0), p(3, 0)];
     const out = catmullRomSmooth(input, 10);
     expect(out).toHaveLength(input.length);
   });
 
-  it('inserts samples when chord exceeds maxChordPx', () => {
+  it('inserts samples when chord exceeds maxChordPt', () => {
     const input = [p(0, 0), p(100, 0), p(200, 0)];
     const out = catmullRomSmooth(input, 10);
     expect(out.length).toBeGreaterThan(input.length);

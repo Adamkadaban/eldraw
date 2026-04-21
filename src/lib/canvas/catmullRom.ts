@@ -5,18 +5,23 @@ import type { Point } from '$lib/types';
  *
  * Input samples are passed through unchanged at their original indices; extra
  * samples are inserted only in gaps where the chord length exceeds
- * `maxChordPx`. This keeps already-dense input cheap (no-op) and only pays
+ * `maxChordPt`. This keeps already-dense input cheap (no-op) and only pays
  * for interpolation when hardware sample density drops during fast strokes
  * — which is exactly when polygonal kinks appear.
+ *
+ * Units: all coordinates — `points` and `maxChordPt` — are in the same
+ * coordinate space as the input `Point` values (PDF points in this app).
+ * Callers that have a pixel-space threshold must convert px → pt (divide by
+ * `ptToPx`) before calling.
  *
  * Centripetal (alpha = 0.5) is used because it avoids the self-intersections
  * and cusps that uniform/chordal Catmull-Rom produce around sharp corners.
  * Reference: Yuksel, Schaefer, Keyser, "Parameterization and Applications of
  * Catmull-Rom Curves" (2011).
  */
-export function catmullRomSmooth(points: Point[], maxChordPx = 6): Point[] {
+export function catmullRomSmooth(points: Point[], maxChordPt = 6): Point[] {
   if (points.length < 2) return points.slice();
-  if (maxChordPx <= 0) return points.slice();
+  if (maxChordPt <= 0) return points.slice();
 
   const out: Point[] = [points[0]];
   for (let i = 0; i < points.length - 1; i++) {
@@ -26,12 +31,12 @@ export function catmullRomSmooth(points: Point[], maxChordPx = 6): Point[] {
     const p3 = points[i + 2] ?? points[i + 1];
 
     const chord = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-    if (chord <= maxChordPx) {
+    if (chord <= maxChordPt) {
       out.push(p2);
       continue;
     }
 
-    const steps = Math.min(16, Math.ceil(chord / maxChordPx));
+    const steps = Math.min(16, Math.ceil(chord / maxChordPt));
     for (let s = 1; s < steps; s++) {
       const t = s / steps;
       out.push(centripetal(p0, p1, p2, p3, t));

@@ -49,7 +49,13 @@ function perpSq(p: Point, a: Point, b: Point): number {
     const ey = p.y - a.y;
     return ex * ex + ey * ey;
   }
-  const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  // Clamp the projection to the segment so backtracking/looping strokes are
+  // measured against the endpoints instead of the infinite line — otherwise
+  // a point that reverses course can land arbitrarily close to the line
+  // while being far from the segment, and RDP would drop it.
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
   const tx = a.x + t * dx;
   const ty = a.y + t * dy;
   const ex = p.x - tx;

@@ -69,6 +69,26 @@ describe('simplifyRdp', () => {
     expect(simplifyRdp(pts, 0)).toEqual(pts);
     expect(simplifyRdp(pts, -1)).toEqual(pts);
   });
+
+  it('does not collapse a backtrack of collinear-but-reversed points', () => {
+    // (0,0) -> (10,0) -> (5,0): the turnaround at (10,0) lies on the infinite
+    // line through the endpoints, so an infinite-line RDP would drop it and
+    // silently lose the backtrack. Point-to-segment distance correctly
+    // reports 5 here, well above epsilon.
+    const pts = [p(0, 0), p(10, 0), p(5, 0)];
+    const out = simplifyRdp(pts, 0.5);
+    expect(out).toHaveLength(3);
+    expect(out[1]).toEqual(pts[1]);
+  });
+
+  it('does not collapse a loop back to the start', () => {
+    // Square loop that returns to origin: endpoints are identical so the
+    // infinite-line "segment" is degenerate; clamped projection correctly
+    // measures distance to the shared endpoint.
+    const pts = [p(0, 0), p(10, 0), p(10, 10), p(0, 10), p(0, 0)];
+    const out = simplifyRdp(pts, 0.5);
+    expect(out.length).toBeGreaterThan(2);
+  });
 });
 
 function distToSegment(p0: Point, a: Point, b: Point): number {
