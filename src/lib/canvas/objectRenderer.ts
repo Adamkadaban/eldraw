@@ -1,4 +1,11 @@
-import type { LineObject, NumberLineObject, ShapeObject, StrokeStyle } from '$lib/types';
+import type {
+  AngleMarkObject,
+  LineObject,
+  NumberLineObject,
+  ShapeObject,
+  StrokeStyle,
+} from '$lib/types';
+import { angleMarkArcParams } from '$lib/geometry/protractor';
 import { numberLineValueToX } from '$lib/tools/shapes';
 
 function dashPattern(dash: StrokeStyle['dash'], widthPx: number): number[] {
@@ -171,6 +178,52 @@ export function drawNumberLine(
       ctx.stroke();
       drawArrowHead(ctx, x1, y, mx, y, Math.max(8, widthPx * 4), nl.style.color);
     }
+  }
+
+  ctx.restore();
+}
+
+export function drawAngleMark(
+  ctx: CanvasRenderingContext2D,
+  mark: AngleMarkObject,
+  ptToPx: number,
+): void {
+  ctx.save();
+  const widthPx = Math.max(0.5, mark.width * ptToPx);
+  ctx.lineWidth = widthPx;
+  ctx.strokeStyle = mark.color;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.setLineDash([]);
+
+  const vx = mark.vertex.x * ptToPx;
+  const vy = mark.vertex.y * ptToPx;
+  const ax = mark.rayA.x * ptToPx;
+  const ay = mark.rayA.y * ptToPx;
+  const bx = mark.rayB.x * ptToPx;
+  const by = mark.rayB.y * ptToPx;
+
+  ctx.beginPath();
+  ctx.moveTo(vx, vy);
+  ctx.lineTo(ax, ay);
+  ctx.moveTo(vx, vy);
+  ctx.lineTo(bx, by);
+  ctx.stroke();
+
+  const arc = angleMarkArcParams(mark.vertex, mark.rayA, mark.rayB, mark.degrees);
+  ctx.beginPath();
+  ctx.arc(vx, vy, arc.radius * ptToPx, arc.startAngle, arc.endAngle, arc.anticlockwise);
+  ctx.stroke();
+
+  if (mark.showLabel) {
+    const fontPx = Math.max(10, 12 * ptToPx);
+    ctx.fillStyle = mark.color;
+    ctx.font = `${fontPx}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const deg = Math.abs(mark.degrees);
+    const rounded = Number.isInteger(deg) ? deg.toFixed(0) : deg.toFixed(1);
+    ctx.fillText(`${rounded}°`, arc.labelAt.x * ptToPx, arc.labelAt.y * ptToPx);
   }
 
   ctx.restore();

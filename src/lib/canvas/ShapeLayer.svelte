@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { AnyObject } from '$lib/types';
-  import { drawLine, drawNumberLine, drawShape } from './objectRenderer';
+  import { drawAngleMark, drawLine, drawNumberLine, drawShape } from './objectRenderer';
 
   interface Props {
     objects: AnyObject[];
@@ -23,6 +23,7 @@
       if (o.type === 'line') drawLine(ctx, o, ptToPx);
       else if (o.type === 'shape') drawShape(ctx, o, ptToPx);
       else if (o.type === 'numberline') drawNumberLine(ctx, o, ptToPx);
+      else if (o.type === 'angleMark') drawAngleMark(ctx, o, ptToPx);
     }
   }
 
