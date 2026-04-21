@@ -196,4 +196,13 @@ describe('hitTestObjects on a mixed page', () => {
     const hits = hitTestObjects(objects, { x: -500, y: -500 }, 4);
     expect(hits).toEqual([]);
   });
+
+  it('unknown object type returns false', () => {
+    const unknown = {
+      id: 'unknown-1',
+      createdAt: 0,
+      type: 'bogus',
+    } as unknown as AnyObject;
+    expect(hitTestObject(unknown, { x: 0, y: 0 }, 4)).toBe(false);
+  });
 });

@@ -105,6 +105,11 @@ export function hitTestObject(
       const dB = distanceToSegment(at, obj.vertex, obj.rayB);
       return dB <= half + radius;
     }
+    default: {
+      const _exhaustiveCheck: never = obj;
+      void _exhaustiveCheck;
+      return false;
+    }
   }
 }
 
