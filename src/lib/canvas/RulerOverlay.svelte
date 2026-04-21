@@ -1,5 +1,6 @@
 <script lang="ts">
   import { overlays } from '$lib/store/overlays';
+  import { toolStore } from '$lib/store/tool';
   import { rulerEnd, rulerTicks, type Vec2 } from '$lib/geometry';
 
   interface Props {
@@ -13,6 +14,7 @@
   const ruler = $derived($overlays.ruler);
   const ticks = $derived(rulerTicks(ruler));
   const end = $derived(rulerEnd(ruler));
+  const isRulerTool = $derived($toolStore.tool === 'ruler');
 
   let svgEl: SVGSVGElement | undefined = $state();
 
@@ -85,6 +87,7 @@
   {height}
   role="application"
   aria-label="Ruler overlay"
+  aria-hidden={!isRulerTool}
   onpointermove={onPointerMove}
   onpointerup={onPointerUp}
   onpointercancel={onPointerUp}
@@ -94,6 +97,7 @@
   >
     <rect
       class="body"
+      class:interactive={isRulerTool}
       x="0"
       y="0"
       width={ruler.length * ptToPx}
@@ -102,9 +106,9 @@
       stroke="#1e88e5"
       stroke-width="1"
       role="button"
-      tabindex="0"
+      tabindex={isRulerTool ? 0 : -1}
       aria-label="Move ruler"
-      onpointerdown={onBodyPointerDown}
+      onpointerdown={isRulerTool ? onBodyPointerDown : null}
     />
   </g>
 
@@ -132,6 +136,7 @@
 
   <circle
     class="end-handle"
+    class:interactive={isRulerTool}
     cx={end.x * ptToPx}
     cy={end.y * ptToPx}
     r={6}
@@ -139,10 +144,10 @@
     stroke="#fff"
     stroke-width="1.5"
     role="slider"
-    tabindex="0"
+    tabindex={isRulerTool ? 0 : -1}
     aria-label="Rotate ruler"
     aria-valuenow={Math.round(ruler.rotation)}
-    onpointerdown={onEndPointerDown}
+    onpointerdown={isRulerTool ? onEndPointerDown : null}
   />
 
   <g
@@ -150,6 +155,7 @@
   >
     <circle
       class="close"
+      class:interactive={isRulerTool}
       cx={-closeOffset}
       cy={bodyHeight / 2}
       r="8"
@@ -157,11 +163,11 @@
       stroke="#1e88e5"
       stroke-width="1"
       role="button"
-      tabindex="0"
+      tabindex={isRulerTool ? 0 : -1}
       aria-label="Hide ruler"
-      onclick={onClose}
-      onpointerdown={onClose}
-      onkeydown={onCloseKey}
+      onclick={isRulerTool ? onClose : null}
+      onpointerdown={isRulerTool ? onClose : null}
+      onkeydown={isRulerTool ? onCloseKey : null}
     />
     <line
       x1={-closeOffset - 3}
@@ -185,23 +191,23 @@
 </svg>
 
 <style>
-  /* The outer SVG covers the whole canvas so ticks/labels can render
-     anywhere. It must not swallow pointer events — only the interactive
-     children below opt back in via pointer-events: auto. See #112. */
+  /* Outer SVG covers the whole canvas so ticks/labels can render anywhere.
+     It must not swallow pointer events — only interactive children opt in
+     via .interactive (gated on the ruler tool being active). See #112, #123. */
   .ruler {
     position: absolute;
     inset: 0;
     pointer-events: none;
   }
-  .body {
+  .body.interactive {
     cursor: grab;
     pointer-events: auto;
   }
-  .end-handle {
+  .end-handle.interactive {
     cursor: grab;
     pointer-events: auto;
   }
-  .close {
+  .close.interactive {
     cursor: pointer;
     pointer-events: auto;
   }
