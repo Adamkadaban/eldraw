@@ -24,7 +24,13 @@
   import { overlays } from '$lib/store/overlays';
   import { startToolBridge } from '$lib/app/toolBridge';
   import { startPresenterBridge } from '$lib/app/presenterBridge';
+  import { startSidebarBridge } from '$lib/app/sidebarBridge';
   import { onPresenterWindowClosed } from '$lib/ipc/presenter';
+  import {
+    openSidebarWindow,
+    closeSidebarWindow,
+    onSidebarWindowClosed,
+  } from '$lib/ipc/sidebar-window';
   import { shortcuts } from '$lib/app/shortcuts';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
   import { hitTestStrokes } from '$lib/tools/eraser';
@@ -51,6 +57,7 @@
   let stopBridge: (() => void) | null = null;
   let stopAutosave: (() => void) | null = null;
   let stopPresenterBridge: (() => void) | null = null;
+  let stopSidebarBridge: (() => void) | null = null;
 
   const pdfState = $derived($pdf);
   const meta = $derived<PdfMeta | null>(pdfState.meta);
@@ -78,6 +85,35 @@
   const zenState = $derived($zenStore);
   const isZen = $derived(zenState.active);
   const chromeHidden = $derived(isPresenter || isZen);
+  const sidebarDetached = $derived(sidebarState.detached);
+  const sidebarHidden = $derived(chromeHidden || sidebarDetached);
+
+  $effect(() => {
+    if (sidebarDetached && !stopSidebarBridge) {
+      stopSidebarBridge = startSidebarBridge('main');
+    } else if (!sidebarDetached && stopSidebarBridge) {
+      stopSidebarBridge();
+      stopSidebarBridge = null;
+    }
+  });
+
+  async function onSidebarDetachChange(detached: boolean): Promise<void> {
+    if (detached) {
+      try {
+        await openSidebarWindow();
+        sidebar.setDetached(true);
+      } catch (err) {
+        log('ipc', `open_sidebar_window failed ${String(err)}`);
+      }
+    } else {
+      try {
+        await closeSidebarWindow();
+      } catch (err) {
+        log('ipc', `close_sidebar_window failed ${String(err)}`);
+      }
+      sidebar.setDetached(false);
+    }
+  }
 
   let zenHintVisible = $state(false);
   $effect(() => {
@@ -376,11 +412,16 @@
     stopHydration = hydrateSidebarFromStorage();
     stopBridge = startToolBridge();
     let unlistenPresenterClose: (() => void) | null = null;
+    let unlistenSidebarClose: (() => void) | null = null;
     void onPresenterWindowClosed(() => presenter.setWindowOpen(false)).then((fn) => {
       unlistenPresenterClose = fn;
     });
+    void onSidebarWindowClosed(() => sidebar.setDetached(false)).then((fn) => {
+      unlistenSidebarClose = fn;
+    });
     return () => {
       unlistenPresenterClose?.();
+      unlistenSidebarClose?.();
     };
   });
 
@@ -389,6 +430,7 @@
     stopAutosave?.();
     stopHydration?.();
     stopPresenterBridge?.();
+    stopSidebarBridge?.();
   });
 </script>
 
@@ -396,16 +438,17 @@
 
 <main
   class="app"
-  class:pinned={sidebarState.pinned}
+  class:pinned={sidebarState.pinned && !sidebarDetached}
   class:presenter={isPresenter}
   class:zen={isZen}
+  class:sidebar-detached={sidebarDetached}
   class:has-thumbs={!chromeHidden && pages.length > 0}
   use:shortcuts
   tabindex="-1"
   role="application"
 >
-  {#if !chromeHidden}
-    <Sidebar />
+  {#if !sidebarHidden}
+    <Sidebar onDetachChange={onSidebarDetachChange} />
   {/if}
 
   <section class="main">

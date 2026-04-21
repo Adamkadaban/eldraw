@@ -4,6 +4,7 @@ mod model;
 mod page_cache;
 mod pdf;
 mod presenter;
+mod sidebar_window;
 mod state;
 mod storage;
 mod thumbnails;
@@ -31,6 +32,10 @@ pub fn run() {
             presenter::close_presenter_window,
             presenter::presenter_sync,
             presenter::list_monitors,
+            sidebar_window::open_sidebar_window,
+            sidebar_window::close_sidebar_window,
+            sidebar_window::sidebar_sync,
+            sidebar_window::sidebar_sync_back,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
