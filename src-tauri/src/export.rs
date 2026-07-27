@@ -34,8 +34,8 @@ use crate::model::{
     AngleMarkObject, Bounds, DashStyle, DrawableObject, EldrawDocument, GraphFunction,
     GraphFunctionKind, GraphObject, LineObject, NumberLineMarkKind, NumberLineObject, Page,
     PageKind, PartialSlideTheme, ShapeKind, ShapeObject, Slide, SlideAlign, SlideBlock,
-    SlideCalloutTone, SlideLayoutKind, SlideListMarker, SlideTheme, StrokeObject, StrokeStyle,
-    StrokeTool, TextObject,
+    SlideCalloutTone, SlideDiagramNodeShape, SlideLayoutKind, SlideListMarker,
+    SlideNumberLineBlock, SlideTheme, StrokeObject, StrokeStyle, StrokeTool, TextObject,
 };
 use crate::state::pdfium;
 
@@ -1262,6 +1262,85 @@ fn draw_angle_mark(canvas: &mut Canvas, mark: &AngleMarkObject) -> AppResult<()>
     Ok(())
 }
 
+fn draw_ellipse_outline(
+    canvas: &mut Canvas,
+    cx: f64,
+    cy: f64,
+    rx: f64,
+    ry: f64,
+    width: f64,
+    color: Color,
+) {
+    if !(rx.is_finite() && ry.is_finite()) || rx <= 0.0 || ry <= 0.0 {
+        return;
+    }
+    let steps = 72usize;
+    let mut previous = (cx + rx, cy);
+    for i in 1..=steps {
+        let angle = std::f64::consts::TAU * i as f64 / steps as f64;
+        let current = (cx + rx * angle.cos(), cy + ry * angle.sin());
+        canvas.segment(previous, current, width, color, false, DashStyle::Solid);
+        previous = current;
+    }
+}
+
+/// Ticks and value labels for a slide number line.
+///
+/// The step values come from an untrusted sidecar, so the emitted count is
+/// capped rather than trusting `(max - min) / step` to be sane.
+fn draw_number_line_ticks(
+    canvas: &mut Canvas,
+    block: &SlideNumberLineBlock,
+    to_x: &dyn Fn(f64) -> f64,
+    axis_y: f64,
+    color: Color,
+    theme: &SlideTheme,
+) -> usize {
+    const MAX_TICKS: usize = 400;
+    let mut drawn = 0usize;
+    let tick_half = canvas.pt(3.0);
+
+    if block.tick_step.is_finite() && block.tick_step > 0.0 {
+        let mut value = (block.min / block.tick_step).ceil() * block.tick_step;
+        while value <= block.max && drawn < MAX_TICKS {
+            let tx = to_x(value);
+            canvas.segment(
+                (tx, axis_y - tick_half),
+                (tx, axis_y + tick_half),
+                1.0,
+                color,
+                false,
+                DashStyle::Solid,
+            );
+            value += block.tick_step;
+            drawn += 1;
+        }
+    }
+
+    if block.label_step.is_finite() && block.label_step > 0.0 {
+        let mut labelled = 0usize;
+        let mut value = (block.min / block.label_step).ceil() * block.label_step;
+        while value <= block.max && labelled < MAX_TICKS {
+            let label = if value.fract().abs() < 1e-9 {
+                format!("{}", value.round() as i64)
+            } else {
+                format!("{value:.2}")
+            };
+            canvas.text(
+                &label,
+                to_x(value) - canvas.pt(4.0),
+                axis_y + tick_half + canvas.pt(3.0),
+                theme.body_size * 0.75,
+                color,
+            );
+            value += block.label_step;
+            labelled += 1;
+        }
+    }
+
+    drawn
+}
+
 fn draw_circle_outline(
     canvas: &mut Canvas,
     cx: f64,
@@ -1399,6 +1478,9 @@ fn block_margin(block: &SlideBlock) -> f64 {
         SlideBlock::Graph(block) => block.base.margin_top,
         SlideBlock::Callout(block) => block.base.margin_top,
         SlideBlock::Image(block) => block.base.margin_top,
+        SlideBlock::Mapping(block) => block.base.margin_top,
+        SlideBlock::Diagram(block) => block.base.margin_top,
+        SlideBlock::Numberline(block) => block.base.margin_top,
         SlideBlock::Spacer(block) => block.base.margin_top,
     }
     .unwrap_or(10.0)
@@ -1584,6 +1666,213 @@ fn render_slide_block(
                 theme.body_size * 0.75,
                 text_color,
             );
+            Ok(y + height)
+        }
+        SlideBlock::Mapping(block) => {
+            let height = canvas.pt(block.height.max(24.0));
+            let accent = parse_color(&theme.accent)?;
+            let label_size = theme.body_size * 0.85;
+            let oval_w = width * 0.28;
+            let oval_h = (height - canvas.pt(label_size * 1.6)).max(canvas.pt(12.0));
+            let left_cx = x + oval_w * 0.6;
+            let right_cx = x + width - oval_w * 0.6;
+            let cy = y + oval_h / 2.0;
+
+            draw_ellipse_outline(canvas, left_cx, cy, oval_w / 2.0, oval_h / 2.0, 1.5, accent);
+            draw_ellipse_outline(
+                canvas,
+                right_cx,
+                cy,
+                oval_w / 2.0,
+                oval_h / 2.0,
+                1.5,
+                text_color,
+            );
+
+            let item_y = |index: usize, count: usize| -> f64 {
+                if count == 0 {
+                    return cy;
+                }
+                cy - oval_h / 2.0 + oval_h * (index as f64 + 1.0) / (count as f64 + 1.0)
+            };
+
+            for (i, label) in block.left.iter().enumerate() {
+                canvas.text(
+                    label,
+                    left_cx - oval_w * 0.2,
+                    item_y(i, block.left.len()),
+                    theme.body_size,
+                    text_color,
+                );
+            }
+            for (i, label) in block.right.iter().enumerate() {
+                canvas.text(
+                    label,
+                    right_cx - oval_w * 0.2,
+                    item_y(i, block.right.len()),
+                    theme.body_size,
+                    text_color,
+                );
+            }
+            // Indices are validated on the frontend, but sidecars are untrusted.
+            for pair in &block.pairs {
+                if pair.from >= block.left.len() || pair.to >= block.right.len() {
+                    continue;
+                }
+                let from = (left_cx + oval_w / 2.0, item_y(pair.from, block.left.len()));
+                let to = (right_cx - oval_w / 2.0, item_y(pair.to, block.right.len()));
+                canvas.segment(from, to, 1.0, text_color, false, DashStyle::Solid);
+                canvas.arrowhead(to, from, canvas.pt(4.0), text_color);
+            }
+
+            canvas.text(
+                &block.left_label,
+                left_cx - oval_w / 2.0,
+                y + oval_h + canvas.pt(4.0),
+                label_size,
+                text_color,
+            );
+            canvas.text(
+                &block.right_label,
+                right_cx - oval_w / 2.0,
+                y + oval_h + canvas.pt(4.0),
+                label_size,
+                text_color,
+            );
+            Ok(y + height)
+        }
+        SlideBlock::Diagram(block) => {
+            let height = canvas.pt(block.height.max(24.0));
+            let accent = parse_color(&theme.accent)?;
+            let clamp01 = |v: f64| {
+                if v.is_finite() {
+                    v.clamp(0.0, 1.0)
+                } else {
+                    0.0
+                }
+            };
+            let node_box = |node: &crate::model::SlideDiagramNode| -> (f64, f64, f64, f64) {
+                let nw = node.w.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.22) * width;
+                let nh = node.h.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.22) * height;
+                let cx = x + clamp01(node.x) * width;
+                let cy = y + clamp01(node.y) * height;
+                (cx - nw / 2.0, cy - nh / 2.0, nw, nh)
+            };
+
+            for node in &block.nodes {
+                let (bx, by, bw, bh) = node_box(node);
+                if !matches!(node.shape, Some(SlideDiagramNodeShape::Plain)) {
+                    for (from, to) in [
+                        ((bx, by), (bx + bw, by)),
+                        ((bx + bw, by), (bx + bw, by + bh)),
+                        ((bx + bw, by + bh), (bx, by + bh)),
+                        ((bx, by + bh), (bx, by)),
+                    ] {
+                        canvas.segment(from, to, 1.2, accent, false, DashStyle::Solid);
+                    }
+                }
+                canvas.text(
+                    &node.text,
+                    bx + canvas.pt(4.0),
+                    by + bh / 2.0,
+                    theme.body_size,
+                    text_color,
+                );
+            }
+
+            for edge in &block.edges {
+                if edge.from == edge.to {
+                    continue;
+                }
+                let Some(from) = block.nodes.iter().find(|n| n.id == edge.from) else {
+                    continue;
+                };
+                let Some(to) = block.nodes.iter().find(|n| n.id == edge.to) else {
+                    continue;
+                };
+                let (fx, fy, fw, fh) = node_box(from);
+                let (tx, ty, _, th) = node_box(to);
+                let start = (fx + fw, fy + fh / 2.0);
+                let end = (tx, ty + th / 2.0);
+                canvas.segment(start, end, 1.0, text_color, false, DashStyle::Solid);
+                canvas.arrowhead(end, start, canvas.pt(4.0), text_color);
+                if let Some(label) = &edge.label {
+                    canvas.text(
+                        label,
+                        f64::midpoint(start.0, end.0),
+                        f64::midpoint(start.1, end.1) - canvas.pt(6.0),
+                        theme.body_size * 0.8,
+                        text_color,
+                    );
+                }
+            }
+            Ok(y + height)
+        }
+        SlideBlock::Numberline(block) => {
+            let height = canvas.pt(block.height.max(16.0));
+            let axis_y = y + height / 2.0;
+            let span = block.max - block.min;
+            if !span.is_finite() || span <= 0.0 {
+                return Ok(y + height);
+            }
+            let to_x = |value: f64| x + ((value - block.min) / span).clamp(0.0, 1.0) * width;
+
+            canvas.segment(
+                (x, axis_y),
+                (x + width, axis_y),
+                1.2,
+                text_color,
+                false,
+                DashStyle::Solid,
+            );
+            canvas.arrowhead((x + width, axis_y), (x, axis_y), canvas.pt(5.0), text_color);
+            canvas.arrowhead((x, axis_y), (x + width, axis_y), canvas.pt(5.0), text_color);
+
+            // Cap the tick count so an untrusted step can't drive an unbounded loop.
+            let ticks = draw_number_line_ticks(canvas, block, &to_x, axis_y, text_color, theme);
+            let _ = ticks;
+            for mark in &block.marks {
+                if !mark.value.is_finite() || mark.value < block.min || mark.value > block.max {
+                    continue;
+                }
+                let mx = to_x(mark.value);
+                let radius = canvas.pt(3.5);
+                match mark.kind {
+                    NumberLineMarkKind::Closed => {
+                        canvas.circle(mx, axis_y, radius, text_color, false);
+                    }
+                    NumberLineMarkKind::Open => {
+                        draw_circle_outline(canvas, mx, axis_y, radius, 1.2, text_color);
+                    }
+                    NumberLineMarkKind::ArrowLeft => {
+                        canvas.segment(
+                            (mx, axis_y),
+                            (x, axis_y),
+                            1.6,
+                            text_color,
+                            false,
+                            DashStyle::Solid,
+                        );
+                        canvas.arrowhead((x, axis_y), (mx, axis_y), canvas.pt(5.0), text_color);
+                    }
+                    NumberLineMarkKind::ArrowRight => {
+                        canvas.segment(
+                            (mx, axis_y),
+                            (x + width, axis_y),
+                            1.6,
+                            text_color,
+                            false,
+                            DashStyle::Solid,
+                        );
+                        canvas.arrowhead(
+                            (x + width, axis_y),
+                            (mx, axis_y),
+                            canvas.pt(5.0),
+                            text_color,
+                        );
+                    }
+                }
+            }
             Ok(y + height)
         }
         SlideBlock::Spacer(block) => Ok(y + canvas.pt(block.height.max(0.0))),
@@ -1983,6 +2272,68 @@ mod tests {
             vec![PageSource::Pdf(2), PageSource::Pdf(0), PageSource::Pdf(2)]
         );
         validate_page_selection(&doc.pages, &select_page_sources(&doc.pages).unwrap(), 3).unwrap();
+    }
+
+    #[test]
+    fn every_slide_block_kind_renders() {
+        let mut slide = page("slide", 0);
+        slide["slide"] = json!({
+            "layout": "content",
+            "title": "All blocks",
+            "blocks": [
+                {"id":"b1","kind":"text","text":"Body"},
+                {"id":"b2","kind":"list","items":[{"text":"one","level":0},{"text":"sub","level":1}],
+                 "marker":"decimal","markerByLevel":["decimal","alpha","roman"]},
+                {"id":"b3","kind":"definitions","items":[{"term":"Term","text":"Meaning"}]},
+                {"id":"b4","kind":"table","header":["h"],"rows":[["r"]],"headerOrientation":"column"},
+                {"id":"b5","kind":"math","latex":"x^2","display":true},
+                {"id":"b6","kind":"callout","text":"Tip","tone":"tip"},
+                {"id":"b7","kind":"mapping","leftLabel":"In","rightLabel":"Out",
+                 "left":["1","2"],"right":["3"],
+                 "pairs":[{"from":0,"to":0},{"from":9,"to":9}],"height":80},
+                {"id":"b8","kind":"diagram",
+                 "nodes":[{"id":"n1","text":"x","x":0.2,"y":0.5,"shape":"box"},
+                          {"id":"n2","text":"2x","x":0.8,"y":0.5,"shape":"plain"}],
+                 "edges":[{"from":"n1","to":"n2","label":"double"},
+                          {"from":"n1","to":"n1"},
+                          {"from":"ghost","to":"n2"}],
+                 "height":80},
+                {"id":"b9","kind":"numberline","min":-5,"max":5,"tickStep":1,"labelStep":5,
+                 "marks":[{"value":0,"kind":"closed"},{"value":2,"kind":"open"},
+                          {"value":-3,"kind":"arrow-left"},{"value":99,"kind":"closed"}],
+                 "height":60},
+                {"id":"b10","kind":"spacer","height":20}
+            ],
+        });
+        let doc = document(vec![slide]);
+        validate_document(&doc).unwrap();
+        let sources = select_page_sources(&doc.pages).unwrap();
+        let image = render_page(&doc.pages[0], sources[0], None, None).unwrap();
+        assert_eq!(image.dimensions(), (200, 400));
+    }
+
+    /// A degenerate number line must not drive an unbounded tick loop or panic.
+    #[test]
+    fn degenerate_number_line_block_is_safe() {
+        for (min, max, tick, label) in [
+            (0.0, 0.0, 1.0, 1.0),
+            (10.0, -10.0, 1.0, 1.0),
+            (-1.0, 1.0, 0.0, 0.0),
+            (-1.0, 1.0, -5.0, -5.0),
+            (-1000.0, 1000.0, 0.000_001, 0.000_001),
+        ] {
+            let mut slide = page("slide", 0);
+            slide["slide"] = json!({
+                "layout": "content",
+                "title": "Edge",
+                "blocks": [{"id":"n","kind":"numberline","min":min,"max":max,
+                            "tickStep":tick,"labelStep":label,"marks":[],"height":40}],
+            });
+            let doc = document(vec![slide]);
+            validate_document(&doc).unwrap();
+            let sources = select_page_sources(&doc.pages).unwrap();
+            assert!(render_page(&doc.pages[0], sources[0], None, None).is_ok());
+        }
     }
 
     #[test]

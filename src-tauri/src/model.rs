@@ -338,7 +338,83 @@ pub enum SlideBlock {
     Graph(SlideGraphBlock),
     Callout(SlideCalloutBlock),
     Image(SlideImageBlock),
+    Mapping(SlideMappingBlock),
+    Diagram(SlideDiagramBlock),
+    Numberline(SlideNumberLineBlock),
     Spacer(SlideSpacerBlock),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlideMappingPair {
+    pub from: usize,
+    pub to: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlideMappingBlock {
+    #[serde(flatten)]
+    pub base: SlideBlockBase,
+    pub left_label: String,
+    pub right_label: String,
+    pub left: Vec<String>,
+    pub right: Vec<String>,
+    pub pairs: Vec<SlideMappingPair>,
+    pub height: f64,
+    pub caption: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SlideDiagramNodeShape {
+    Box,
+    Plain,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlideDiagramNode {
+    pub id: String,
+    pub text: String,
+    pub x: f64,
+    pub y: f64,
+    pub w: Option<f64>,
+    pub h: Option<f64>,
+    pub shape: Option<SlideDiagramNodeShape>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlideDiagramEdge {
+    pub from: String,
+    pub to: String,
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlideDiagramBlock {
+    #[serde(flatten)]
+    pub base: SlideBlockBase,
+    pub nodes: Vec<SlideDiagramNode>,
+    pub edges: Vec<SlideDiagramEdge>,
+    pub height: f64,
+    pub caption: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlideNumberLineBlock {
+    #[serde(flatten)]
+    pub base: SlideBlockBase,
+    pub min: f64,
+    pub max: f64,
+    pub tick_step: f64,
+    pub label_step: f64,
+    pub marks: Vec<NumberLineMark>,
+    pub height: f64,
+    pub caption: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -361,6 +437,7 @@ pub struct SlideListBlock {
     pub base: SlideBlockBase,
     pub items: Vec<SlideListItem>,
     pub marker: SlideListMarker,
+    pub marker_by_level: Option<Vec<SlideListMarker>>,
     pub font_size: Option<f64>,
 }
 
@@ -369,6 +446,8 @@ pub struct SlideListBlock {
 pub enum SlideListMarker {
     Bullet,
     Decimal,
+    Alpha,
+    Roman,
     None,
 }
 
@@ -403,8 +482,16 @@ pub struct SlideTableBlock {
     pub caption: Option<String>,
     pub header: Vec<String>,
     pub rows: Vec<Vec<String>>,
+    pub header_orientation: Option<SlideTableHeaderOrientation>,
     pub font_size: Option<f64>,
     pub column_weights: Option<Vec<f64>>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SlideTableHeaderOrientation {
+    Row,
+    Column,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -490,4 +577,32 @@ pub enum SlideAlign {
     Left,
     Center,
     Right,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The frontend is the source of truth for the slide schema. Any block kind
+    /// or field it can emit must deserialize here, or `save_sidecar` rejects
+    /// the whole document at the IPC boundary and the user's work is lost.
+    #[test]
+    fn deserializes_every_slide_block_kind_the_frontend_can_emit() {
+        let json = r#"{
+          "layout":"content","title":"T","blocks":[
+            {"id":"a","kind":"mapping","leftLabel":"In","rightLabel":"Out",
+             "left":["1"],"right":["2"],"pairs":[{"from":0,"to":0}],"height":200},
+            {"id":"b","kind":"diagram",
+             "nodes":[{"id":"n1","text":"x","x":0.1,"y":0.5}],"edges":[],"height":150},
+            {"id":"c","kind":"numberline","min":-10,"max":10,
+             "tickStep":1,"labelStep":5,"marks":[],"height":80},
+            {"id":"d","kind":"list","items":[{"text":"i","level":0}],
+             "marker":"alpha","markerByLevel":["decimal","alpha","roman"]},
+            {"id":"e","kind":"table","header":["h"],"rows":[["r"]],
+             "headerOrientation":"column"}
+          ]}"#;
+        let parsed = serde_json::from_str::<Slide>(json);
+        assert!(parsed.is_ok(), "deserialization failed: {:?}", parsed.err());
+        assert_eq!(parsed.unwrap().blocks.len(), 5);
+    }
 }
