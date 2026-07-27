@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isAppendOnly } from '$lib/canvas/layerDiff';
   import { onMount } from 'svelte';
   import type { AnyObject } from '$lib/types';
   import { drawAngleMark, drawLine, drawNumberLine, drawShape } from './objectRenderer';
@@ -54,14 +55,6 @@
       return;
     }
     fullRedraw();
-  }
-
-  function isAppendOnly(prev: AnyObject[], next: AnyObject[]): boolean {
-    if (next.length < prev.length) return false;
-    for (let i = 0; i < prev.length; i++) {
-      if (prev[i] !== next[i]) return false;
-    }
-    return true;
   }
 
   onMount(fullRedraw);

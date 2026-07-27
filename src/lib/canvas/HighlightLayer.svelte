@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isAppendOnly } from '$lib/canvas/layerDiff';
   import { onMount } from 'svelte';
   import type { StrokeObject } from '$lib/types';
   import { drawStroke } from './strokeRenderer';
@@ -58,14 +59,6 @@
       return;
     }
     fullRedraw();
-  }
-
-  function isAppendOnly(prev: StrokeObject[], next: StrokeObject[]): boolean {
-    if (next.length < prev.length) return false;
-    for (let i = 0; i < prev.length; i++) {
-      if (prev[i] !== next[i]) return false;
-    }
-    return true;
   }
 
   onMount(fullRedraw);
