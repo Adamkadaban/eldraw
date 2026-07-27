@@ -32,6 +32,19 @@ describe('detectMathSegments', () => {
     ]);
   });
 
+  it('splits a valid expression from prose that follows it', () => {
+    expect(detectMathSegments('The line y = mx + b has slope m.')).toEqual([
+      { kind: 'text', value: 'The line ' },
+      { kind: 'math', value: 'y = mx + b', display: false },
+      { kind: 'text', value: ' has slope m.' },
+    ]);
+  });
+
+  it('does not promote either side of a prose-word boundary without complete operands', () => {
+    const source = 'the answer = whatever you want';
+    expect(detectMathSegments(source)).toEqual([{ kind: 'text', value: source }]);
+  });
+
   it.each([
     'Domain & Range',
     'The # of days in a month',
@@ -42,6 +55,7 @@ describe('detectMathSegments', () => {
     'It costs $5 today',
     'This is a pre-algebra lesson',
     '50% off',
+    'ID = AB',
   ])('leaves prose unchanged: %s', (source) => {
     expect(detectMathSegments(source)).toEqual([{ kind: 'text', value: source }]);
     expect(looksLikeMath(source)).toBe(false);
@@ -53,6 +67,18 @@ describe('detectMathSegments', () => {
       { kind: 'math', value: 'x = 4', display: false },
       { kind: 'text', value: ', then check.' },
     ]);
+  });
+
+  it('trims a dangling operand after a sentence comma', () => {
+    expect(detectMathSegments('Since x^2 = 16, x is 4 or -4.')).toEqual([
+      { kind: 'text', value: 'Since ' },
+      { kind: 'math', value: 'x^2 = 16', display: false },
+      { kind: 'text', value: ', x is 4 or -4.' },
+    ]);
+  });
+
+  it('keeps commas that are nested inside math brackets', () => {
+    expect(mathValues('Use f(x, y) = 2 and S = {1, 2}.')).toEqual(['f(x, y) = 2', 'S = {1, 2}']);
   });
 
   it('rejects incomplete bracketed expressions', () => {
