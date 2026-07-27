@@ -29,6 +29,13 @@ const maxDiagramNodes = 100;
 const maxDiagramEdges = 500;
 const maxNumberLineMarks = 200;
 const maxNumberLineTicks = 1_000;
+const maxListItems = 500;
+const maxDefinitionItems = 200;
+const maxTableRows = 500;
+const maxTableColumns = 100;
+const maxGraphFunctions = 50;
+const maxSlideBlocks = 200;
+const maxSlideAsides = 10;
 
 function newId(): string {
   try {
@@ -158,6 +165,7 @@ function sanitizeGraph(value: unknown): SlideGraphSpec {
   const functionIds = new Set<string>();
   const functions = Array.isArray(input.functions)
     ? input.functions
+        .slice(0, maxGraphFunctions)
         .map((fn) => sanitizeGraphFunction(fn, functionIds))
         .filter((fn): fn is GraphFunction => fn !== null)
     : [];
@@ -273,6 +281,7 @@ function sanitizeBlock(value: unknown, usedIds: Set<string>, asideOnly = false):
         kind: 'list',
         items: Array.isArray(input.items)
           ? input.items
+              .slice(0, maxListItems)
               .map(objectValue)
               .filter((item): item is Record<string, unknown> => item !== null)
               .map((item) => ({
@@ -291,6 +300,7 @@ function sanitizeBlock(value: unknown, usedIds: Set<string>, asideOnly = false):
         kind: 'definitions',
         items: Array.isArray(input.items)
           ? input.items
+              .slice(0, maxDefinitionItems)
               .map(objectValue)
               .filter((item): item is Record<string, unknown> => item !== null)
               .map((item) => ({
@@ -302,10 +312,13 @@ function sanitizeBlock(value: unknown, usedIds: Set<string>, asideOnly = false):
       };
     case 'table': {
       const header = Array.isArray(input.header)
-        ? input.header.map((cell) => stringValue(cell))
+        ? input.header.slice(0, maxTableColumns).map((cell) => stringValue(cell))
         : [];
       const rows = Array.isArray(input.rows)
-        ? input.rows.filter(Array.isArray).map((row) => row.map((cell) => stringValue(cell)))
+        ? input.rows
+            .slice(0, maxTableRows)
+            .filter(Array.isArray)
+            .map((row) => row.slice(0, maxTableColumns).map((cell) => stringValue(cell)))
         : [];
       const columnCount = Math.max(header.length, ...rows.map((row) => row.length), 0);
       const pad = (row: string[]) => [
@@ -607,11 +620,13 @@ export function sanitizeSlide(input: unknown): Slide | null {
     const usedIds = new Set<string>();
     const blocks = Array.isArray(source.blocks)
       ? source.blocks
+          .slice(0, maxSlideBlocks)
           .map((block) => sanitizeBlock(block, usedIds))
           .filter((block): block is SlideBlock => block !== null)
       : [];
     const aside = Array.isArray(source.aside)
       ? source.aside
+          .slice(0, maxSlideAsides)
           .map((block) => sanitizeBlock(block, usedIds, true))
           .filter((block): block is SlideCalloutBlock => block?.kind === 'callout')
       : undefined;

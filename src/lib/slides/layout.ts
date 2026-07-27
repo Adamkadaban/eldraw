@@ -54,6 +54,21 @@ function textHeight(text: string, fontSize: number, width: number): number {
   return lineCount(text, fontSize, width) * fontSize * LINE_HEIGHT_RATIO;
 }
 
+/**
+ * Vertical space a block caption occupies, including the gap beneath it.
+ *
+ * Exported so the renderer subtracts exactly what the layouter reserved; a
+ * fixed estimate here would stretch the block's content once a caption wraps.
+ */
+export function captionHeight(
+  caption: string | undefined,
+  fontSize: number,
+  width: number,
+): number {
+  if (!caption) return 0;
+  return textHeight(caption, fontSize, width) + fontSize * 0.45;
+}
+
 function normalizedColumnWeights(block: Extract<SlideBlock, { kind: 'table' }>, count: number) {
   const weights = block.columnWeights;
   if (
@@ -111,10 +126,7 @@ export function measureBlock(block: SlideBlock, theme: SlideTheme, width: number
         }
         return height + rowHeight;
       }, 0);
-      const captionHeight = block.caption
-        ? textHeight(block.caption, fontSize, availableWidth) + fontSize * 0.45
-        : 0;
-      return captionHeight + rowsHeight;
+      return captionHeight(block.caption, fontSize, availableWidth) + rowsHeight;
     }
     case 'math': {
       const fontSize = safeFontSize(block.fontSize, bodySize);
@@ -122,10 +134,7 @@ export function measureBlock(block: SlideBlock, theme: SlideTheme, width: number
     }
     case 'graph': {
       const graphHeight = finiteNonNegative(block.height);
-      return (
-        graphHeight +
-        (block.caption ? textHeight(block.caption, bodySize, availableWidth) + bodySize * 0.45 : 0)
-      );
+      return graphHeight + captionHeight(block.caption, bodySize, availableWidth);
     }
     case 'mapping':
     case 'diagram':

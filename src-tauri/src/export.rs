@@ -46,6 +46,7 @@ const MAX_PIXEL_AREA: u64 = 32 * 1024 * 1024;
 const MAX_OBJECTS_PER_PAGE: usize = 100_000;
 const MAX_POINTS_PER_STROKE: usize = 1_000_000;
 const MAX_SOURCE_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_TICKS: usize = 10_000;
 const MAX_GRAPH_SAMPLES: usize = 2048;
 const JPEG_QUALITY: u8 = 92;
 
@@ -191,7 +192,13 @@ impl Canvas {
         if !distance.is_finite() || width <= 0.0 {
             return;
         }
-        let steps = distance.ceil().max(1.0) as usize;
+        // Coordinates are finite but unbounded, so a segment can be far longer
+        // than the canvas. Anything beyond the canvas diagonal is invisible;
+        // capping keeps rasterization proportional to what can actually be seen.
+        let max_steps = (u64::from(self.width()) + u64::from(self.height()))
+            .saturating_mul(4)
+            .max(1);
+        let steps = distance.ceil().max(1.0).min(max_steps as f64) as usize;
         let dash_length = (width * 3.0).max(1.0);
         for i in 0..=steps {
             let t = i as f64 / steps as f64;
@@ -940,8 +947,14 @@ fn values_in_range(min: f64, max: f64, step: f64) -> Vec<f64> {
         return Vec::new();
     }
     let first = (min / step).ceil() * step;
-    let raw_count = ((max - first) / step).floor().max(0.0) as usize + 1;
-    let count = raw_count.min(10_000);
+    if !first.is_finite() {
+        return Vec::new();
+    }
+    // Clamp in f64 before casting: a denormal step makes this quotient
+    // infinite, and `f64::INFINITY as usize` saturates to `usize::MAX`, so
+    // adding 1 afterwards would overflow.
+    let spans = ((max - first) / step).floor().clamp(0.0, MAX_TICKS as f64) as usize;
+    let count = spans.saturating_add(1).min(MAX_TICKS);
     (0..count).map(|i| first + i as f64 * step).collect()
 }
 
@@ -1296,13 +1309,13 @@ fn draw_number_line_ticks(
     color: Color,
     theme: &SlideTheme,
 ) -> usize {
-    const MAX_TICKS: usize = 400;
+    const MAX_SLIDE_TICKS: usize = 400;
     let mut drawn = 0usize;
     let tick_half = canvas.pt(3.0);
 
     if block.tick_step.is_finite() && block.tick_step > 0.0 {
         let mut value = (block.min / block.tick_step).ceil() * block.tick_step;
-        while value <= block.max && drawn < MAX_TICKS {
+        while value <= block.max && drawn < MAX_SLIDE_TICKS {
             let tx = to_x(value);
             canvas.segment(
                 (tx, axis_y - tick_half),
@@ -1320,7 +1333,7 @@ fn draw_number_line_ticks(
     if block.label_step.is_finite() && block.label_step > 0.0 {
         let mut labelled = 0usize;
         let mut value = (block.min / block.label_step).ceil() * block.label_step;
-        while value <= block.max && labelled < MAX_TICKS {
+        while value <= block.max && labelled < MAX_SLIDE_TICKS {
             let label = if value.fract().abs() < 1e-9 {
                 format!("{}", value.round() as i64)
             } else {
@@ -2272,6 +2285,55 @@ mod tests {
             vec![PageSource::Pdf(2), PageSource::Pdf(0), PageSource::Pdf(2)]
         );
         validate_page_selection(&doc.pages, &select_page_sources(&doc.pages).unwrap(), 3).unwrap();
+    }
+
+    /// A denormal step makes `(max - first) / step` infinite; casting that to
+    /// usize saturates, so the count must be clamped before any arithmetic.
+    #[test]
+    fn tiny_step_does_not_overflow_tick_count() {
+        for step in [5e-324_f64, 1e-300, f64::MIN_POSITIVE] {
+            let values = values_in_range(0.0, 1.0, step);
+            assert!(
+                values.len() <= 10_000,
+                "unbounded tick count for step {step}"
+            );
+        }
+    }
+
+    /// Coordinates are finite but unbounded, so a segment far larger than the
+    /// canvas must not drive an effectively infinite rasterization loop.
+    #[test]
+    fn oversized_segment_is_bounded() {
+        let mut canvas = Canvas::new(
+            PixelSize {
+                width: 64,
+                height: 64,
+            },
+            Color {
+                r: 255,
+                g: 255,
+                b: 255,
+                a: 255,
+            },
+        );
+        let start = std::time::Instant::now();
+        canvas.segment(
+            (0.0, 0.0),
+            (1e10, 0.0),
+            2.0,
+            Color {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 255,
+            },
+            false,
+            DashStyle::Solid,
+        );
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(2),
+            "segment rasterization is not bounded by canvas size"
+        );
     }
 
     #[test]

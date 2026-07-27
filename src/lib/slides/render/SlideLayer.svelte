@@ -4,7 +4,7 @@
   import { renderLatex } from '$lib/text/latex';
   import type { Slide, SlideBlock, SlideTheme } from '$lib/types';
   import { presentList } from '../listMarkers';
-  import { layoutSlide, type LayoutBox } from '../layout';
+  import { captionHeight, layoutSlide, type LayoutBox } from '../layout';
   import { resolveTheme } from '../theme';
   import { diagramGeometry } from './diagramGeometry';
   import { graphObjectForSlide, graphThemeForSlide } from './graphAdapter';
@@ -211,7 +211,7 @@
           {@html mathHtml(placed.block.latex, placed.block.display)}
         </div>
       {:else if placed.block.kind === 'graph'}
-        {@const captionSize = placed.block.caption ? theme.bodySize * 1.8 : 0}
+        {@const captionSize = captionHeight(placed.block.caption, theme.bodySize, placed.box.w)}
         {@const graphHeight = Math.max(0, placed.box.h - captionSize)}
         {#if placed.block.caption}
           <div class="caption" style:font-size={`${theme.bodySize * scale}px`}>

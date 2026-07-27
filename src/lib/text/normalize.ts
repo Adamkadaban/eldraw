@@ -95,10 +95,33 @@ function normalizeBalancedSquareRoots(source: string): string {
   return out;
 }
 
+/**
+ * Wrap multi-character sub/superscripts in braces.
+ *
+ * Digit runs and letter runs are handled separately and mixed runs are left
+ * alone: TeX reads `x^2y` as `x²y`, so greedily wrapping it to `x^{2y}` would
+ * silently change the formula's meaning rather than fix it.
+ */
 function wrapMultiCharacterScripts(source: string): string {
-  return source.replace(/([_^])([A-Za-z0-9]+)/g, (_match, operator: string, operand: string) =>
-    operand.length > 1 ? `${operator}{${operand}}` : `${operator}${operand}`,
-  );
+  return source
+    .replace(/([_^])(\d{2,})(?![A-Za-z0-9])/g, '$1{$2}')
+    .replace(/([_^])([A-Za-z]{2,})(?![A-Za-z0-9])/g, '$1{$2}');
+}
+
+/**
+ * Replace shorthand with a LaTeX command.
+ *
+ * A control sequence swallows every letter that follows it, so `x<=y` would
+ * become the undefined `\ley`. A separating space is emitted when the next
+ * character is a letter; TeX discards it and the command terminates cleanly.
+ */
+function replaceOperator(source: string, pattern: RegExp, command: string): string {
+  return source.replace(pattern, (match, ...rest) => {
+    const offset = rest[rest.length - 2] as number;
+    const input = rest[rest.length - 1] as string;
+    const next = input[offset + match.length] ?? '';
+    return /[A-Za-z]/.test(next) ? `${command} ` : command;
+  });
 }
 
 function normalizeFunctions(source: string): string {
@@ -128,14 +151,13 @@ function escapeSpecialCharacters(source: string): string {
 export function normalizeMathSource(raw: string): string {
   let source = normalizeBalancedSquareRoots(raw);
   source = wrapMultiCharacterScripts(source);
-  source = source
-    .replace(/\.\.\./g, '\\dots')
-    .replace(/<=/g, '\\le')
-    .replace(/>=/g, '\\ge')
-    .replace(/!=/g, '\\ne')
-    .replace(/\+-/g, '\\pm')
-    .replace(/->/g, '\\to')
-    .replace(/\*/g, '\\cdot');
+  source = replaceOperator(source, /\.\.\./g, '\\dots');
+  source = replaceOperator(source, /<=/g, '\\le');
+  source = replaceOperator(source, />=/g, '\\ge');
+  source = replaceOperator(source, /!=/g, '\\ne');
+  source = replaceOperator(source, /\+-/g, '\\pm');
+  source = replaceOperator(source, /->/g, '\\to');
+  source = replaceOperator(source, /\*/g, '\\cdot');
   source = replaceBareWords(source, ['oo', 'infty'], () => '\\infty');
   source = replaceBareWords(source, GREEK_NAMES, (name) => `\\${name}`);
   source = normalizeFunctions(source);

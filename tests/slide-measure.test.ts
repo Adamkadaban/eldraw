@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { measureBlock } from '$lib/slides/layout';
+import { captionHeight, measureBlock } from '$lib/slides/layout';
 import { defaultSlideTheme } from '$lib/slides/theme';
 import type { SlideBlock } from '$lib/types';
 
@@ -70,6 +70,27 @@ describe('measureBlock', () => {
       const measured = measureBlock(list, defaultSlideTheme, width);
       expect(Number.isFinite(measured)).toBe(true);
       expect(measured).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('captionHeight', () => {
+  it('is zero when there is no caption', () => {
+    expect(captionHeight(undefined, 12, 400)).toBe(0);
+    expect(captionHeight('', 12, 400)).toBe(0);
+  });
+
+  it('grows when a caption wraps to more lines', () => {
+    const short = captionHeight('Short', 12, 400);
+    const long = captionHeight('word '.repeat(80), 12, 400);
+    expect(long).toBeGreaterThan(short);
+  });
+
+  it('never returns a non-finite or negative value', () => {
+    for (const width of [0, -50, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const h = captionHeight('Caption', 12, width);
+      expect(Number.isFinite(h)).toBe(true);
+      expect(h).toBeGreaterThanOrEqual(0);
     }
   });
 });
