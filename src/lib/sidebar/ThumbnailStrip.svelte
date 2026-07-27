@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import type { Page } from '$lib/types';
+  import type { SlideTheme } from '$lib/types';
   import {
     bumpPageGeneration,
     DEFAULT_MAX_DIM,
@@ -26,6 +27,8 @@
     maxWidth?: number;
     /** Stable identifier for the loaded PDF; thumbnail cache is scoped to it. */
     docKey?: string | null;
+    /** Deck theme, so slide previews match the main view for themed decks. */
+    slideTheme?: SlideTheme;
   }
 
   const {
@@ -38,6 +41,7 @@
     onhide,
     maxWidth = 140,
     docKey = null,
+    slideTheme = defaultSlideTheme,
   }: Props = $props();
 
   const canDelete = $derived(pages.length > 1);
@@ -47,12 +51,12 @@
    * cache. Keyed by the slide object identity, which is stable because the
    * document store replaces slides immutably on every edit.
    */
-  const slideThumbs = new Map<number, { slide: unknown; url: string }>();
+  const slideThumbs = new Map<number, { slide: unknown; theme: SlideTheme; url: string }>();
 
   function slideThumbUrl(page: Page, width: number, height: number): string | null {
     if (page.type !== 'slide' || !page.slide || width <= 0 || height <= 0) return null;
     const cached = slideThumbs.get(page.pageIndex);
-    if (cached && cached.slide === page.slide) return cached.url;
+    if (cached && cached.slide === page.slide && cached.theme === slideTheme) return cached.url;
 
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(width));
@@ -62,13 +66,13 @@
     renderSlideBackground(
       ctx,
       page.slide,
-      defaultSlideTheme,
+      slideTheme,
       canvas.width,
       canvas.height,
       canvas.width / page.width,
     );
     const url = canvas.toDataURL();
-    slideThumbs.set(page.pageIndex, { slide: page.slide, url });
+    slideThumbs.set(page.pageIndex, { slide: page.slide, theme: slideTheme, url });
     return url;
   }
 

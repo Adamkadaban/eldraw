@@ -309,6 +309,11 @@ export function createDocumentStore(): DocumentStore {
       if (!doc) return;
       const page = doc.pages[pageIndex];
       if (!page || page.objects.length !== objects.length) return;
+      // The new order must be a permutation of the current one. Matching only
+      // length and membership would let a duplicated id silently drop another
+      // object from the page.
+      const nextIds = new Set(objects.map((object) => object.id));
+      if (nextIds.size !== objects.length) return;
       const currentIds = new Set(page.objects.map((object) => object.id));
       if (objects.some((object) => !currentIds.has(object.id))) return;
       pushAndApply(pageIndex, {

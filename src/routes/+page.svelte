@@ -253,7 +253,8 @@
 
   function insertSlide(slide: Slide): void {
     documentStore.insertSlidePageAfter(pageIndex, slide, SLIDE_SIZE.width, SLIDE_SIZE.height);
-    viewport.setPage(pageIndex + 1, pages.length + 1);
+    const total = get(currentDocument)?.pages.length ?? 0;
+    viewport.setPage(pageIndexAfterDuplicate(pageIndex, total), total);
   }
 
   function onSlideCommand(action: SlideCommandAction): void {
@@ -876,6 +877,7 @@
   {#if chrome.thumbnails && !sidebarState.rightBarHidden}
     <ThumbnailStrip
       {pages}
+      {slideTheme}
       currentIndex={pageIndex}
       docKey={doc?.pdfHash ?? null}
       onpick={onThumbPick}
