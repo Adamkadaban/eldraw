@@ -44,6 +44,35 @@ const GREEK_NAMES = new Set([
 ]);
 
 const CONSTANT_NAMES = new Set(['oo', 'infty']);
+const SHORT_PROSE_WORDS = new Set([
+  'am',
+  'an',
+  'as',
+  'at',
+  'be',
+  'by',
+  'do',
+  'go',
+  'he',
+  'if',
+  'in',
+  'is',
+  'it',
+  'me',
+  'my',
+  'no',
+  'of',
+  'oh',
+  'ok',
+  'on',
+  'or',
+  'so',
+  'to',
+  'up',
+  'us',
+  'we',
+]);
+const COMPACT_VARIABLE_FOLLOWERS = new Set(['+', '-', '*', '/', '^', '_']);
 const RELATIONS = new Set(['=', '<', '>', '<=', '>=', '!=', '=>', '≠', '≤', '≥']);
 const OPERATORS = [
   '<=',
@@ -83,6 +112,7 @@ interface Token {
   start: number;
   end: number;
   recognizedWord?: boolean;
+  compactVariable?: boolean;
   scriptOperand?: boolean;
 }
 
@@ -138,6 +168,7 @@ function tokenize(source: string): Token[] {
           FUNCTION_NAMES.has(lower) ||
           GREEK_NAMES.has(lower) ||
           CONSTANT_NAMES.has(lower),
+        compactVariable: value.length === 2 && value === lower && !SHORT_PROSE_WORDS.has(lower),
       });
       continue;
     }
@@ -186,14 +217,26 @@ function nextSignificant(tokens: Token[], from: number): Token | undefined {
 function isLeftOperand(token: Token | undefined): boolean {
   if (!token) return false;
   if (token.kind === 'number' || token.kind === 'control') return true;
-  if (token.kind === 'word') return token.recognizedWord === true || token.scriptOperand === true;
+  if (token.kind === 'word') {
+    return (
+      token.recognizedWord === true ||
+      token.compactVariable === true ||
+      token.scriptOperand === true
+    );
+  }
   return token.kind === 'bracket' && ')]}'.includes(token.value);
 }
 
 function isRightOperand(token: Token | undefined): boolean {
   if (!token) return false;
   if (token.kind === 'number' || token.kind === 'control') return true;
-  if (token.kind === 'word') return token.recognizedWord === true || token.scriptOperand === true;
+  if (token.kind === 'word') {
+    return (
+      token.recognizedWord === true ||
+      token.compactVariable === true ||
+      token.scriptOperand === true
+    );
+  }
   return token.kind === 'bracket' && '([{'.includes(token.value);
 }
 
@@ -307,9 +350,75 @@ function trimCandidate(tokens: Token[]): Token[] {
   return tokens.slice(start, end);
 }
 
-function canJoinCandidate(token: Token, candidate: Token[]): boolean {
+function sourceForTokens(tokens: Token[]): string {
+  return tokens.map((token) => token.value).join('');
+}
+
+function lastTopLevelComma(tokens: Token[]): number {
+  const stack: string[] = [];
+  const pairs: Record<string, string> = { ')': '(', ']': '[', '}': '{' };
+  let comma = -1;
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.kind === 'bracket') {
+      if ('([{'.includes(token.value)) {
+        stack.push(token.value);
+      } else if (stack[stack.length - 1] === pairs[token.value]) {
+        stack.pop();
+      }
+    } else if (token.kind === 'punctuation' && token.value === ',' && stack.length === 0) {
+      comma = index;
+    }
+  }
+
+  return comma;
+}
+
+function trimIncompleteTail(tokens: Token[]): Token[] {
+  let trimmed = trimCandidate(tokens);
+
+  while (trimmed.length > 0) {
+    const last = trimmed[trimmed.length - 1];
+    if (last.kind === 'operator') {
+      trimmed = trimCandidate(trimmed.slice(0, -1));
+      continue;
+    }
+
+    const comma = lastTopLevelComma(trimmed);
+    if (comma >= 0) {
+      const suffix = trimCandidate(trimmed.slice(comma + 1));
+      if (suffix.length === 0 || !candidateLooksLikeMath(sourceForTokens(suffix), suffix)) {
+        trimmed = trimCandidate(trimmed.slice(0, comma));
+        continue;
+      }
+    }
+    break;
+  }
+
+  return trimmed;
+}
+
+function hasRelationWithLeftOperand(tokens: Token[]): boolean {
+  return tokens.some(
+    (token, index) =>
+      token.kind === 'operator' &&
+      RELATIONS.has(token.value) &&
+      isLeftOperand(previousSignificant(tokens, index - 1)),
+  );
+}
+
+function canJoinCandidate(token: Token, candidate: Token[], following: Token | undefined): boolean {
   if (token.kind === 'other') return false;
   if (token.kind !== 'word' || token.recognizedWord) return true;
+  if (
+    token.compactVariable &&
+    hasRelationWithLeftOperand(candidate) &&
+    following?.kind === 'operator' &&
+    COMPACT_VARIABLE_FOLLOWERS.has(following.value)
+  ) {
+    return true;
+  }
 
   const previous = previousSignificant(candidate, candidate.length - 1);
   if (previous?.kind === 'operator' && (previous.value === '^' || previous.value === '_')) {
@@ -349,7 +458,7 @@ export function detectMathSegments(source: string): TextSegment[] {
   let candidate: Token[] = [];
 
   const flush = () => {
-    const trimmed = trimCandidate(candidate);
+    const trimmed = trimIncompleteTail(candidate);
     if (trimmed.length > 0) {
       const start = trimmed[0].start;
       const end = trimmed[trimmed.length - 1].end;
@@ -358,8 +467,9 @@ export function detectMathSegments(source: string): TextSegment[] {
     candidate = [];
   };
 
-  for (const token of tokens) {
-    if (canJoinCandidate(token, candidate)) {
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (canJoinCandidate(token, candidate, nextSignificant(tokens, index + 1))) {
       if (token.kind !== 'space' || candidate.length > 0) candidate.push(token);
     } else {
       flush();
