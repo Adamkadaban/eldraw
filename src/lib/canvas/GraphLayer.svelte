@@ -8,6 +8,7 @@
     type ParameterizedFn,
     type ParameterizedFnXY,
   } from '$lib/graph/parser';
+  import { graphFnCacheKey, liveCacheKeys, pruneCache } from '$lib/graph/compileCache';
   import { clampParameter } from '$lib/graph/parameters';
   import { plotFunction } from '$lib/graph/plotter';
   import { marchingSquares, stitchSegments } from '$lib/graph/implicit';
@@ -108,7 +109,7 @@
     fn: GraphFunction,
     parameters: readonly GraphParameter[],
   ): ParameterizedFn | null {
-    const key = `${graphId}\u0000${fn.id}`;
+    const key = graphFnCacheKey(graphId, fn.id);
     const names = parameterNamesKey(parameters);
     let cached = explicitCache.get(key);
     if (!cached || cached.expr !== fn.expr || cached.parameterNames !== names) {
@@ -131,7 +132,7 @@
     fn: GraphFunction,
     parameters: readonly GraphParameter[],
   ): ParameterizedFnXY | null {
-    const key = `${graphId}\u0000${fn.id}`;
+    const key = graphFnCacheKey(graphId, fn.id);
     const names = parameterNamesKey(parameters);
     let cached = implicitCache.get(key);
     if (!cached || cached.expr !== fn.expr || cached.parameterNames !== names) {
@@ -247,10 +248,22 @@
     }
   }
 
+  /**
+   * Drop compiled entries for graphs and functions that no longer exist.
+   * The caches are keyed per function, so without this they would retain every
+   * expression ever compiled for the lifetime of the page.
+   */
+  function pruneCaches() {
+    const live = liveCacheKeys(graphs);
+    pruneCache(explicitCache, live);
+    pruneCache(implicitCache, live);
+  }
+
   function redraw() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    pruneCaches();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const theme = resolvedTheme;
     for (const g of graphs) drawGraph(ctx, g, theme);
