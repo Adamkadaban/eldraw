@@ -490,7 +490,15 @@ export function createDocumentStore(): DocumentStore {
     },
 
     objectsOnPage(pageIndex) {
-      return derived(state, ($doc) => $doc?.pages[pageIndex]?.objects ?? []);
+      let prev: AnyObject[] = [];
+      return derived(state, ($doc) => {
+        const next = $doc?.pages[pageIndex]?.objects ?? [];
+        if (next === prev || (next.length === prev.length && next.every((o, i) => o === prev[i]))) {
+          return prev;
+        }
+        prev = next;
+        return next;
+      });
     },
 
     onPageCommit(listener) {
