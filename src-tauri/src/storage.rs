@@ -153,16 +153,17 @@ mod tests {
     use tempfile::TempDir;
 
     fn sample_doc() -> EldrawDocument {
-        EldrawDocument {
-            version: 1,
-            pdf_hash: "abc123".into(),
-            pdf_path: Some("/tmp/foo.pdf".into()),
-            pages: vec![
-                json!({"pageIndex": 0, "type": "pdf", "width": 612.0, "height": 792.0, "objects": [], "insertedAfterPdfPage": null}),
+        serde_json::from_value(json!({
+            "version": 1,
+            "pdfHash": "abc123",
+            "pdfPath": "/example/foo.pdf",
+            "pages": [
+                {"pageIndex": 0, "type": "pdf", "pdfSourceIndex": 0, "width": 612.0, "height": 792.0, "objects": [], "insertedAfterPdfPage": null}
             ],
-            palettes: vec![],
-            prefs: json!({}),
-        }
+            "palettes": [],
+            "prefs": {},
+        }))
+        .unwrap()
     }
 
     fn pdf_str(dir: &TempDir, name: &str) -> String {

@@ -22,6 +22,7 @@ import {
 } from '$lib/config/commands';
 import { settings } from '$lib/store/settings';
 import { openSlidesDialog } from '$lib/slides/dialog';
+import { exportAnnotatedPdfDialog } from '$lib/app/exportPdfDialog';
 
 export interface Command {
   id: string;
@@ -192,6 +193,11 @@ export function getCommands(): Command[] {
       id: 'file.openFromSlides',
       title: 'Open from Google Slides…',
       run: openSlidesDialog,
+    },
+    {
+      id: 'file.exportAnnotatedPdf',
+      title: 'Export annotated PDF…',
+      run: () => void exportAnnotatedPdfDialog(),
     },
     {
       id: 'config.export',

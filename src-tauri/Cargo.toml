@@ -27,6 +27,9 @@ pdfium-render = { version = "0.9", default-features = false, features = [
   "thread_safe",
 ] }
 image = "0.25"
+font8x8 = "0.3"
+lopdf = "0.38"
+meval = "0.2"
 tauri-plugin-dialog = "2.7.0"
 lru = "0.12"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "charset"] }
