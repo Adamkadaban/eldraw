@@ -68,8 +68,10 @@
     PdfMeta,
     ShapeObject,
     StrokeObject,
+    TextMathMode,
     TextObject,
   } from '$lib/types';
+  import { textMathMode } from '$lib/types';
 
   const ERASER_RADIUS = 4;
 
@@ -283,9 +285,21 @@
     if (!editor) return null;
     if (editor.mode === 'edit') {
       const o = editor.obj;
-      return { content: o.content, latex: o.latex, fontSize: o.fontSize, color: o.color };
+      return {
+        content: o.content,
+        latex: o.latex,
+        mathMode: textMathMode(o),
+        fontSize: o.fontSize,
+        color: o.color,
+      };
     }
-    return { content: '', latex: false, fontSize: 16, color: sidebarState.activeColor };
+    return {
+      content: '',
+      latex: false,
+      mathMode: 'auto' as const,
+      fontSize: 16,
+      color: sidebarState.activeColor,
+    };
   });
 
   function newId(): string {
@@ -305,6 +319,7 @@
   function onEditorOk(result: {
     content: string;
     latex: boolean;
+    mathMode: TextMathMode;
     fontSize: number;
     color: string;
   }): void {
@@ -321,6 +336,7 @@
         at: editor.at,
         content: result.content,
         latex: result.latex,
+        mathMode: result.mathMode,
         fontSize: result.fontSize,
         color: result.color,
       };
@@ -332,6 +348,7 @@
         documentStore.updateObject(pageIndex, editor.obj.id, {
           content: result.content,
           latex: result.latex,
+          mathMode: result.mathMode,
           fontSize: result.fontSize,
           color: result.color,
         });
@@ -824,6 +841,7 @@
     <TextEditor
       initialContent={editorInitial.content}
       initialLatex={editorInitial.latex}
+      initialMathMode={editorInitial.mathMode}
       initialFontSize={editorInitial.fontSize}
       initialColor={editorInitial.color}
       screenX={editor.screen.x}

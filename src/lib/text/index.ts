@@ -1,4 +1,10 @@
 export { renderLatex, escapeHtml } from './latex';
 export type { LatexRender, RenderLatexOptions, KatexRenderFn } from './latex';
+export { autoSegment, detectMathSegments, looksLikeMath } from './autodetect';
+export { normalizeMathSource } from './normalize';
+export { renderMixed } from './render';
+export type { MixedRender, RenderedRun } from './render';
+export { hasExplicitMath, segmentLatex, unescapeDollars } from './segment';
+export type { TextSegment } from './segment';
 export { estimateTextBounds, hitTestTextObject, hitTestTextObjects } from './hitTest';
 export type { TextBounds } from './hitTest';
