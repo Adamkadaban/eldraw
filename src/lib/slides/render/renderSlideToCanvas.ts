@@ -1,6 +1,52 @@
-import type { Slide, SlideTheme } from '$lib/types';
-import { layoutSlide } from '../layout';
+import type { Slide, SlideMappingBlock, SlideTheme } from '$lib/types';
+import { layoutSlide, type LayoutBox } from '../layout';
 import { resolveTheme } from '../theme';
+import { mappingGeometry } from './mappingGeometry';
+
+function drawMappingPlaceholder(
+  ctx: CanvasRenderingContext2D,
+  block: SlideMappingBlock,
+  box: LayoutBox,
+  theme: SlideTheme,
+  scale: number,
+): void {
+  const geometry = mappingGeometry(block, box.w, box.h, theme.bodySize);
+  const offsetX = box.x * scale;
+  const offsetY = box.y * scale;
+
+  ctx.save();
+  ctx.lineWidth = Math.max(0.75, scale);
+  for (const [oval, color, opacity] of [
+    [geometry.leftOval, theme.accent, 0.15],
+    [geometry.rightOval, theme.textColor, 0.07],
+  ] as const) {
+    ctx.beginPath();
+    ctx.ellipse(
+      offsetX + oval.cx * scale,
+      offsetY + oval.cy * scale,
+      oval.rx * scale,
+      oval.ry * scale,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = color;
+    ctx.globalAlpha = opacity;
+    ctx.fill();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+  }
+  ctx.strokeStyle = theme.textColor;
+  ctx.globalAlpha = 0.45;
+  for (const arrow of geometry.arrows.slice(0, 8)) {
+    ctx.beginPath();
+    ctx.moveTo(offsetX + arrow.from.x * scale, offsetY + arrow.from.y * scale);
+    ctx.lineTo(offsetX + arrow.to.x * scale, offsetY + arrow.to.y * scale);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
 export function renderSlideBackground(
   ctx: CanvasRenderingContext2D,
@@ -36,6 +82,10 @@ export function renderSlideBackground(
     const y = box.y * scale;
     const w = box.w * scale;
     const h = box.h * scale;
+    if (block.kind === 'mapping') {
+      drawMappingPlaceholder(ctx, block, box, safeTheme, scale);
+      continue;
+    }
     ctx.fillStyle = block.kind === 'callout' ? safeTheme.accent : safeTheme.textColor;
     ctx.globalAlpha = block.kind === 'callout' ? 0.14 : 0.18;
     if (block.kind === 'graph' || block.kind === 'image' || block.kind === 'table') {

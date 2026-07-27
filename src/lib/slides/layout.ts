@@ -131,6 +131,8 @@ export function measureBlock(block: SlideBlock, theme: SlideTheme, width: number
         (block.caption ? textHeight(block.caption, bodySize, availableWidth) + bodySize * 0.45 : 0)
       );
     }
+    case 'mapping':
+      return finiteNonNegative(block.height);
     case 'callout': {
       const fontSize = safeFontSize(block.fontSize, bodySize);
       const padding = fontSize * 0.8;
@@ -151,6 +153,7 @@ function blockGap(block: SlideBlock, bodySize: number): number {
   switch (block.kind) {
     case 'graph':
     case 'image':
+    case 'mapping':
       return bodySize * 1.15;
     case 'table':
       return bodySize;

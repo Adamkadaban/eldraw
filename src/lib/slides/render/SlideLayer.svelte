@@ -7,6 +7,7 @@
   import { resolveTheme } from '../theme';
   import { graphObjectForSlide, graphThemeForSlide } from './graphAdapter';
   import { renderInlineMath } from './inlineMath';
+  import { mappingGeometry } from './mappingGeometry';
 
   interface Props {
     slide: Slide;
@@ -228,6 +229,107 @@
             theme={graphThemeForSlide(theme, scale)}
           />
         </div>
+      {:else if placed.block.kind === 'mapping'}
+        {@const mapping = mappingGeometry(placed.block, placed.box.w, placed.box.h, theme.bodySize)}
+        <div class="mapping">
+          <svg
+            class="mapping-svg"
+            viewBox={`0 0 ${placed.box.w} ${placed.box.h}`}
+            aria-hidden="true"
+          >
+            <ellipse
+              cx={mapping.leftOval.cx}
+              cy={mapping.leftOval.cy}
+              rx={mapping.leftOval.rx}
+              ry={mapping.leftOval.ry}
+              fill={theme.accent}
+              fill-opacity="0.1"
+              stroke={theme.accent}
+              stroke-opacity="0.45"
+              stroke-width="1.1"
+            />
+            <ellipse
+              cx={mapping.rightOval.cx}
+              cy={mapping.rightOval.cy}
+              rx={mapping.rightOval.rx}
+              ry={mapping.rightOval.ry}
+              fill={theme.textColor}
+              fill-opacity="0.045"
+              stroke={theme.textColor}
+              stroke-opacity="0.28"
+              stroke-width="1.1"
+            />
+            {#each mapping.arrows as arrow}
+              <line
+                x1={arrow.from.x}
+                y1={arrow.from.y}
+                x2={arrow.to.x}
+                y2={arrow.to.y}
+                stroke={theme.textColor}
+                stroke-opacity="0.65"
+                stroke-width="1.15"
+              />
+              <polygon
+                points={arrow.head.map((point) => `${point.x},${point.y}`).join(' ')}
+                fill={theme.textColor}
+                fill-opacity="0.7"
+              />
+            {/each}
+          </svg>
+          {#if mapping.caption && placed.block.caption}
+            <div
+              class="mapping-caption"
+              style:left={`${mapping.caption.x * scale}px`}
+              style:top={`${mapping.caption.y * scale}px`}
+              style:font-size={`${theme.bodySize * scale}px`}
+            >
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html renderInlineMath(placed.block.caption)}
+            </div>
+          {/if}
+          {#each mapping.leftItems as item}
+            <div
+              class="mapping-item"
+              style:left={`${item.x * scale}px`}
+              style:top={`${item.y * scale}px`}
+              style:width={`${mapping.leftOval.rx * 1.35 * scale}px`}
+              style:font-size={`${theme.bodySize * scale}px`}
+            >
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html renderInlineMath(item.text)}
+            </div>
+          {/each}
+          {#each mapping.rightItems as item}
+            <div
+              class="mapping-item"
+              style:left={`${item.x * scale}px`}
+              style:top={`${item.y * scale}px`}
+              style:width={`${mapping.rightOval.rx * 1.35 * scale}px`}
+              style:font-size={`${theme.bodySize * scale}px`}
+            >
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html renderInlineMath(item.text)}
+            </div>
+          {/each}
+          <div
+            class="mapping-label"
+            style:left={`${mapping.leftLabel.x * scale}px`}
+            style:top={`${mapping.leftLabel.y * scale}px`}
+            style:font-size={`${theme.bodySize * 0.86 * scale}px`}
+          >
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            {@html renderInlineMath(placed.block.leftLabel)}
+          </div>
+          <div
+            class="mapping-label"
+            style:left={`${mapping.rightLabel.x * scale}px`}
+            style:top={`${mapping.rightLabel.y * scale}px`}
+            style:font-size={`${theme.bodySize * 0.86 * scale}px`}
+          >
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            {@html renderInlineMath(placed.block.rightLabel)}
+          </div>
+        </div>
       {:else if placed.block.kind === 'callout'}
         <div
           class="callout"
@@ -341,6 +443,31 @@
     position: relative;
     width: 100%;
     overflow: hidden;
+  }
+
+  .mapping,
+  .mapping-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .mapping-item,
+  .mapping-label,
+  .mapping-caption {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mapping-label,
+  .mapping-caption {
+    font-weight: 600;
   }
 
   .callout {
