@@ -1,4 +1,5 @@
 import type { Slide, SlideAlign, SlideBlock, SlideTheme } from '$lib/types';
+import { presentList } from './listMarkers';
 
 export interface LayoutBox {
   x: number;
@@ -53,11 +54,6 @@ function textHeight(text: string, fontSize: number, width: number): number {
   return lineCount(text, fontSize, width) * fontSize * LINE_HEIGHT_RATIO;
 }
 
-function clampedLevel(level: number): number {
-  if (!Number.isFinite(level)) return 0;
-  return Math.min(3, Math.max(0, Math.floor(level)));
-}
-
 function normalizedColumnWeights(block: Extract<SlideBlock, { kind: 'table' }>, count: number) {
   const weights = block.columnWeights;
   if (
@@ -84,9 +80,9 @@ export function measureBlock(block: SlideBlock, theme: SlideTheme, width: number
     }
     case 'list': {
       const fontSize = safeFontSize(block.fontSize, bodySize);
-      return block.items.reduce((height, item) => {
-        const indent = clampedLevel(item.level) * fontSize * 1.4;
-        const itemWidth = Math.max(0, availableWidth - indent - fontSize * 1.5);
+      return presentList(block).reduce((height, item) => {
+        const reservedWidth = (item.indentEm + item.markerWidthEm + 0.55) * fontSize;
+        const itemWidth = Math.max(0, availableWidth - reservedWidth);
         return height + textHeight(item.text, fontSize, itemWidth);
       }, 0);
     }
@@ -132,6 +128,8 @@ export function measureBlock(block: SlideBlock, theme: SlideTheme, width: number
       );
     }
     case 'mapping':
+    case 'diagram':
+    case 'numberline':
       return finiteNonNegative(block.height);
     case 'callout': {
       const fontSize = safeFontSize(block.fontSize, bodySize);
@@ -154,6 +152,8 @@ function blockGap(block: SlideBlock, bodySize: number): number {
     case 'graph':
     case 'image':
     case 'mapping':
+    case 'diagram':
+    case 'numberline':
       return bodySize * 1.15;
     case 'table':
       return bodySize;

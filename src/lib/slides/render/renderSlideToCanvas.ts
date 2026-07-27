@@ -1,7 +1,15 @@
-import type { Slide, SlideMappingBlock, SlideTheme } from '$lib/types';
+import type {
+  Slide,
+  SlideDiagramBlock,
+  SlideMappingBlock,
+  SlideNumberLineBlock,
+  SlideTheme,
+} from '$lib/types';
 import { layoutSlide, type LayoutBox } from '../layout';
 import { resolveTheme } from '../theme';
+import { diagramGeometry } from './diagramGeometry';
 import { mappingGeometry } from './mappingGeometry';
+import { slideNumberLineGeometry } from './numberLineGeometry';
 
 function drawMappingPlaceholder(
   ctx: CanvasRenderingContext2D,
@@ -48,6 +56,67 @@ function drawMappingPlaceholder(
   ctx.restore();
 }
 
+function drawDiagramPlaceholder(
+  ctx: CanvasRenderingContext2D,
+  block: SlideDiagramBlock,
+  box: LayoutBox,
+  theme: SlideTheme,
+  scale: number,
+): void {
+  const geometry = diagramGeometry(block, box.w, box.h, theme.bodySize);
+  const offsetX = box.x * scale;
+  const offsetY = box.y * scale;
+  ctx.save();
+  ctx.strokeStyle = theme.textColor;
+  ctx.lineWidth = Math.max(0.75, scale);
+  ctx.globalAlpha = 0.35;
+  for (const edge of geometry.edges.slice(0, 12)) {
+    ctx.beginPath();
+    ctx.moveTo(offsetX + edge.from.x * scale, offsetY + edge.from.y * scale);
+    ctx.lineTo(offsetX + edge.to.x * scale, offsetY + edge.to.y * scale);
+    ctx.stroke();
+  }
+  ctx.fillStyle = theme.accent;
+  ctx.globalAlpha = 0.13;
+  for (const node of geometry.nodes.filter((item) => item.shape === 'box').slice(0, 12)) {
+    ctx.fillRect(
+      offsetX + (node.x - node.w / 2) * scale,
+      offsetY + (node.y - node.h / 2) * scale,
+      node.w * scale,
+      node.h * scale,
+    );
+  }
+  ctx.restore();
+}
+
+function drawNumberLinePlaceholder(
+  ctx: CanvasRenderingContext2D,
+  block: SlideNumberLineBlock,
+  box: LayoutBox,
+  theme: SlideTheme,
+  scale: number,
+): void {
+  const geometry = slideNumberLineGeometry(block, box.w, box.h, theme);
+  if (!geometry.valid) return;
+  const offsetX = box.x * scale;
+  const offsetY = box.y * scale;
+  ctx.save();
+  ctx.strokeStyle = theme.textColor;
+  ctx.lineWidth = Math.max(0.75, scale);
+  ctx.globalAlpha = 0.45;
+  ctx.beginPath();
+  ctx.moveTo(offsetX + geometry.x0 * scale, offsetY + geometry.y * scale);
+  ctx.lineTo(offsetX + geometry.x1 * scale, offsetY + geometry.y * scale);
+  for (const tick of geometry.ticks.slice(0, 24)) {
+    const x = offsetX + tick.x * scale;
+    const y = offsetY + geometry.y * scale;
+    ctx.moveTo(x, y - 3 * scale);
+    ctx.lineTo(x, y + 3 * scale);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function renderSlideBackground(
   ctx: CanvasRenderingContext2D,
   slide: Slide,
@@ -84,6 +153,14 @@ export function renderSlideBackground(
     const h = box.h * scale;
     if (block.kind === 'mapping') {
       drawMappingPlaceholder(ctx, block, box, safeTheme, scale);
+      continue;
+    }
+    if (block.kind === 'diagram') {
+      drawDiagramPlaceholder(ctx, block, box, safeTheme, scale);
+      continue;
+    }
+    if (block.kind === 'numberline') {
+      drawNumberLinePlaceholder(ctx, block, box, safeTheme, scale);
       continue;
     }
     ctx.fillStyle = block.kind === 'callout' ? safeTheme.accent : safeTheme.textColor;
