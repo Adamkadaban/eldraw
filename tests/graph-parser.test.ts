@@ -42,6 +42,15 @@ describe('parseExpression', () => {
     expect(compile('(-2)^2')(0)).toBe(4);
   });
 
+  it('supports unary signs in exponents without changing power precedence', () => {
+    expect(compile('x^-2')(3)).toBeCloseTo(1 / 9);
+    expect(compile('2^-x')(3)).toBeCloseTo(1 / 8);
+    expect(compile('e^-x')(2)).toBeCloseTo(Math.exp(-2));
+    expect(compile('x^--2')(3)).toBe(9);
+    expect(compile('-2^2')(0)).toBe(-4);
+    expect(compile('2^3^2')(0)).toBe(512);
+  });
+
   it('supports unary plus and minus', () => {
     expect(compile('-x')(5)).toBe(-5);
     expect(compile('--x')(5)).toBe(5);

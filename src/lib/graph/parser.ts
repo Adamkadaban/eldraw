@@ -6,7 +6,7 @@
  *   expr   := term (('+' | '-') term)*
  *   term   := unary (('*' | '/') unary)*
  *   unary  := ('+' | '-') unary | factor
- *   factor := primary ('^' factor)?         // right-associative and tighter
+ *   factor := primary ('^' unary)?          // right-associative and tighter
  *                                           // than unary minus so `-2^2 == -4`.
  *   primary := number | ident | call | '(' expr ')'
  *   call   := ident '(' expr ')'
@@ -193,7 +193,7 @@ function parseFactor(c: Cursor): NodeFn {
   const t = peek(c);
   if (t && t.k === 'op' && t.v === '^') {
     consume(c);
-    const exp = parseFactor(c);
+    const exp = parseUnary(c);
     return (v) => Math.pow(base(v), exp(v));
   }
   return base;
