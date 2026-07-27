@@ -31,6 +31,11 @@ function commandToMutations(pageIndex: number, cmd: Command): MutationEvent[] {
         id: e.objectId,
         after: e.after,
       }));
+    case 'reorder':
+      return [
+        { kind: 'remove', pageIndex, ids: cmd.before.map((o) => o.id) },
+        ...cmd.after.map((object) => ({ kind: 'add' as const, pageIndex, object })),
+      ];
     case 'clearPage':
       return [{ kind: 'remove', pageIndex, ids: cmd.objects.map((o) => o.id) }];
     case 'restorePage':
@@ -52,6 +57,7 @@ export interface DocumentStore {
   addObject(pageIndex: number, obj: AnyObject): void;
   removeObject(pageIndex: number, id: ObjectId): void;
   removeObjects(pageIndex: number, ids: readonly ObjectId[]): void;
+  reorderObjects(pageIndex: number, objects: readonly AnyObject[]): void;
   updateObject(pageIndex: number, id: ObjectId, patch: Partial<AnyObject>): void;
   /**
    * Apply a batch of object replacements under a single history entry. The
@@ -272,6 +278,20 @@ export function createDocumentStore(): DocumentStore {
         .filter(({ object }) => wanted.has(object.id));
       if (items.length === 0) return;
       pushAndApply(pageIndex, { type: 'removeMany', items });
+    },
+
+    reorderObjects(pageIndex, objects) {
+      const doc = get(state);
+      if (!doc) return;
+      const page = doc.pages[pageIndex];
+      if (!page || page.objects.length !== objects.length) return;
+      const currentIds = new Set(page.objects.map((object) => object.id));
+      if (objects.some((object) => !currentIds.has(object.id))) return;
+      pushAndApply(pageIndex, {
+        type: 'reorder',
+        before: [...page.objects],
+        after: [...objects],
+      });
     },
 
     updateObject(pageIndex, id, patch) {

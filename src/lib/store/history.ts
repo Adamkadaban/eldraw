@@ -24,6 +24,7 @@ export type Command =
   | { type: 'insertMany'; items: IndexedObject[] }
   | { type: 'update'; objectId: ObjectId; before: AnyObject; after: AnyObject }
   | { type: 'updateMany'; entries: UpdateEntry[] }
+  | { type: 'reorder'; before: AnyObject[]; after: AnyObject[] }
   | { type: 'clearPage'; objects: AnyObject[] }
   | { type: 'restorePage'; objects: AnyObject[] };
 
@@ -59,6 +60,8 @@ export function applyCommand(page: Page, cmd: Command): Page {
         objects: page.objects.map((o) => byId.get(o.id) ?? o),
       };
     }
+    case 'reorder':
+      return { ...page, objects: [...cmd.after] };
     case 'clearPage':
       return { ...page, objects: [] };
     case 'restorePage':
@@ -92,6 +95,8 @@ export function invertCommand(cmd: Command): Command {
           after: e.before,
         })),
       };
+    case 'reorder':
+      return { type: 'reorder', before: cmd.after, after: cmd.before };
     case 'clearPage':
       return { type: 'restorePage', objects: cmd.objects };
     case 'restorePage':
