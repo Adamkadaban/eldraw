@@ -19,7 +19,7 @@ export interface UpdateEntry {
 
 export type Command =
   | { type: 'add'; object: AnyObject }
-  | { type: 'remove'; object: AnyObject }
+  | { type: 'remove'; item: IndexedObject }
   | { type: 'removeMany'; items: IndexedObject[] }
   | { type: 'insertMany'; items: IndexedObject[] }
   | { type: 'update'; objectId: ObjectId; before: AnyObject; after: AnyObject }
@@ -35,7 +35,7 @@ export function applyCommand(page: Page, cmd: Command): Page {
     case 'add':
       return { ...page, objects: [...page.objects, cmd.object] };
     case 'remove':
-      return { ...page, objects: page.objects.filter((o) => o.id !== cmd.object.id) };
+      return { ...page, objects: page.objects.filter((o) => o.id !== cmd.item.object.id) };
     case 'removeMany': {
       const drop = new Set(cmd.items.map((i) => i.object.id));
       return { ...page, objects: page.objects.filter((o) => !drop.has(o.id)) };
@@ -72,9 +72,9 @@ export function applyCommand(page: Page, cmd: Command): Page {
 export function invertCommand(cmd: Command): Command {
   switch (cmd.type) {
     case 'add':
-      return { type: 'remove', object: cmd.object };
+      return { type: 'removeMany', items: [{ object: cmd.object, index: 0 }] };
     case 'remove':
-      return { type: 'add', object: cmd.object };
+      return { type: 'insertMany', items: [cmd.item] };
     case 'removeMany':
       return { type: 'insertMany', items: cmd.items };
     case 'insertMany':

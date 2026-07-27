@@ -17,7 +17,7 @@ function commandToMutations(pageIndex: number, cmd: Command): MutationEvent[] {
     case 'add':
       return [{ kind: 'add', pageIndex, object: cmd.object }];
     case 'remove':
-      return [{ kind: 'remove', pageIndex, ids: [cmd.object.id] }];
+      return [{ kind: 'remove', pageIndex, ids: [cmd.item.object.id] }];
     case 'removeMany':
       return [{ kind: 'remove', pageIndex, ids: cmd.items.map((i) => i.object.id) }];
     case 'insertMany':
@@ -261,9 +261,12 @@ export function createDocumentStore(): DocumentStore {
       if (!doc) return;
       const page = doc.pages[pageIndex];
       if (!page) return;
-      const obj = page.objects.find((o) => o.id === id);
-      if (!obj) return;
-      pushAndApply(pageIndex, { type: 'remove', object: obj });
+      const index = page.objects.findIndex((o) => o.id === id);
+      if (index < 0) return;
+      pushAndApply(pageIndex, {
+        type: 'remove',
+        item: { object: page.objects[index], index },
+      });
     },
 
     removeObjects(pageIndex, ids) {
