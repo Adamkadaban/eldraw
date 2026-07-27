@@ -84,14 +84,34 @@ export const shortcuts: Action<HTMLElement> = () => {
 
   function handleKeyUp(event: KeyboardEvent): void {
     if (event.key === ' ') {
-      spaceHeld = false;
-      viewport.setPanMode(false);
+      releaseSpace();
     }
+  }
+
+  /**
+   * Space-hold pan is driven by keydown/keyup, so a keyup delivered to another
+   * window would otherwise leave pan mode latched on. Reset it whenever this
+   * window stops receiving key events.
+   */
+  function releaseSpace(): void {
+    if (!spaceHeld) return;
+    spaceHeld = false;
+    viewport.setPanMode(false);
+  }
+
+  function handleWindowBlur(): void {
+    releaseSpace();
+  }
+
+  function handleVisibilityChange(): void {
+    if (document.visibilityState === 'hidden') releaseSpace();
   }
 
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleWindowBlur);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
   }
 
   return {
@@ -100,6 +120,8 @@ export const shortcuts: Action<HTMLElement> = () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('keydown', handleKeyDown);
         window.removeEventListener('keyup', handleKeyUp);
+        window.removeEventListener('blur', handleWindowBlur);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
     },
   };

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import {
     CanvasStack,
     EraseDebugOverlay,
@@ -32,6 +33,7 @@
   import { shortcuts } from '$lib/app/shortcuts';
   import { setWindowFullscreenChromeless } from '$lib/app/windowFullscreen';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
+  import { pageIndexAfterDelete, pageIndexAfterDuplicate } from '$lib/app/pageNav';
   import { loadPdfFromSource, stopAutosave } from '$lib/pdf/loader';
   import { reloadWarning, clearReloadWarning } from '$lib/store/reloadWarning';
   import { reloadPdf } from '$lib/app/actions';
@@ -221,17 +223,16 @@
 
   function onThumbDuplicate(i: number): void {
     documentStore.duplicatePage(i);
-    viewport.setPage(i + 1, pages.length + 1);
+    const total = get(currentDocument)?.pages.length ?? 0;
+    viewport.setPage(pageIndexAfterDuplicate(i, total), total);
   }
 
   function onThumbDelete(i: number): void {
     if (pages.length <= 1) return;
     documentStore.deletePage(i);
-    const nextTotal = pages.length - 1;
+    const total = get(currentDocument)?.pages.length ?? 0;
     const snap = viewport.snapshot();
-    if (snap.currentPageIndex >= i) {
-      viewport.setPage(Math.max(0, snap.currentPageIndex - 1), nextTotal);
-    }
+    viewport.setPage(pageIndexAfterDelete(i, snap.currentPageIndex, total), total);
   }
 
   function clearCurrentPage(): void {
