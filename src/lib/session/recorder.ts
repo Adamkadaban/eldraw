@@ -102,6 +102,18 @@ export function createRecorder(deps: RecorderDeps = browserDeps()) {
     pushSessionEvent({ kind: 'pageChange', t: currentElapsed(), page: lastPage });
   }
 
+  function recordGraphParameter(page: number, graphId: string, name: string, value: number): void {
+    if (get(state).status !== 'recording' || !Number.isFinite(value)) return;
+    pushSessionEvent({
+      kind: 'graph.paramChange',
+      t: currentElapsed(),
+      page,
+      graphId,
+      name,
+      value,
+    });
+  }
+
   async function start(pdfPath: string, nameHint?: string): Promise<void> {
     if (get(state).status !== 'idle' && get(state).status !== 'error') {
       throw new Error('recorder busy');
@@ -276,6 +288,7 @@ export function createRecorder(deps: RecorderDeps = browserDeps()) {
     pause,
     resume,
     stop,
+    recordGraphParameter,
     snapshot(): RecorderState {
       return get(state);
     },

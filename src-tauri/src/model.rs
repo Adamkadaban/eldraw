@@ -173,6 +173,18 @@ pub struct GraphObject {
     pub show_axes: bool,
     pub show_grid: bool,
     pub functions: Vec<GraphFunction>,
+    pub parameters: Option<Vec<GraphParameter>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphParameter {
+    pub name: String,
+    pub value: f64,
+    pub min: f64,
+    pub max: f64,
+    pub step: f64,
+    pub show_chip: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -604,5 +616,27 @@ mod tests {
         let parsed = serde_json::from_str::<Slide>(json);
         assert!(parsed.is_ok(), "deserialization failed: {:?}", parsed.err());
         assert_eq!(parsed.unwrap().blocks.len(), 5);
+    }
+
+    #[test]
+    fn graph_parameters_round_trip_through_the_sidecar_model() {
+        let json = r##"{
+          "type":"graph","id":"g1","createdAt":1,
+          "bounds":{"x":10,"y":20,"w":300,"h":200},
+          "xRange":[-10,10],"yRange":[-5,5],"gridStep":1,
+          "showAxes":true,"showGrid":true,
+          "functions":[{
+            "id":"f1","expr":"a*sin(x)","kind":"explicit",
+            "color":"#1e88e5","width":2,"dash":"solid","domain":null
+          }],
+          "parameters":[{
+            "name":"a","value":1.3,"min":-5,"max":5,"step":0.1,"showChip":true
+          }]
+        }"##;
+        let parsed: DrawableObject = serde_json::from_str(json).expect("graph should deserialize");
+        let encoded = serde_json::to_value(parsed).expect("graph should serialize");
+        assert_eq!(encoded["parameters"][0]["name"], "a");
+        assert_eq!(encoded["parameters"][0]["value"], 1.3);
+        assert_eq!(encoded["parameters"][0]["showChip"], true);
     }
 }

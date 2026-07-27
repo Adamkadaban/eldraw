@@ -52,6 +52,11 @@
   import { createRafBatcher } from '$lib/canvas/inkBatch';
   import { eraseDebug } from '$lib/store/eraseDebug';
   import { activeGraph, clearActiveGraph, setActiveGraph } from '$lib/store/activeGraph';
+  import {
+    clearGraphPreview,
+    graphPreview as graphPreviewStore,
+    setGraphPreview,
+  } from '$lib/store/graphPreview';
   import { createGraphObject } from '$lib/graph/graphObject';
   import GraphEditor from '$lib/graph/GraphEditor.svelte';
   import { CommandPalette } from '$lib/command';
@@ -62,6 +67,7 @@
     ReplayLayer,
     SessionsPanel,
     player,
+    recorder,
     replayState,
   } from '$lib/session';
   import type { ReplayRenderState } from '$lib/session/player';
@@ -300,12 +306,25 @@
   const pageGraphs = $derived<GraphObject[]>(
     pageObjects.filter((o): o is GraphObject => o.type === 'graph'),
   );
+  const graphPreview = $derived($graphPreviewStore);
   const activeGraphRef = $derived($activeGraph);
   const editingGraph = $derived<GraphObject | null>(
     activeGraphRef && activeGraphRef.pageIndex === pageIndex
       ? (pageGraphs.find((g) => g.id === activeGraphRef.objectId) ?? null)
       : null,
   );
+  const renderedPageGraphs = $derived<GraphObject[]>(
+    graphPreview?.pageIndex === pageIndex
+      ? pageGraphs.map((graph) =>
+          graph.id === graphPreview?.graph.id ? graphPreview.graph : graph,
+        )
+      : pageGraphs,
+  );
+
+  $effect(() => {
+    const activeId = editingGraph?.id;
+    if (graphPreview && graphPreview.graph.id !== activeId) clearGraphPreview();
+  });
   const pageTextObjects = $derived<TextObject[]>(
     pageObjects.filter((o): o is TextObject => o.type === 'text'),
   );
@@ -551,6 +570,23 @@
   function onUpdateGraph(patch: Partial<GraphObject>): void {
     if (!editingGraph) return;
     documentStore.updateObject(pageIndex, editingGraph.id, patch);
+    clearGraphPreview();
+  }
+
+  function onPreviewGraph(patch: Partial<GraphObject>): void {
+    if (!editingGraph) return;
+    const before = graphPreview?.graph.id === editingGraph.id ? graphPreview.graph : editingGraph;
+    const after = { ...before, ...patch };
+    setGraphPreview({ pageIndex, graph: after });
+
+    if (!patch.parameters) return;
+    const previousValues = new Map(
+      before.parameters?.map((parameter) => [parameter.name, parameter.value]),
+    );
+    for (const parameter of patch.parameters) {
+      if (previousValues.get(parameter.name) === parameter.value) continue;
+      recorder.recordGraphParameter(pageIndex, editingGraph.id, parameter.name, parameter.value);
+    }
   }
 
   function onDeleteGraph(): void {
@@ -596,6 +632,7 @@
     stopSidebarBridge?.();
     registerZenFullscreenBridge(null);
     eraseBatcher.cancel();
+    clearGraphPreview();
     stopAutosave();
   });
 </script>
@@ -784,7 +821,7 @@
             >
               {#snippet overlay()}
                 <GraphLayer
-                  graphs={pageGraphs}
+                  graphs={renderedPageGraphs}
                   width={size.width}
                   height={size.height}
                   ptToPx={size.ptToPx}
@@ -820,6 +857,7 @@
               <GraphEditor
                 graph={editingGraph}
                 onUpdate={onUpdateGraph}
+                onPreview={onPreviewGraph}
                 onDelete={onDeleteGraph}
                 onClose={clearActiveGraph}
               />

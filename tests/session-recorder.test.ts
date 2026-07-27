@@ -138,6 +138,22 @@ describe('recorder', () => {
     expect(strokeEvents[0].t).toBeLessThanOrEqual(strokeEvents[1].t);
   });
 
+  it('records graph parameter previews while recording', async () => {
+    const h = makeHarness();
+    await h.recorder.start('/tmp/x.pdf');
+    h.now.ms = 250;
+    h.recorder.recordGraphParameter(0, 'g1', 'a', 2.5);
+
+    expect(h.recorder._inject.events.at(-1)).toEqual({
+      kind: 'graph.paramChange',
+      t: 250,
+      page: 0,
+      graphId: 'g1',
+      name: 'a',
+      value: 2.5,
+    });
+  });
+
   it('emits pageChange on viewport change, ignoring repeats', async () => {
     const h = makeHarness();
     h.now.ms = 0;

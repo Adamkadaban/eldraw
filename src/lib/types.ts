@@ -114,6 +114,16 @@ export interface GraphFunction {
   domain: [number, number] | null;
 }
 
+export interface GraphParameter {
+  name: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  /** Render a `a = 1.3` chip inside the graph area for the projected view. */
+  showChip?: boolean;
+}
+
 export interface GraphObject extends ObjectBase {
   type: 'graph';
   bounds: { x: number; y: number; w: number; h: number };
@@ -124,6 +134,7 @@ export interface GraphObject extends ObjectBase {
   showAxes: boolean;
   showGrid: boolean;
   functions: GraphFunction[];
+  parameters?: GraphParameter[];
 }
 
 /**

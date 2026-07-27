@@ -5,6 +5,14 @@ export type SessionEvent =
   | { kind: 'objectAdd'; t: number; page: number; obj: AnyObject }
   | { kind: 'objectDel'; t: number; page: number; ids: ObjectId[] }
   | { kind: 'objectUpdate'; t: number; page: number; id: ObjectId; after: AnyObject }
+  | {
+      kind: 'graph.paramChange';
+      t: number;
+      page: number;
+      graphId: ObjectId;
+      name: string;
+      value: number;
+    }
   | { kind: 'pageChange'; t: number; page: number };
 
 export interface SessionMeta {
