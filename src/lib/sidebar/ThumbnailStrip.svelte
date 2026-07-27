@@ -48,15 +48,21 @@
 
   /**
    * Slide previews are drawn locally rather than going through the pdfium
-   * cache. Keyed by the slide object identity, which is stable because the
-   * document store replaces slides immutably on every edit.
+   * cache.
+   *
+   * Keyed by the slide object itself, not by page index: indices are
+   * reassigned on insert, delete, and reorder, so an index key would both miss
+   * and retain entries for pages that no longer exist. A WeakMap also lets
+   * previews for discarded slides be collected instead of growing without
+   * bound over a long session.
    */
-  const slideThumbs = new Map<number, { slide: unknown; theme: SlideTheme; url: string }>();
+  const slideThumbs = new WeakMap<object, { theme: SlideTheme; size: string; url: string }>();
 
   function slideThumbUrl(page: Page, width: number, height: number): string | null {
     if (page.type !== 'slide' || !page.slide || width <= 0 || height <= 0) return null;
-    const cached = slideThumbs.get(page.pageIndex);
-    if (cached && cached.slide === page.slide && cached.theme === slideTheme) return cached.url;
+    const size = `${Math.round(width)}x${Math.round(height)}`;
+    const cached = slideThumbs.get(page.slide);
+    if (cached && cached.theme === slideTheme && cached.size === size) return cached.url;
 
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(width));
@@ -72,7 +78,7 @@
       canvas.width / page.width,
     );
     const url = canvas.toDataURL();
-    slideThumbs.set(page.pageIndex, { slide: page.slide, theme: slideTheme, url });
+    slideThumbs.set(page.slide, { theme: slideTheme, size, url });
     return url;
   }
 

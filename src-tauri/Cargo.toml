@@ -4,6 +4,9 @@ version = "0.1.0-rc.12"
 description = "PDF annotation tool for live math teaching"
 authors = ["Adam"]
 edition = "2021"
+# File locking (std::fs::File::try_lock / TryLockError) used by storage.rs was
+# stabilized in 1.89. Declared so an older toolchain fails with a clear message.
+rust-version = "1.89"
 
 [lib]
 name = "eldraw_lib"

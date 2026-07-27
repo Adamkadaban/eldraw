@@ -9,6 +9,16 @@ export async function exportAnnotatedPdfDialog(): Promise<void> {
     window.alert('Open a document before exporting.');
     return;
   }
+  // Rendering pdf pages needs the source file. Catching this here gives a
+  // actionable message instead of a low-level "cannot read source PDF".
+  const needsSource = doc.pages.some((page) => page.type === 'pdf');
+  if (needsSource && !doc.pdfPath) {
+    window.alert(
+      'This document has PDF pages but its source file is not available.\n\n' +
+        'Re-open the original PDF, then export again.',
+    );
+    return;
+  }
   const outPath = await save({
     filters: [{ name: 'PDF', extensions: ['pdf'] }],
     defaultPath: suggestedFilename(doc.pdfPath),
