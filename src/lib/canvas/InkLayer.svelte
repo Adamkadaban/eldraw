@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isAppendOnly } from '$lib/canvas/layerDiff';
   import { onMount } from 'svelte';
   import type { StrokeObject } from '$lib/types';
   import { drawStroke } from './strokeRenderer';
@@ -13,8 +14,12 @@
   let { strokes, width, height, ptToPx }: Props = $props();
 
   let canvas: HTMLCanvasElement;
+  let prevStrokes: StrokeObject[] = [];
+  let prevWidth = 0;
+  let prevHeight = 0;
+  let prevPtToPx = 0;
 
-  function redraw() {
+  function fullRedraw() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -23,16 +28,41 @@
     for (const s of strokes) {
       if (s.tool === 'pen') drawStroke(ctx, s, { ptToPx });
     }
+    prevStrokes = strokes;
+    prevWidth = width;
+    prevHeight = height;
+    prevPtToPx = ptToPx;
   }
 
-  onMount(redraw);
+  function incrementalDraw() {
+    if (!canvas) return;
+    if (width !== prevWidth || height !== prevHeight || ptToPx !== prevPtToPx) {
+      fullRedraw();
+      return;
+    }
+    if (strokes === prevStrokes) return;
+    if (isAppendOnly(prevStrokes, strokes)) {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.globalCompositeOperation = 'source-over';
+      for (let i = prevStrokes.length; i < strokes.length; i++) {
+        const s = strokes[i];
+        if (s.tool === 'pen') drawStroke(ctx, s, { ptToPx });
+      }
+      prevStrokes = strokes;
+      return;
+    }
+    fullRedraw();
+  }
+
+  onMount(fullRedraw);
 
   $effect(() => {
     void strokes;
     void width;
     void height;
     void ptToPx;
-    redraw();
+    incrementalDraw();
   });
 </script>
 

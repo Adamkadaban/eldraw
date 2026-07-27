@@ -18,10 +18,21 @@
     result: MixedRender;
   }
 
+  const renderCache = new Map<
+    string,
+    { content: string; mode: ReturnType<typeof textMathMode>; result: MixedRender }
+  >();
+
   const rendered = $derived<Rendered[]>(
     objects.map((obj) => {
       const mode = textMathMode(obj);
-      return { obj, mode, result: renderMixed(obj.content, mode) };
+      const cached = renderCache.get(obj.id);
+      if (cached && cached.content === obj.content && cached.mode === mode) {
+        return { obj, mode, result: cached.result };
+      }
+      const result = renderMixed(obj.content, mode);
+      renderCache.set(obj.id, { content: obj.content, mode, result });
+      return { obj, mode, result };
     }),
   );
 
