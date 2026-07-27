@@ -152,6 +152,87 @@ function relationPractice(): Slide {
   };
 }
 
+function functionMachine(): Slide {
+  const diagram = block<'diagram'>('diagram');
+  diagram.nodes = [
+    { id: 'forward-input', text: 'Input', x: 0.08, y: 0.25, shape: 'plain' },
+    { id: 'forward-first', text: 'Operation 1', x: 0.35, y: 0.25, shape: 'box' },
+    { id: 'forward-second', text: 'Operation 2', x: 0.65, y: 0.25, shape: 'box' },
+    { id: 'forward-output', text: 'Output', x: 0.92, y: 0.25, shape: 'plain' },
+    { id: 'reverse-output', text: 'Output', x: 0.92, y: 0.75, shape: 'plain' },
+    { id: 'reverse-second', text: 'Undo operation 2', x: 0.65, y: 0.75, shape: 'box' },
+    { id: 'reverse-first', text: 'Undo operation 1', x: 0.35, y: 0.75, shape: 'box' },
+    { id: 'reverse-input', text: 'Input', x: 0.08, y: 0.75, shape: 'plain' },
+  ];
+  diagram.edges = [
+    { from: 'forward-input', to: 'forward-first' },
+    { from: 'forward-first', to: 'forward-second' },
+    { from: 'forward-second', to: 'forward-output' },
+    { from: 'reverse-output', to: 'reverse-second' },
+    { from: 'reverse-second', to: 'reverse-first' },
+    { from: 'reverse-first', to: 'reverse-input' },
+  ];
+  diagram.height = 300;
+  return { ...createSlide('content', 'Function machine'), blocks: [diagram] };
+}
+
+function labelledExpression(): Slide {
+  const expression = block<'math'>('math');
+  expression.latex = 'a(b + c)';
+  const diagram = block<'diagram'>('diagram');
+  diagram.nodes = [
+    { id: 'label-one', text: 'Label', x: 0.2, y: 0.8, shape: 'plain' },
+    { id: 'target-one', text: 'Part', x: 0.4, y: 0.2, shape: 'plain' },
+    { id: 'label-two', text: 'Label', x: 0.8, y: 0.8, shape: 'plain' },
+    { id: 'target-two', text: 'Part', x: 0.6, y: 0.2, shape: 'plain' },
+  ];
+  diagram.edges = [
+    { from: 'label-one', to: 'target-one' },
+    { from: 'label-two', to: 'target-two' },
+  ];
+  diagram.height = 180;
+  return { ...createSlide('content', 'Labelled expression'), blocks: [expression, diagram] };
+}
+
+function numberLineSlide(): Slide {
+  const numberline = block<'numberline'>('numberline');
+  const prompt = block<'text'>('text');
+  prompt.text = 'Add a short prompt';
+  return { ...createSlide('content', 'Number line'), blocks: [numberline, prompt] };
+}
+
+function subNumberedSteps(): Slide {
+  const list = block<'list'>('list');
+  list.marker = 'decimal';
+  list.markerByLevel = ['decimal', 'alpha'];
+  list.items = [
+    { text: 'First step', level: 0 },
+    { text: 'Sub-step', level: 1 },
+    { text: 'Second step', level: 0 },
+  ];
+  return { ...createSlide('content', 'Steps'), blocks: [list] };
+}
+
+function dataTable(): Slide {
+  const table = block<'table'>('table');
+  table.headerOrientation = 'column';
+  table.header = ['Label', 'Value', 'Value'];
+  table.rows = [
+    ['Category', 'Value', 'Value'],
+    ['Category', 'Value', 'Value'],
+  ];
+  const firstPrompt = block<'text'>('text');
+  firstPrompt.text = 'Add a question about the data';
+  const secondPrompt = block<'text'>('text');
+  secondPrompt.text = 'Add a follow-up question';
+  const space = block<'spacer'>('spacer');
+  space.height = 180;
+  return {
+    ...createSlide('content', 'Data table'),
+    blocks: [table, firstPrompt, secondPrompt, space],
+  };
+}
+
 function practiceGrid(): Slide {
   const blocks: (SlideTextBlock | SlideSpacerBlock)[] = [];
   for (let index = 1; index <= 4; index += 1) {
@@ -278,6 +359,41 @@ export const slideTemplates: SlideTemplate[] = [
     description: 'A mapping beside domain and range questions',
     group: 'Practice',
     build: relationPractice,
+  },
+  {
+    id: 'function-machine',
+    name: 'Function machine',
+    description: 'Forward and reverse operation chains',
+    group: 'Math',
+    build: functionMachine,
+  },
+  {
+    id: 'labelled-expression',
+    name: 'Labelled expression',
+    description: 'An expression with leader-line labels',
+    group: 'Math',
+    build: labelledExpression,
+  },
+  {
+    id: 'number-line',
+    name: 'Number line',
+    description: 'A number line with a short prompt',
+    group: 'Math',
+    build: numberLineSlide,
+  },
+  {
+    id: 'sub-numbered-steps',
+    name: 'Sub-numbered steps',
+    description: 'Numbered steps with alphabetic sub-steps',
+    group: 'Concepts',
+    build: subNumberedSteps,
+  },
+  {
+    id: 'data-table',
+    name: 'Data table',
+    description: 'Column-headed data with prompts and writing space',
+    group: 'Data',
+    build: dataTable,
   },
   {
     id: 'practice-grid',

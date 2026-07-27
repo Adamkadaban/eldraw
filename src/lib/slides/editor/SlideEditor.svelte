@@ -1,14 +1,18 @@
 <script lang="ts">
   import type {
     GraphFunction,
+    NumberLineMarkKind,
     Slide,
     SlideAlign,
     SlideBlock,
     SlideCalloutBlock,
     SlideCalloutTone,
+    SlideDiagramBlock,
     SlideGraphBlock,
     SlideLayoutKind,
+    SlideListMarker,
     SlideMappingBlock,
+    SlideNumberLineBlock,
     SlideTableBlock,
   } from '$lib/types';
   import {
@@ -30,6 +34,7 @@
   let addKind = $state<SlideBlock['kind']>('text');
   let imageError = $state('');
   let mappingSelections = $state<Record<string, { from: number; to: number }>>({});
+  let diagramSelections = $state<Record<string, { from: string; to: string }>>({});
 
   const layouts: { value: SlideLayoutKind; label: string }[] = [
     { value: 'title', label: 'Title' },
@@ -49,7 +54,17 @@
     { value: 'callout', label: 'Callout' },
     { value: 'image', label: 'Image' },
     { value: 'mapping', label: 'Mapping diagram' },
+    { value: 'diagram', label: 'Node diagram' },
+    { value: 'numberline', label: 'Number line' },
     { value: 'spacer', label: 'Writing space' },
+  ];
+
+  const listMarkerOptions: { value: SlideListMarker; label: string }[] = [
+    { value: 'bullet', label: 'Bullet' },
+    { value: 'decimal', label: 'Decimal' },
+    { value: 'alpha', label: 'Alphabetic' },
+    { value: 'roman', label: 'Roman numeral' },
+    { value: 'none', label: 'None' },
   ];
 
   function cloneSlide(): Slide {
@@ -316,6 +331,168 @@
     });
   }
 
+  function setListMarkerLevel(
+    block: Extract<SlideBlock, { kind: 'list' }>,
+    index: number,
+    marker: SlideListMarker,
+  ): void {
+    const markerByLevel = [...(block.markerByLevel ?? [])];
+    markerByLevel[index] = marker;
+    onchange(updateBlock(slide, block.id, { markerByLevel }));
+  }
+
+  function removeListMarkerLevel(
+    block: Extract<SlideBlock, { kind: 'list' }>,
+    index: number,
+  ): void {
+    onchange(
+      updateBlock(slide, block.id, {
+        markerByLevel: (block.markerByLevel ?? []).filter(
+          (_, markerIndex) => markerIndex !== index,
+        ),
+      }),
+    );
+  }
+
+  function updateDiagram(block: SlideDiagramBlock, patch: Partial<SlideDiagramBlock>): void {
+    onchange(updateBlock(slide, block.id, patch));
+  }
+
+  function updateDiagramNode(
+    block: SlideDiagramBlock,
+    index: number,
+    patch: Partial<SlideDiagramBlock['nodes'][number]>,
+  ): void {
+    updateDiagram(block, {
+      nodes: block.nodes.map((node, nodeIndex) =>
+        nodeIndex === index ? { ...node, ...patch, id: node.id } : node,
+      ),
+    });
+  }
+
+  function renameDiagramNode(block: SlideDiagramBlock, index: number, value: string): void {
+    const id = value.trim();
+    const current = block.nodes[index];
+    if (
+      !current ||
+      id.length === 0 ||
+      block.nodes.some((node, i) => i !== index && node.id === id)
+    ) {
+      return;
+    }
+    updateDiagram(block, {
+      nodes: block.nodes.map((node, nodeIndex) => (nodeIndex === index ? { ...node, id } : node)),
+      edges: block.edges.map((edge) => ({
+        ...edge,
+        from: edge.from === current.id ? id : edge.from,
+        to: edge.to === current.id ? id : edge.to,
+      })),
+    });
+  }
+
+  function addDiagramNode(block: SlideDiagramBlock): void {
+    updateDiagram(block, {
+      nodes: [
+        ...block.nodes,
+        {
+          id: crypto.randomUUID(),
+          text: 'Node',
+          x: 0.5,
+          y: 0.5,
+          shape: 'box',
+        },
+      ],
+    });
+  }
+
+  function removeDiagramNode(block: SlideDiagramBlock, id: string): void {
+    updateDiagram(block, {
+      nodes: block.nodes.filter((node) => node.id !== id),
+      edges: block.edges.filter((edge) => edge.from !== id && edge.to !== id),
+    });
+  }
+
+  function setDiagramSelection(
+    block: SlideDiagramBlock,
+    endpoint: 'from' | 'to',
+    value: string,
+  ): void {
+    const current = diagramSelections[block.id] ?? {
+      from: block.nodes[0]?.id ?? '',
+      to: block.nodes[1]?.id ?? '',
+    };
+    diagramSelections[block.id] = { ...current, [endpoint]: value };
+  }
+
+  function addDiagramEdge(block: SlideDiagramBlock): void {
+    const defaults = { from: block.nodes[0]?.id ?? '', to: block.nodes[1]?.id ?? '' };
+    const selection = diagramSelections[block.id] ?? defaults;
+    if (
+      selection.from === selection.to ||
+      !block.nodes.some((node) => node.id === selection.from) ||
+      !block.nodes.some((node) => node.id === selection.to)
+    ) {
+      return;
+    }
+    updateDiagram(block, { edges: [...block.edges, { ...selection }] });
+  }
+
+  function removeDiagramEdge(block: SlideDiagramBlock, index: number): void {
+    updateDiagram(block, {
+      edges: block.edges.filter((_, edgeIndex) => edgeIndex !== index),
+    });
+  }
+
+  function updateNumberLine(
+    block: SlideNumberLineBlock,
+    patch: Partial<SlideNumberLineBlock>,
+  ): void {
+    onchange(updateBlock(slide, block.id, patch));
+  }
+
+  function setNumberLineBound(
+    block: SlideNumberLineBlock,
+    bound: 'min' | 'max',
+    value: number,
+  ): void {
+    if ((bound === 'min' && value >= block.max) || (bound === 'max' && value <= block.min)) return;
+    updateNumberLine(block, { [bound]: value });
+  }
+
+  function setNumberLineStep(
+    block: SlideNumberLineBlock,
+    step: 'tickStep' | 'labelStep',
+    value: number,
+  ): void {
+    const range = block.max - block.min;
+    updateNumberLine(block, {
+      [step]: Math.min(range, Math.max(range / 1_000, value)),
+    });
+  }
+
+  function updateNumberLineMark(
+    block: SlideNumberLineBlock,
+    index: number,
+    patch: Partial<SlideNumberLineBlock['marks'][number]>,
+  ): void {
+    updateNumberLine(block, {
+      marks: block.marks.map((mark, markIndex) =>
+        markIndex === index ? { ...mark, ...patch } : mark,
+      ),
+    });
+  }
+
+  function removeNumberLineMark(block: SlideNumberLineBlock, index: number): void {
+    updateNumberLine(block, {
+      marks: block.marks.filter((_, markIndex) => markIndex !== index),
+    });
+  }
+
+  function addNumberLineMark(block: SlideNumberLineBlock): void {
+    const value = block.min <= 0 && block.max >= 0 ? 0 : block.min;
+    updateNumberLine(block, { marks: [...block.marks, { value, kind: 'closed' }] });
+  }
+
   async function loadImage(
     block: Extract<SlideBlock, { kind: 'image' }>,
     file?: File,
@@ -534,18 +711,52 @@
                   onchange={(event) =>
                     onchange(
                       updateBlock(slide, block.id, {
-                        marker: (event.currentTarget as HTMLSelectElement).value as
-                          | 'bullet'
-                          | 'decimal'
-                          | 'none',
+                        marker: (event.currentTarget as HTMLSelectElement).value as SlideListMarker,
                       }),
                     )}
                 >
-                  <option value="bullet">Bullet</option>
-                  <option value="decimal">Decimal</option>
-                  <option value="none">None</option>
+                  {#each listMarkerOptions as marker (marker.value)}
+                    <option value={marker.value}>{marker.label}</option>
+                  {/each}
                 </select>
               </label>
+              <div class="wide marker-levels">
+                <span class="field-label">Markers by indent level</span>
+                {#each block.markerByLevel ?? [] as marker, markerIndex}
+                  <div class="marker-level">
+                    <label>
+                      Level {markerIndex + 1}
+                      <select
+                        value={marker}
+                        onchange={(event) =>
+                          setListMarkerLevel(
+                            block,
+                            markerIndex,
+                            (event.currentTarget as HTMLSelectElement).value as SlideListMarker,
+                          )}
+                      >
+                        {#each listMarkerOptions as option (option.value)}
+                          <option value={option.value}>{option.label}</option>
+                        {/each}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      class="danger"
+                      aria-label={`Remove marker override for level ${markerIndex + 1}`}
+                      onclick={() => removeListMarkerLevel(block, markerIndex)}>×</button
+                    >
+                  </div>
+                {/each}
+                <button
+                  type="button"
+                  class="add-small"
+                  disabled={(block.markerByLevel?.length ?? 0) >= 4}
+                  onclick={() =>
+                    setListMarkerLevel(block, block.markerByLevel?.length ?? 0, block.marker)}
+                  >+ level</button
+                >
+              </div>
               <div class="wide repeated">
                 {#each block.items as item, itemIndex}
                   <div class="item-row">
@@ -642,6 +853,23 @@
                 >
               </div>
             {:else if block.kind === 'table'}
+              <label>
+                Header orientation
+                <select
+                  value={block.headerOrientation ?? 'row'}
+                  onchange={(event) =>
+                    onchange(
+                      updateBlock(slide, block.id, {
+                        headerOrientation: (event.currentTarget as HTMLSelectElement).value as
+                          | 'row'
+                          | 'column',
+                      }),
+                    )}
+                >
+                  <option value="row">Top row</option>
+                  <option value="column">First column</option>
+                </select>
+              </label>
               <label class="wide">
                 Caption
                 <input
@@ -1174,6 +1402,302 @@
                     updateMapping(block, { height: numberValue(event, block.height) })}
                 />
               </label>
+            {:else if block.kind === 'diagram'}
+              <label class="wide">
+                Caption
+                <input
+                  type="text"
+                  value={block.caption ?? ''}
+                  oninput={(event) =>
+                    updateDiagram(block, {
+                      caption: (event.currentTarget as HTMLInputElement).value,
+                    })}
+                />
+              </label>
+              <div class="wide diagram-nodes">
+                <strong>Nodes</strong>
+                {#each block.nodes as node, nodeIndex (node.id)}
+                  <div class="diagram-node">
+                    <label>
+                      ID
+                      <input
+                        type="text"
+                        value={node.id}
+                        onchange={(event) =>
+                          renameDiagramNode(
+                            block,
+                            nodeIndex,
+                            (event.currentTarget as HTMLInputElement).value,
+                          )}
+                      />
+                    </label>
+                    <label>
+                      Text
+                      <input
+                        type="text"
+                        value={node.text}
+                        oninput={(event) =>
+                          updateDiagramNode(block, nodeIndex, {
+                            text: (event.currentTarget as HTMLInputElement).value,
+                          })}
+                      />
+                    </label>
+                    <label>
+                      Shape
+                      <select
+                        value={node.shape ?? 'box'}
+                        onchange={(event) =>
+                          updateDiagramNode(block, nodeIndex, {
+                            shape: (event.currentTarget as HTMLSelectElement).value as
+                              | 'box'
+                              | 'plain',
+                          })}
+                      >
+                        <option value="box">Box</option>
+                        <option value="plain">Plain</option>
+                      </select>
+                    </label>
+                    <label>
+                      x
+                      <input
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={node.x}
+                        onchange={(event) =>
+                          updateDiagramNode(block, nodeIndex, {
+                            x: Math.min(1, Math.max(0, numberValue(event, node.x))),
+                          })}
+                      />
+                    </label>
+                    <label>
+                      y
+                      <input
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={node.y}
+                        onchange={(event) =>
+                          updateDiagramNode(block, nodeIndex, {
+                            y: Math.min(1, Math.max(0, numberValue(event, node.y))),
+                          })}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      class="danger diagram-node-delete"
+                      aria-label={`Delete diagram node ${nodeIndex + 1}`}
+                      onclick={() => removeDiagramNode(block, node.id)}>Delete</button
+                    >
+                  </div>
+                {/each}
+                <button type="button" class="add-small" onclick={() => addDiagramNode(block)}
+                  >+ node</button
+                >
+              </div>
+              <div class="wide diagram-edges">
+                <strong>Edges</strong>
+                {#each block.edges as edge, edgeIndex}
+                  <div class="diagram-edge">
+                    <span>{edge.from} → {edge.to}</span>
+                    <input
+                      type="text"
+                      value={edge.label ?? ''}
+                      aria-label={`Edge ${edgeIndex + 1} label`}
+                      placeholder="Optional label"
+                      oninput={(event) =>
+                        updateDiagram(block, {
+                          edges: block.edges.map((candidate, index) =>
+                            index === edgeIndex
+                              ? {
+                                  ...candidate,
+                                  label: (event.currentTarget as HTMLInputElement).value,
+                                }
+                              : candidate,
+                          ),
+                        })}
+                    />
+                    <button
+                      type="button"
+                      class="danger"
+                      aria-label={`Delete edge ${edgeIndex + 1}`}
+                      onclick={() => removeDiagramEdge(block, edgeIndex)}>×</button
+                    >
+                  </div>
+                {/each}
+                <div class="new-diagram-edge">
+                  <label>
+                    From
+                    <select
+                      value={diagramSelections[block.id]?.from ?? block.nodes[0]?.id ?? ''}
+                      disabled={block.nodes.length < 2}
+                      onchange={(event) =>
+                        setDiagramSelection(
+                          block,
+                          'from',
+                          (event.currentTarget as HTMLSelectElement).value,
+                        )}
+                    >
+                      {#each block.nodes as node}
+                        <option value={node.id}>{node.text || node.id}</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <label>
+                    To
+                    <select
+                      value={diagramSelections[block.id]?.to ?? block.nodes[1]?.id ?? ''}
+                      disabled={block.nodes.length < 2}
+                      onchange={(event) =>
+                        setDiagramSelection(
+                          block,
+                          'to',
+                          (event.currentTarget as HTMLSelectElement).value,
+                        )}
+                    >
+                      {#each block.nodes as node}
+                        <option value={node.id}>{node.text || node.id}</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={block.nodes.length < 2 ||
+                      (diagramSelections[block.id]?.from ?? block.nodes[0]?.id) ===
+                        (diagramSelections[block.id]?.to ?? block.nodes[1]?.id)}
+                    onclick={() => addDiagramEdge(block)}>+ edge</button
+                  >
+                </div>
+              </div>
+              <label>
+                Height
+                <input
+                  type="number"
+                  min="1"
+                  max="2000"
+                  value={block.height}
+                  onchange={(event) =>
+                    updateDiagram(block, { height: numberValue(event, block.height) })}
+                />
+              </label>
+            {:else if block.kind === 'numberline'}
+              <label class="wide">
+                Caption
+                <input
+                  type="text"
+                  value={block.caption ?? ''}
+                  oninput={(event) =>
+                    updateNumberLine(block, {
+                      caption: (event.currentTarget as HTMLInputElement).value,
+                    })}
+                />
+              </label>
+              <div class="wide numberline-settings">
+                <label>
+                  Minimum
+                  <input
+                    type="number"
+                    step="any"
+                    value={block.min}
+                    onchange={(event) =>
+                      setNumberLineBound(block, 'min', numberValue(event, block.min))}
+                  />
+                </label>
+                <label>
+                  Maximum
+                  <input
+                    type="number"
+                    step="any"
+                    value={block.max}
+                    onchange={(event) =>
+                      setNumberLineBound(block, 'max', numberValue(event, block.max))}
+                  />
+                </label>
+                <label>
+                  Tick step
+                  <input
+                    type="number"
+                    min="0.000001"
+                    step="any"
+                    value={block.tickStep}
+                    onchange={(event) =>
+                      setNumberLineStep(block, 'tickStep', numberValue(event, block.tickStep))}
+                  />
+                </label>
+                <label>
+                  Label step
+                  <input
+                    type="number"
+                    min="0.000001"
+                    step="any"
+                    value={block.labelStep}
+                    onchange={(event) =>
+                      setNumberLineStep(block, 'labelStep', numberValue(event, block.labelStep))}
+                  />
+                </label>
+                <label>
+                  Height
+                  <input
+                    type="number"
+                    min="1"
+                    max="2000"
+                    value={block.height}
+                    onchange={(event) =>
+                      updateNumberLine(block, {
+                        height: Math.max(1, numberValue(event, block.height)),
+                      })}
+                  />
+                </label>
+              </div>
+              <div class="wide numberline-marks">
+                <strong>Marks</strong>
+                {#each block.marks as mark, markIndex}
+                  <div class="numberline-mark">
+                    <label>
+                      Value
+                      <input
+                        type="number"
+                        step="any"
+                        value={mark.value}
+                        onchange={(event) =>
+                          updateNumberLineMark(block, markIndex, {
+                            value: Math.min(
+                              block.max,
+                              Math.max(block.min, numberValue(event, mark.value)),
+                            ),
+                          })}
+                      />
+                    </label>
+                    <label>
+                      Kind
+                      <select
+                        value={mark.kind}
+                        onchange={(event) =>
+                          updateNumberLineMark(block, markIndex, {
+                            kind: (event.currentTarget as HTMLSelectElement)
+                              .value as NumberLineMarkKind,
+                          })}
+                      >
+                        <option value="open">Open circle</option>
+                        <option value="closed">Closed circle</option>
+                        <option value="arrow-left">Left arrow</option>
+                        <option value="arrow-right">Right arrow</option>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      class="danger"
+                      aria-label={`Delete number-line mark ${markIndex + 1}`}
+                      onclick={() => removeNumberLineMark(block, markIndex)}>×</button
+                    >
+                  </div>
+                {/each}
+                <button type="button" class="add-small" onclick={() => addNumberLineMark(block)}
+                  >+ mark</button
+                >
+              </div>
             {:else if block.kind === 'spacer'}
               <label>
                 Writing-space height
@@ -1471,6 +1995,66 @@
     display: grid;
     grid-template-columns: 28px 78px minmax(0, 1fr) 25px;
     gap: 4px;
+  }
+  .marker-levels,
+  .diagram-nodes,
+  .diagram-edges,
+  .numberline-marks {
+    display: grid;
+    gap: 5px;
+  }
+  .field-label,
+  .diagram-nodes > strong,
+  .diagram-edges > strong,
+  .numberline-marks > strong {
+    color: #bbb;
+    font-size: 11px;
+  }
+  .marker-level {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 25px;
+    gap: 4px;
+    align-items: end;
+  }
+  .diagram-node {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    padding: 6px;
+    border: 1px solid #363636;
+    border-radius: 4px;
+  }
+  .diagram-node-delete {
+    align-self: end;
+  }
+  .diagram-edge {
+    display: grid;
+    grid-template-columns: minmax(90px, auto) minmax(0, 1fr) 25px;
+    gap: 5px;
+    align-items: center;
+  }
+  .diagram-edge span {
+    overflow: hidden;
+    color: #aaa;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .new-diagram-edge {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 5px;
+    align-items: end;
+  }
+  .numberline-settings {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .numberline-mark {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) 25px;
+    gap: 5px;
+    align-items: end;
   }
   .mapping-columns {
     display: grid;
