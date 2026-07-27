@@ -291,6 +291,28 @@ export interface SlideSpacerBlock extends SlideBlockBase {
   height: number;
 }
 
+/**
+ * A relation drawn as two labelled ovals joined by arrows — the standard
+ * way domain/range mappings are introduced in algebra.
+ */
+export interface SlideMappingPair {
+  /** Index into `left`. */
+  from: number;
+  /** Index into `right`. */
+  to: number;
+}
+
+export interface SlideMappingBlock extends SlideBlockBase {
+  kind: 'mapping';
+  leftLabel: string;
+  rightLabel: string;
+  left: string[];
+  right: string[];
+  pairs: SlideMappingPair[];
+  height: number;
+  caption?: string;
+}
+
 export type SlideBlock =
   | SlideTextBlock
   | SlideListBlock
@@ -300,6 +322,7 @@ export type SlideBlock =
   | SlideGraphBlock
   | SlideCalloutBlock
   | SlideImageBlock
+  | SlideMappingBlock
   | SlideSpacerBlock;
 
 /**
