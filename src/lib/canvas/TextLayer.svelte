@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { TextObject } from '$lib/types';
-  import { renderLatex } from '$lib/text/latex';
+  import { textMathMode, type TextObject } from '$lib/types';
+  import { renderMixed, type MixedRender } from '$lib/text/render';
 
   interface Props {
     objects: TextObject[];
@@ -14,17 +14,14 @@
 
   interface Rendered {
     obj: TextObject;
-    html: string;
-    errored: boolean;
+    mode: ReturnType<typeof textMathMode>;
+    result: MixedRender;
   }
 
   const rendered = $derived<Rendered[]>(
     objects.map((obj) => {
-      if (!obj.latex) {
-        return { obj, html: '', errored: false };
-      }
-      const r = renderLatex(obj.content);
-      return { obj, html: r.html, errored: !r.ok };
+      const mode = textMathMode(obj);
+      return { obj, mode, result: renderMixed(obj.content, mode) };
     }),
   );
 
@@ -59,42 +56,42 @@
       <button
         type="button"
         class="text-obj text-button"
-        class:latex={o.latex}
-        class:errored={item.errored}
+        class:latex={item.mode === 'latex'}
+        class:errored={item.result.errored}
         style="left: {o.at.x * ptToPx}px; top: {o.at.y *
           ptToPx}px; color: {o.color}; font-size: {o.fontSize * ptToPx}px;"
         onclick={(e) => onPick(e, o)}
       >
-        {#if o.latex && !item.errored}
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          {@html item.html}
-        {:else if o.latex && item.errored}
-          <span class="raw">{o.content}</span>
-        {:else}
-          {o.content}
-        {/if}
+        {#each item.result.runs as run}
+          {#if run.kind === 'text'}
+            <span>{run.value}</span>
+          {:else}
+            <span class:display={run.display} class:raw={run.errored}>
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html run.html}
+            </span>
+          {/if}
+        {/each}
       </button>
-    {:else if o.latex}
-      <div
-        class="text-obj latex"
-        class:errored={item.errored}
-        style="left: {o.at.x * ptToPx}px; top: {o.at.y *
-          ptToPx}px; color: {o.color}; font-size: {o.fontSize * ptToPx}px;"
-      >
-        {#if item.errored}
-          <span class="raw">{o.content}</span>
-        {:else}
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          {@html item.html}
-        {/if}
-      </div>
     {:else}
       <div
-        class="text-obj plain"
+        class="text-obj"
+        class:latex={item.mode === 'latex'}
+        class:plain={item.mode === 'plain'}
+        class:errored={item.result.errored}
         style="left: {o.at.x * ptToPx}px; top: {o.at.y *
           ptToPx}px; color: {o.color}; font-size: {o.fontSize * ptToPx}px;"
       >
-        {o.content}
+        {#each item.result.runs as run}
+          {#if run.kind === 'text'}
+            <span>{run.value}</span>
+          {:else}
+            <span class:display={run.display} class:raw={run.errored}>
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html run.html}
+            </span>
+          {/if}
+        {/each}
       </div>
     {/if}
   {/each}
@@ -152,5 +149,8 @@
   .text-obj.errored .raw,
   .text-button.errored .raw {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .text-obj .display {
+    display: block;
   }
 </style>
