@@ -37,6 +37,12 @@
   import { reloadPdf } from '$lib/app/actions';
   import OpenFromSlidesDialog from '$lib/ui/OpenFromSlidesDialog.svelte';
   import { slidesDialogOpen, openSlidesDialog } from '$lib/slides/dialog';
+  import { SlideLayer, defaultSlideTheme } from '$lib/slides';
+  import SlideEditor from '$lib/slides/editor/SlideEditor.svelte';
+  import TemplatePicker from '$lib/slides/editor/TemplatePicker.svelte';
+  import { createSlide, setLayout } from '$lib/slides/deck';
+  import { SLIDE_PAGE_SIZE } from '$lib/slides/pageOps';
+  import { SLIDE_COMMAND_EVENT, type SlideCommandAction } from '$lib/slides/commands';
   import { createSpatialIndex, type SpatialIndex } from '$lib/tools/spatialIndex';
   import SelectionLayer from '$lib/select/SelectionLayer.svelte';
   import { selection } from '$lib/select/selection';
@@ -70,6 +76,7 @@
     StrokeObject,
     TextMathMode,
     TextObject,
+    Slide,
   } from '$lib/types';
   import { textMathMode } from '$lib/types';
 
@@ -237,6 +244,52 @@
   const pageCount = $derived(doc?.pages.length ?? meta?.pageCount ?? 0);
   const pageIndex = $derived(Math.min(view.currentPageIndex, Math.max(0, pageCount - 1)));
   const currentPage = $derived(doc?.pages[pageIndex] ?? null);
+  const slideTheme = $derived(doc?.slideTheme ?? defaultSlideTheme);
+  let editingSlide = $state<Slide | null>(null);
+  let templatePickerOpen = $state(false);
+
+  const SLIDE_SIZE = SLIDE_PAGE_SIZE.widescreen;
+
+  function insertSlide(slide: Slide): void {
+    documentStore.insertSlidePageAfter(pageIndex, slide, SLIDE_SIZE.width, SLIDE_SIZE.height);
+    viewport.setPage(pageIndex + 1, pages.length + 1);
+  }
+
+  function onSlideCommand(action: SlideCommandAction): void {
+    const page = doc?.pages[pageIndex];
+    switch (action) {
+      case 'new':
+        insertSlide(createSlide('content'));
+        break;
+      case 'new-from-template':
+        templatePickerOpen = true;
+        break;
+      case 'edit':
+        if (page?.type === 'slide' && page.slide) editingSlide = page.slide;
+        break;
+      case 'duplicate':
+        documentStore.duplicatePage(pageIndex);
+        break;
+      case 'change-layout':
+        if (page?.type === 'slide' && page.slide) {
+          const order = ['content', 'title', 'columns', 'grid', 'blank'] as const;
+          const next = order[(order.indexOf(page.slide.layout) + 1) % order.length];
+          documentStore.updateSlide(pageIndex, setLayout(page.slide, next));
+        }
+        break;
+      case 'delete':
+        if (page?.type === 'slide') documentStore.deletePage(pageIndex);
+        break;
+    }
+  }
+
+  $effect(() => {
+    const handler = (event: Event) => {
+      onSlideCommand((event as CustomEvent<SlideCommandAction>).detail);
+    };
+    window.addEventListener(SLIDE_COMMAND_EVENT, handler);
+    return () => window.removeEventListener(SLIDE_COMMAND_EVENT, handler);
+  });
   const pdfPageIndex = $derived(doc ? pdfPageIndexAt(doc.pages, pageIndex) : pageIndex);
   const pageObjects = $derived<AnyObject[]>(currentPage?.objects ?? []);
   const pageStrokes = $derived<StrokeObject[]>(
@@ -679,7 +732,17 @@
           class="page-frame"
           style="width: {size.width}px; height: {size.height}px; transform: translate({view.offsetX}px, {view.offsetY}px);"
         >
-          {#if meta && currentPage?.type !== 'blank' && pdfPageIndex !== null}
+          {#if currentPage?.type === 'slide' && currentPage.slide}
+            <div class="slide-slot" style="width: {size.width}px; height: {size.height}px;">
+              <SlideLayer
+                slide={currentPage.slide}
+                theme={slideTheme}
+                width={size.width}
+                height={size.height}
+                ptToPx={size.ptToPx}
+              />
+            </div>
+          {:else if meta && currentPage?.type !== 'blank' && pdfPageIndex !== null}
             <div class="pdf-slot">
               <PdfLayer
                 pageIndex={pdfPageIndex}
@@ -882,6 +945,25 @@
       await loadPdfFromSource({ kind: 'file', path });
     }}
   />
+  {#if templatePickerOpen}
+    <TemplatePicker
+      onpick={(slide) => {
+        templatePickerOpen = false;
+        insertSlide(slide);
+      }}
+      onclose={() => (templatePickerOpen = false)}
+    />
+  {/if}
+  {#if editingSlide}
+    <SlideEditor
+      slide={editingSlide}
+      onchange={(next) => {
+        editingSlide = next;
+        documentStore.updateSlide(pageIndex, next);
+      }}
+      onclose={() => (editingSlide = null)}
+    />
+  {/if}
   <EraseDebugOverlay />
 </main>
 
@@ -1082,6 +1164,12 @@
   .blank-slot {
     background: #fff;
     box-sizing: border-box;
+  }
+  .slide-slot {
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    overflow: hidden;
   }
   .empty {
     position: absolute;

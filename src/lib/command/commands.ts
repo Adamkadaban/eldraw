@@ -22,6 +22,7 @@ import {
 } from '$lib/config/commands';
 import { settings } from '$lib/store/settings';
 import { openSlidesDialog } from '$lib/slides/dialog';
+import { slideCommands } from '$lib/slides/commands';
 import { exportAnnotatedPdfDialog } from '$lib/app/exportPdfDialog';
 
 export interface Command {
@@ -223,5 +224,6 @@ export function getCommands(): Command[] {
       title: 'Reset settings to defaults',
       run: triggerResetSettings,
     },
+    ...slideCommands,
   ];
 }

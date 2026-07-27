@@ -12,6 +12,7 @@
   } from '$lib/pdf/thumbnails';
   import { drawAnnotationOverlay, thumbnailPixelSize } from '$lib/pdf/thumbnailComposite';
   import { documentStore } from '$lib/store/document';
+  import { defaultSlideTheme, renderSlideBackground } from '$lib/slides';
   import { thumbnailSize } from './thumbnailSize';
 
   interface Props {
@@ -40,6 +41,36 @@
   }: Props = $props();
 
   const canDelete = $derived(pages.length > 1);
+
+  /**
+   * Slide previews are drawn locally rather than going through the pdfium
+   * cache. Keyed by the slide object identity, which is stable because the
+   * document store replaces slides immutably on every edit.
+   */
+  const slideThumbs = new Map<number, { slide: unknown; url: string }>();
+
+  function slideThumbUrl(page: Page, width: number, height: number): string | null {
+    if (page.type !== 'slide' || !page.slide || width <= 0 || height <= 0) return null;
+    const cached = slideThumbs.get(page.pageIndex);
+    if (cached && cached.slide === page.slide) return cached.url;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width));
+    canvas.height = Math.max(1, Math.round(height));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    renderSlideBackground(
+      ctx,
+      page.slide,
+      defaultSlideTheme,
+      canvas.width,
+      canvas.height,
+      canvas.width / page.width,
+    );
+    const url = canvas.toDataURL();
+    slideThumbs.set(page.pageIndex, { slide: page.slide, url });
+    return url;
+  }
 
   let previewUrls = $state(new Map<number, string>());
   const compositedUrls = new Map<number, string>();
@@ -278,6 +309,7 @@
     {#each pages as page, i (page.pageIndex)}
       {@const size = thumbnailSize(page.width, page.height, maxWidth)}
       {@const url = previewFor(page)}
+      {@const preview = page.type === 'slide' ? slideThumbUrl(page, size.width, size.height) : url}
       <li class="row" class:active={i === currentIndex}>
         <button
           type="button"
@@ -290,8 +322,8 @@
             class="preview"
             class:blank={page.type === 'blank'}
             use:observe={page}
-            style="width: {size.width}px; height: {size.height}px;{url
-              ? ` background-image: url('${url}');`
+            style="width: {size.width}px; height: {size.height}px;{preview
+              ? ` background-image: url('${preview}');`
               : ''}"
             style:background-color={page.type === 'blank'
               ? (page.background ?? undefined)

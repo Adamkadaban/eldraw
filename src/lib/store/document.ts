@@ -1,6 +1,7 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
-import type { AnyObject, EldrawDocument, ObjectId, Page } from '$lib/types';
+import type { AnyObject, EldrawDocument, ObjectId, Page, Slide } from '$lib/types';
 import { isSafeHexColor } from '$lib/color';
+import { sanitizeSlide } from '$lib/slides/deck';
 import { applyCommand, createHistory, invertCommand, type Command, type History } from './history';
 
 export type PageCommitListener = (pageIndex: number) => void;
@@ -72,6 +73,10 @@ export interface DocumentStore {
     height: number,
     background?: string,
   ): void;
+  /** Insert an authored slide as a new page after the given array position. */
+  insertSlidePageAfter(afterArrayIndex: number, slide: Slide, width: number, height: number): void;
+  /** Replace the slide content of a slide page. Not undoable via page history. */
+  updateSlide(pageIndex: number, slide: Slide): void;
   movePage(from: number, to: number): void;
   duplicatePage(index: number): void;
   deletePage(index: number): void;
@@ -142,7 +147,7 @@ function lastPdfIndexAtOrBefore(pages: readonly Page[], arrayIndex: number): num
 function normalizeLoaded(doc: EldrawDocument): EldrawDocument {
   let nextDerived = 0;
   const pages = doc.pages.map((p, i) => {
-    const withBg = sanitizePageBackground(p);
+    const withBg = sanitizeLoadedPage(p);
     const base = withBg.pageIndex === i ? withBg : { ...withBg, pageIndex: i };
     if (base.type === 'pdf' && typeof base.pdfSourceIndex !== 'number') {
       const withSource = { ...base, pdfSourceIndex: nextDerived };
@@ -168,6 +173,22 @@ function sanitizePageBackground(page: Page): Page {
   const { background: _drop, ...rest } = page;
   void _drop;
   return rest as Page;
+}
+
+/**
+ * Apply every load-time trust boundary to a page. Slide content reaches the
+ * DOM through `{@html}` and inline styles, so it is sanitized here rather
+ * than at render time. A slide page whose content fails validation degrades
+ * to a blank page instead of being dropped, so annotations are never lost.
+ */
+function sanitizeLoadedPage(page: Page): Page {
+  const withBg = sanitizePageBackground(page);
+  if (withBg.type !== 'slide') return withBg;
+  const slide = sanitizeSlide(withBg.slide);
+  if (slide) return { ...withBg, slide };
+  const { slide: _drop, ...rest } = withBg;
+  void _drop;
+  return { ...(rest as Page), type: 'blank' };
 }
 
 function reindex(pages: Page[]): Page[] {
@@ -344,6 +365,39 @@ export function createDocumentStore(): DocumentStore {
         pages.splice(insertIdx, 0, blank);
         history.shiftPageIndicesFrom(insertIdx);
         return { ...doc, pages: reindex(pages) };
+      });
+    },
+
+    insertSlidePageAfter(afterArrayIndex, slide, width, height) {
+      const safe = sanitizeSlide(slide);
+      if (!safe) return;
+      state.update((doc) => {
+        if (!doc) return doc;
+        const insertIdx = afterArrayIndex + 1;
+        const page: Page = {
+          pageIndex: insertIdx,
+          type: 'slide',
+          insertedAfterPdfPage: lastPdfIndexAtOrBefore(doc.pages, afterArrayIndex),
+          width,
+          height,
+          slide: safe,
+          objects: [],
+        };
+        const pages = [...doc.pages];
+        pages.splice(insertIdx, 0, page);
+        history.shiftPageIndicesFrom(insertIdx);
+        return { ...doc, pages: reindex(pages) };
+      });
+    },
+
+    updateSlide(pageIndex, slide) {
+      const safe = sanitizeSlide(slide);
+      if (!safe) return;
+      state.update((doc) => {
+        if (!doc) return doc;
+        const page = doc.pages[pageIndex];
+        if (!page || page.type !== 'slide') return doc;
+        return replacePage(doc, pageIndex, { ...page, slide: safe });
       });
     },
 
