@@ -7,7 +7,13 @@
  * {@link resolveTheme}.
  */
 
-export type GraphPresetName = 'classic' | 'textbook' | 'blueprint' | 'minimal' | 'graphPaper';
+export type GraphPresetName =
+  | 'classic'
+  | 'textbook'
+  | 'blueprint'
+  | 'minimal'
+  | 'graphPaper'
+  | 'lesson';
 
 export type OriginLabelMode = 'none' | 'letter' | 'coords';
 export type AxisLabelStyle = 'italic-serif' | 'italic-sans' | 'none';
@@ -174,12 +180,41 @@ const graphPaper: GraphTheme = {
   curveDefaultWidth: 2,
 };
 
+/**
+ * Tuned for graphs projected in a live lesson: the grid recedes so hand-drawn
+ * work over the top stays the most prominent thing on the slide, while the
+ * axes and labels remain legible from the back of a room.
+ */
+const lesson: GraphTheme = {
+  background: '#fdfdfb',
+  backgroundEnabled: true,
+  frameColor: '#d8d8d2',
+  frameEnabled: true,
+
+  axisColor: '#4a4a4a',
+  axisWidth: 1.1,
+  axisArrowheads: false,
+  tickLength: 4,
+
+  gridMajor: { enabled: true, color: '#c9c9c2', width: 1, opacity: 0.75 },
+  gridMinor: { enabled: true, color: '#e4e4dd', width: 1, opacity: 0.85, subdivisions: 5 },
+
+  labelColor: '#6a6a66',
+  labelFontFamily: SANS,
+  labelFontSize: 9,
+
+  axisLabelStyle: 'italic-serif',
+  originLabel: 'coords',
+  curveDefaultWidth: 1.8,
+};
+
 export const GRAPH_THEME_PRESETS: Readonly<Record<GraphPresetName, GraphTheme>> = Object.freeze({
   classic,
   textbook,
   blueprint,
   minimal,
   graphPaper,
+  lesson,
 });
 
 export const GRAPH_PRESET_ORDER: readonly GraphPresetName[] = [
@@ -188,6 +223,7 @@ export const GRAPH_PRESET_ORDER: readonly GraphPresetName[] = [
   'blueprint',
   'minimal',
   'graphPaper',
+  'lesson',
 ];
 
 export const GRAPH_PRESET_LABELS: Readonly<Record<GraphPresetName, string>> = {
@@ -196,6 +232,7 @@ export const GRAPH_PRESET_LABELS: Readonly<Record<GraphPresetName, string>> = {
   blueprint: 'Blueprint',
   minimal: 'Minimal',
   graphPaper: 'Graph paper',
+  lesson: 'Lesson',
 };
 
 export const DEFAULT_GRAPH_PRESET: GraphPresetName = 'classic';

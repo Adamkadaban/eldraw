@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_GRAPH_PRESET,
   GRAPH_PRESET_ORDER,
+  GRAPH_PRESET_LABELS,
   GRAPH_THEME_PRESETS,
   isGraphPresetName,
   mergeTheme,
@@ -9,8 +10,10 @@ import {
 } from '$lib/graph/theme';
 
 describe('graph theme presets', () => {
-  it('exposes the five named presets with distinct backgrounds', () => {
-    expect(GRAPH_PRESET_ORDER).toEqual([
+  it('exposes every preset in a stable order with distinct backgrounds', () => {
+    // Asserted as a superset so adding a preset does not fail this test, while
+    // removing or reordering an existing one still does.
+    expect(GRAPH_PRESET_ORDER.slice(0, 5)).toEqual([
       'classic',
       'textbook',
       'blueprint',
@@ -19,6 +22,22 @@ describe('graph theme presets', () => {
     ]);
     const backgrounds = GRAPH_PRESET_ORDER.map((n) => GRAPH_THEME_PRESETS[n].background);
     expect(new Set(backgrounds).size).toBeGreaterThanOrEqual(3);
+  });
+
+  it('registers a name, label and theme for every preset', () => {
+    for (const name of GRAPH_PRESET_ORDER) {
+      expect(GRAPH_THEME_PRESETS[name], `missing theme for ${name}`).toBeDefined();
+      expect(GRAPH_PRESET_LABELS[name], `missing label for ${name}`).toBeTruthy();
+    }
+    expect(Object.keys(GRAPH_THEME_PRESETS).sort()).toEqual([...GRAPH_PRESET_ORDER].sort());
+  });
+
+  it('lesson keeps the grid lighter than the axes so ink stays prominent', () => {
+    const t = GRAPH_THEME_PRESETS.lesson;
+    const lum = (hex: string) => parseInt(hex.slice(1, 3), 16);
+    expect(lum(t.gridMajor.color)).toBeGreaterThan(lum(t.axisColor));
+    expect(lum(t.gridMinor.color)).toBeGreaterThan(lum(t.gridMajor.color));
+    expect(t.axisWidth).toBeLessThanOrEqual(1.25);
   });
 
   it('blueprint uses a dark background with light labels', () => {

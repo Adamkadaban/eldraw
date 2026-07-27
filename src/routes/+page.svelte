@@ -84,6 +84,7 @@
     StrokeObject,
     TextMathMode,
     TextObject,
+    ToolKind,
     Slide,
   } from '$lib/types';
   import { textMathMode } from '$lib/types';
@@ -102,10 +103,15 @@
   const overlaysState = $derived($overlays);
   const rulerVisible = $derived(overlaysState.rulerVisible);
   const rulerSnapState = $derived(rulerVisible ? overlaysState.ruler : null);
+  // Show the ruler when the tool is picked, but only on that transition.
+  // Reading `rulerVisible` here would re-show it the instant it was closed.
+  let lastToolForRuler: ToolKind | null = null;
   $effect(() => {
-    if (sidebarState.activeTool === 'ruler' && !overlaysState.rulerVisible) {
+    const tool = sidebarState.activeTool;
+    if (tool === 'ruler' && lastToolForRuler !== 'ruler') {
       overlays.setRulerVisible(true);
     }
+    lastToolForRuler = tool;
   });
   $effect(() => {
     if (sidebarState.activeTool !== 'select') selection.clear();
@@ -1186,9 +1192,6 @@
     inset: 0;
     z-index: 15;
     pointer-events: none;
-  }
-  .overlay-slot :global(svg) {
-    pointer-events: auto;
   }
   .overlay-slot.capture {
     pointer-events: auto;
