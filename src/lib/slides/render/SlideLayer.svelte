@@ -552,8 +552,10 @@
 
   .hero-tint {
     position: absolute;
-    inset: 0 0 42% 0;
+    inset: 0;
     opacity: 0.07;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 72%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 72%);
   }
 
   .slide-title,
