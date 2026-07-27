@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import {
     CanvasStack,
     EraseDebugOverlay,
@@ -32,11 +33,18 @@
   import { shortcuts } from '$lib/app/shortcuts';
   import { setWindowFullscreenChromeless } from '$lib/app/windowFullscreen';
   import { openPdfDialog } from '$lib/app/openPdfDialog';
+  import { pageIndexAfterDelete, pageIndexAfterDuplicate } from '$lib/app/pageNav';
   import { loadPdfFromSource, stopAutosave } from '$lib/pdf/loader';
   import { reloadWarning, clearReloadWarning } from '$lib/store/reloadWarning';
   import { reloadPdf } from '$lib/app/actions';
   import OpenFromSlidesDialog from '$lib/ui/OpenFromSlidesDialog.svelte';
   import { slidesDialogOpen, openSlidesDialog } from '$lib/slides/dialog';
+  import { SlideLayer, defaultSlideTheme } from '$lib/slides';
+  import SlideEditor from '$lib/slides/editor/SlideEditor.svelte';
+  import TemplatePicker from '$lib/slides/editor/TemplatePicker.svelte';
+  import { createSlide, setLayout } from '$lib/slides/deck';
+  import { SLIDE_PAGE_SIZE } from '$lib/slides/pageOps';
+  import { SLIDE_COMMAND_EVENT, type SlideCommandAction } from '$lib/slides/commands';
   import { createSpatialIndex, type SpatialIndex } from '$lib/tools/spatialIndex';
   import SelectionLayer from '$lib/select/SelectionLayer.svelte';
   import { selection } from '$lib/select/selection';
@@ -44,6 +52,11 @@
   import { createRafBatcher } from '$lib/canvas/inkBatch';
   import { eraseDebug } from '$lib/store/eraseDebug';
   import { activeGraph, clearActiveGraph, setActiveGraph } from '$lib/store/activeGraph';
+  import {
+    clearGraphPreview,
+    graphPreview as graphPreviewStore,
+    setGraphPreview,
+  } from '$lib/store/graphPreview';
   import { createGraphObject } from '$lib/graph/graphObject';
   import GraphEditor from '$lib/graph/GraphEditor.svelte';
   import { CommandPalette } from '$lib/command';
@@ -54,6 +67,7 @@
     ReplayLayer,
     SessionsPanel,
     player,
+    recorder,
     replayState,
   } from '$lib/session';
   import type { ReplayRenderState } from '$lib/session/player';
@@ -68,8 +82,11 @@
     PdfMeta,
     ShapeObject,
     StrokeObject,
+    TextMathMode,
     TextObject,
+    Slide,
   } from '$lib/types';
+  import { textMathMode } from '$lib/types';
 
   const ERASER_RADIUS = 4;
 
@@ -212,17 +229,16 @@
 
   function onThumbDuplicate(i: number): void {
     documentStore.duplicatePage(i);
-    viewport.setPage(i + 1, pages.length + 1);
+    const total = get(currentDocument)?.pages.length ?? 0;
+    viewport.setPage(pageIndexAfterDuplicate(i, total), total);
   }
 
   function onThumbDelete(i: number): void {
     if (pages.length <= 1) return;
     documentStore.deletePage(i);
-    const nextTotal = pages.length - 1;
+    const total = get(currentDocument)?.pages.length ?? 0;
     const snap = viewport.snapshot();
-    if (snap.currentPageIndex >= i) {
-      viewport.setPage(Math.max(0, snap.currentPageIndex - 1), nextTotal);
-    }
+    viewport.setPage(pageIndexAfterDelete(i, snap.currentPageIndex, total), total);
   }
 
   function clearCurrentPage(): void {
@@ -235,6 +251,53 @@
   const pageCount = $derived(doc?.pages.length ?? meta?.pageCount ?? 0);
   const pageIndex = $derived(Math.min(view.currentPageIndex, Math.max(0, pageCount - 1)));
   const currentPage = $derived(doc?.pages[pageIndex] ?? null);
+  const slideTheme = $derived(doc?.slideTheme ?? defaultSlideTheme);
+  let editingSlide = $state<Slide | null>(null);
+  let templatePickerOpen = $state(false);
+
+  const SLIDE_SIZE = SLIDE_PAGE_SIZE.widescreen;
+
+  function insertSlide(slide: Slide): void {
+    documentStore.insertSlidePageAfter(pageIndex, slide, SLIDE_SIZE.width, SLIDE_SIZE.height);
+    const total = get(currentDocument)?.pages.length ?? 0;
+    viewport.setPage(pageIndexAfterDuplicate(pageIndex, total), total);
+  }
+
+  function onSlideCommand(action: SlideCommandAction): void {
+    const page = doc?.pages[pageIndex];
+    switch (action) {
+      case 'new':
+        insertSlide(createSlide('content'));
+        break;
+      case 'new-from-template':
+        templatePickerOpen = true;
+        break;
+      case 'edit':
+        if (page?.type === 'slide' && page.slide) editingSlide = page.slide;
+        break;
+      case 'duplicate':
+        documentStore.duplicatePage(pageIndex);
+        break;
+      case 'change-layout':
+        if (page?.type === 'slide' && page.slide) {
+          const order = ['content', 'title', 'columns', 'grid', 'blank'] as const;
+          const next = order[(order.indexOf(page.slide.layout) + 1) % order.length];
+          documentStore.updateSlide(pageIndex, setLayout(page.slide, next));
+        }
+        break;
+      case 'delete':
+        if (page?.type === 'slide') documentStore.deletePage(pageIndex);
+        break;
+    }
+  }
+
+  $effect(() => {
+    const handler = (event: Event) => {
+      onSlideCommand((event as CustomEvent<SlideCommandAction>).detail);
+    };
+    window.addEventListener(SLIDE_COMMAND_EVENT, handler);
+    return () => window.removeEventListener(SLIDE_COMMAND_EVENT, handler);
+  });
   const pdfPageIndex = $derived(doc ? pdfPageIndexAt(doc.pages, pageIndex) : pageIndex);
   const pageObjects = $derived<AnyObject[]>(currentPage?.objects ?? []);
   const pageStrokes = $derived<StrokeObject[]>(
@@ -243,12 +306,25 @@
   const pageGraphs = $derived<GraphObject[]>(
     pageObjects.filter((o): o is GraphObject => o.type === 'graph'),
   );
+  const graphPreview = $derived($graphPreviewStore);
   const activeGraphRef = $derived($activeGraph);
   const editingGraph = $derived<GraphObject | null>(
     activeGraphRef && activeGraphRef.pageIndex === pageIndex
       ? (pageGraphs.find((g) => g.id === activeGraphRef.objectId) ?? null)
       : null,
   );
+  const renderedPageGraphs = $derived<GraphObject[]>(
+    graphPreview?.pageIndex === pageIndex
+      ? pageGraphs.map((graph) =>
+          graph.id === graphPreview?.graph.id ? graphPreview.graph : graph,
+        )
+      : pageGraphs,
+  );
+
+  $effect(() => {
+    const activeId = editingGraph?.id;
+    if (graphPreview && graphPreview.graph.id !== activeId) clearGraphPreview();
+  });
   const pageTextObjects = $derived<TextObject[]>(
     pageObjects.filter((o): o is TextObject => o.type === 'text'),
   );
@@ -283,9 +359,21 @@
     if (!editor) return null;
     if (editor.mode === 'edit') {
       const o = editor.obj;
-      return { content: o.content, latex: o.latex, fontSize: o.fontSize, color: o.color };
+      return {
+        content: o.content,
+        latex: o.latex,
+        mathMode: textMathMode(o),
+        fontSize: o.fontSize,
+        color: o.color,
+      };
     }
-    return { content: '', latex: false, fontSize: 16, color: sidebarState.activeColor };
+    return {
+      content: '',
+      latex: false,
+      mathMode: 'auto' as const,
+      fontSize: 16,
+      color: sidebarState.activeColor,
+    };
   });
 
   function newId(): string {
@@ -305,6 +393,7 @@
   function onEditorOk(result: {
     content: string;
     latex: boolean;
+    mathMode: TextMathMode;
     fontSize: number;
     color: string;
   }): void {
@@ -321,6 +410,7 @@
         at: editor.at,
         content: result.content,
         latex: result.latex,
+        mathMode: result.mathMode,
         fontSize: result.fontSize,
         color: result.color,
       };
@@ -332,6 +422,7 @@
         documentStore.updateObject(pageIndex, editor.obj.id, {
           content: result.content,
           latex: result.latex,
+          mathMode: result.mathMode,
           fontSize: result.fontSize,
           color: result.color,
         });
@@ -479,6 +570,23 @@
   function onUpdateGraph(patch: Partial<GraphObject>): void {
     if (!editingGraph) return;
     documentStore.updateObject(pageIndex, editingGraph.id, patch);
+    clearGraphPreview();
+  }
+
+  function onPreviewGraph(patch: Partial<GraphObject>): void {
+    if (!editingGraph) return;
+    const before = graphPreview?.graph.id === editingGraph.id ? graphPreview.graph : editingGraph;
+    const after = { ...before, ...patch };
+    setGraphPreview({ pageIndex, graph: after });
+
+    if (!patch.parameters) return;
+    const previousValues = new Map(
+      before.parameters?.map((parameter) => [parameter.name, parameter.value]),
+    );
+    for (const parameter of patch.parameters) {
+      if (previousValues.get(parameter.name) === parameter.value) continue;
+      recorder.recordGraphParameter(pageIndex, editingGraph.id, parameter.name, parameter.value);
+    }
   }
 
   function onDeleteGraph(): void {
@@ -524,6 +632,7 @@
     stopSidebarBridge?.();
     registerZenFullscreenBridge(null);
     eraseBatcher.cancel();
+    clearGraphPreview();
     stopAutosave();
   });
 </script>
@@ -662,7 +771,17 @@
           class="page-frame"
           style="width: {size.width}px; height: {size.height}px; transform: translate({view.offsetX}px, {view.offsetY}px);"
         >
-          {#if meta && currentPage?.type !== 'blank' && pdfPageIndex !== null}
+          {#if currentPage?.type === 'slide' && currentPage.slide}
+            <div class="slide-slot" style="width: {size.width}px; height: {size.height}px;">
+              <SlideLayer
+                slide={currentPage.slide}
+                theme={slideTheme}
+                width={size.width}
+                height={size.height}
+                ptToPx={size.ptToPx}
+              />
+            </div>
+          {:else if meta && currentPage?.type !== 'blank' && pdfPageIndex !== null}
             <div class="pdf-slot">
               <PdfLayer
                 pageIndex={pdfPageIndex}
@@ -702,7 +821,7 @@
             >
               {#snippet overlay()}
                 <GraphLayer
-                  graphs={pageGraphs}
+                  graphs={renderedPageGraphs}
                   width={size.width}
                   height={size.height}
                   ptToPx={size.ptToPx}
@@ -738,6 +857,7 @@
               <GraphEditor
                 graph={editingGraph}
                 onUpdate={onUpdateGraph}
+                onPreview={onPreviewGraph}
                 onDelete={onDeleteGraph}
                 onClose={clearActiveGraph}
               />
@@ -795,6 +915,7 @@
   {#if chrome.thumbnails && !sidebarState.rightBarHidden}
     <ThumbnailStrip
       {pages}
+      {slideTheme}
       currentIndex={pageIndex}
       docKey={doc?.pdfHash ?? null}
       onpick={onThumbPick}
@@ -824,6 +945,7 @@
     <TextEditor
       initialContent={editorInitial.content}
       initialLatex={editorInitial.latex}
+      initialMathMode={editorInitial.mathMode}
       initialFontSize={editorInitial.fontSize}
       initialColor={editorInitial.color}
       screenX={editor.screen.x}
@@ -864,6 +986,25 @@
       await loadPdfFromSource({ kind: 'file', path });
     }}
   />
+  {#if templatePickerOpen}
+    <TemplatePicker
+      onpick={(slide) => {
+        templatePickerOpen = false;
+        insertSlide(slide);
+      }}
+      onclose={() => (templatePickerOpen = false)}
+    />
+  {/if}
+  {#if editingSlide}
+    <SlideEditor
+      slide={editingSlide}
+      onchange={(next) => {
+        editingSlide = next;
+        documentStore.updateSlide(pageIndex, next);
+      }}
+      onclose={() => (editingSlide = null)}
+    />
+  {/if}
   <EraseDebugOverlay />
 </main>
 
@@ -1064,6 +1205,12 @@
   .blank-slot {
     background: #fff;
     box-sizing: border-box;
+  }
+  .slide-slot {
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    overflow: hidden;
   }
   .empty {
     position: absolute;

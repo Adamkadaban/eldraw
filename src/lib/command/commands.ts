@@ -22,6 +22,8 @@ import {
 } from '$lib/config/commands';
 import { settings } from '$lib/store/settings';
 import { openSlidesDialog } from '$lib/slides/dialog';
+import { slideCommands } from '$lib/slides/commands';
+import { exportAnnotatedPdfDialog } from '$lib/app/exportPdfDialog';
 
 export interface Command {
   id: string;
@@ -194,6 +196,11 @@ export function getCommands(): Command[] {
       run: openSlidesDialog,
     },
     {
+      id: 'file.exportAnnotatedPdf',
+      title: 'Export annotated PDF…',
+      run: () => void exportAnnotatedPdfDialog(),
+    },
+    {
       id: 'config.export',
       title: 'Export settings…',
       run: triggerExportSettings,
@@ -217,5 +224,6 @@ export function getCommands(): Command[] {
       title: 'Reset settings to defaults',
       run: triggerResetSettings,
     },
+    ...slideCommands,
   ];
 }

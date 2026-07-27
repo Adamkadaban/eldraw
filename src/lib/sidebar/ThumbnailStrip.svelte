@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import type { Page } from '$lib/types';
+  import type { SlideTheme } from '$lib/types';
   import {
     bumpPageGeneration,
     DEFAULT_MAX_DIM,
@@ -12,6 +13,7 @@
   } from '$lib/pdf/thumbnails';
   import { drawAnnotationOverlay, thumbnailPixelSize } from '$lib/pdf/thumbnailComposite';
   import { documentStore } from '$lib/store/document';
+  import { defaultSlideTheme, renderSlideBackground } from '$lib/slides';
   import { thumbnailSize } from './thumbnailSize';
 
   interface Props {
@@ -25,6 +27,8 @@
     maxWidth?: number;
     /** Stable identifier for the loaded PDF; thumbnail cache is scoped to it. */
     docKey?: string | null;
+    /** Deck theme, so slide previews match the main view for themed decks. */
+    slideTheme?: SlideTheme;
   }
 
   const {
@@ -37,9 +41,46 @@
     onhide,
     maxWidth = 140,
     docKey = null,
+    slideTheme = defaultSlideTheme,
   }: Props = $props();
 
   const canDelete = $derived(pages.length > 1);
+
+  /**
+   * Slide previews are drawn locally rather than going through the pdfium
+   * cache.
+   *
+   * Keyed by the slide object itself, not by page index: indices are
+   * reassigned on insert, delete, and reorder, so an index key would both miss
+   * and retain entries for pages that no longer exist. A WeakMap also lets
+   * previews for discarded slides be collected instead of growing without
+   * bound over a long session.
+   */
+  const slideThumbs = new WeakMap<object, { theme: SlideTheme; size: string; url: string }>();
+
+  function slideThumbUrl(page: Page, width: number, height: number): string | null {
+    if (page.type !== 'slide' || !page.slide || width <= 0 || height <= 0) return null;
+    const size = `${Math.round(width)}x${Math.round(height)}`;
+    const cached = slideThumbs.get(page.slide);
+    if (cached && cached.theme === slideTheme && cached.size === size) return cached.url;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width));
+    canvas.height = Math.max(1, Math.round(height));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    renderSlideBackground(
+      ctx,
+      page.slide,
+      slideTheme,
+      canvas.width,
+      canvas.height,
+      canvas.width / page.width,
+    );
+    const url = canvas.toDataURL();
+    slideThumbs.set(page.slide, { theme: slideTheme, size, url });
+    return url;
+  }
 
   let previewUrls = $state(new Map<number, string>());
   const compositedUrls = new Map<number, string>();
@@ -278,6 +319,7 @@
     {#each pages as page, i (page.pageIndex)}
       {@const size = thumbnailSize(page.width, page.height, maxWidth)}
       {@const url = previewFor(page)}
+      {@const preview = page.type === 'slide' ? slideThumbUrl(page, size.width, size.height) : url}
       <li class="row" class:active={i === currentIndex}>
         <button
           type="button"
@@ -290,8 +332,8 @@
             class="preview"
             class:blank={page.type === 'blank'}
             use:observe={page}
-            style="width: {size.width}px; height: {size.height}px;{url
-              ? ` background-image: url('${url}');`
+            style="width: {size.width}px; height: {size.height}px;{preview
+              ? ` background-image: url('${preview}');`
               : ''}"
             style:background-color={page.type === 'blank'
               ? (page.background ?? undefined)

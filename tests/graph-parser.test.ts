@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { parseExpression } from '$lib/graph/parser';
+import {
+  freeVariables,
+  parseExpression,
+  parseExpressionWithParams,
+  parseExpressionXY,
+  parseExpressionXYWithParams,
+} from '$lib/graph/parser';
+import type { GraphParameter } from '$lib/types';
 
 function compile(src: string): (x: number) => number {
   const r = parseExpression(src);
@@ -40,6 +47,15 @@ describe('parseExpression', () => {
   it('binds ^ tighter than unary minus for pow on negatives', () => {
     expect(compile('-2^2')(0)).toBe(-4);
     expect(compile('(-2)^2')(0)).toBe(4);
+  });
+
+  it('supports unary signs in exponents without changing power precedence', () => {
+    expect(compile('x^-2')(3)).toBeCloseTo(1 / 9);
+    expect(compile('2^-x')(3)).toBeCloseTo(1 / 8);
+    expect(compile('e^-x')(2)).toBeCloseTo(Math.exp(-2));
+    expect(compile('x^--2')(3)).toBe(9);
+    expect(compile('-2^2')(0)).toBe(-4);
+    expect(compile('2^3^2')(0)).toBe(512);
   });
 
   it('supports unary plus and minus', () => {
@@ -102,5 +118,72 @@ describe('parseExpression', () => {
     const f = compile('1/x');
     expect(f(0)).toBe(Infinity);
     expect(f(2)).toBe(0.5);
+  });
+});
+
+describe('freeVariables', () => {
+  it('returns free variables in first-appearance order without duplicates', () => {
+    expect(freeVariables('y = a*sin(b*x) + c + a', ['x', 'y'])).toEqual(['a', 'b', 'c']);
+  });
+
+  it('excludes function names, constants, and reserved variables', () => {
+    expect(freeVariables('sin(x)', ['x'])).toEqual([]);
+    expect(freeVariables('pi*x + e^x', ['x'])).toEqual([]);
+    expect(freeVariables('x^2 + y^2 = r^2', ['x', 'y'])).toEqual(['r']);
+  });
+
+  it('returns an empty list for input that cannot be tokenized', () => {
+    expect(() => freeVariables('a + @', ['x'])).not.toThrow();
+    expect(freeVariables('a + @', ['x'])).toEqual([]);
+  });
+});
+
+describe('parameterized expressions', () => {
+  const parameter = (name: string, value: number): GraphParameter => ({
+    name,
+    value,
+    min: -5,
+    max: 5,
+    step: 0.1,
+  });
+
+  it('evaluates and updates explicit parameters through a shared buffer', () => {
+    const result = parseExpressionWithParams('a*sin(x) + b', [
+      parameter('a', 2),
+      parameter('b', 1),
+    ]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.compiled.fn(Math.PI / 2)).toBeCloseTo(3);
+    result.compiled.setParameter('a', 4);
+    expect(result.compiled.fn(Math.PI / 2)).toBeCloseTo(5);
+    result.compiled.setParameter('unknown', 100);
+    expect(result.compiled.fn(Math.PI / 2)).toBeCloseTo(5);
+    expect(result.compiled.parameterNames).toEqual(['a', 'b']);
+  });
+
+  it('evaluates and updates implicit parameters', () => {
+    const result = parseExpressionXYWithParams('x^2 + y^2 = r^2', [parameter('r', 2)]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.compiled.fn(0, 2)).toBe(0);
+    result.compiled.setParameter('r', 3);
+    expect(result.compiled.fn(0, 2)).toBe(-5);
+  });
+
+  it('still reports undeclared identifiers cleanly', () => {
+    const result = parseExpressionWithParams('a*x + b', [parameter('a', 2)]);
+    expect(result).toEqual({ ok: false, error: "unknown identifier 'b'" });
+  });
+
+  it('preserves the legacy parser semantics', () => {
+    const negativePower = parseExpression('-2^2');
+    const associatedPower = parseExpression('2^3^2');
+    const implicit = parseExpressionXY('x^2 + y^2 = 4');
+    expect(negativePower.ok && negativePower.fn(0)).toBe(-4);
+    expect(associatedPower.ok && associatedPower.fn(0)).toBe(512);
+    expect(implicit.ok && implicit.fn(0, 2)).toBe(0);
   });
 });

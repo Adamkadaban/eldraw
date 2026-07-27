@@ -4,17 +4,18 @@
 //! Lock file:               `"{pdf_path}.eldraw.lock"`.
 //! Writes go via `"{pdf_path}.eldraw.json.tmp"` + rename for atomicity.
 
-use std::fs::{self, OpenOptions};
+use std::collections::HashMap;
+use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-use sysinfo::{Pid, System};
 
 use crate::error::{AppError, AppResult};
 use crate::model::EldrawDocument;
 
 const SUPPORTED_VERSION: u32 = 1;
+static HELD_LOCKS: OnceLock<Mutex<HashMap<PathBuf, File>>> = OnceLock::new();
 
 fn sidecar_path(pdf_path: &str) -> PathBuf {
     PathBuf::from(format!("{pdf_path}.eldraw.json"))
@@ -68,15 +69,6 @@ pub fn save_sidecar_impl(pdf_path: &str, doc: &EldrawDocument) -> AppResult<()> 
     Ok(())
 }
 
-fn pid_alive(pid: u32) -> bool {
-    let mut sys = System::new();
-    sys.refresh_processes(
-        sysinfo::ProcessesToUpdate::Some(&[Pid::from_u32(pid)]),
-        true,
-    );
-    sys.process(Pid::from_u32(pid)).is_some()
-}
-
 fn iso_now() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -84,61 +76,51 @@ fn iso_now() -> String {
     format!("{secs}")
 }
 
-fn parse_lock_pid(contents: &str) -> Option<u32> {
-    contents
-        .lines()
-        .next()
-        .and_then(|l| l.trim().parse::<u32>().ok())
+fn held_locks() -> &'static Mutex<HashMap<PathBuf, File>> {
+    HELD_LOCKS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 pub fn acquire_lock_impl(pdf_path: &str) -> AppResult<bool> {
     let path = lock_path(pdf_path);
     ensure_parent(&path)?;
     let body = format!("{}\n{}\n", std::process::id(), iso_now());
+    let mut locks = held_locks()
+        .lock()
+        .map_err(|_| std::io::Error::other("lock registry poisoned"))?;
+    if locks.contains_key(&path) {
+        return Ok(true);
+    }
 
-    match OpenOptions::new().write(true).create_new(true).open(&path) {
-        Ok(mut f) => {
-            f.write_all(body.as_bytes())?;
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&path)?;
+    match file.try_lock() {
+        Ok(()) => {
+            file.set_len(0)?;
+            file.write_all(body.as_bytes())?;
+            file.sync_data()?;
+            // OS locks live as long as their file handle, so retain it until release.
+            locks.insert(path, file);
             Ok(true)
         }
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            let contents = fs::read_to_string(&path).unwrap_or_default();
-            if let Some(existing_pid) = parse_lock_pid(&contents) {
-                if existing_pid != std::process::id() && pid_alive(existing_pid) {
-                    return Ok(false);
-                }
-            }
-            // Stale (or our own) lock: reclaim by overwriting atomically via
-            // remove + create_new so no other process can sneak in.
-            let _ = fs::remove_file(&path);
-            match OpenOptions::new().write(true).create_new(true).open(&path) {
-                Ok(mut f) => {
-                    f.write_all(body.as_bytes())?;
-                    Ok(true)
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
-                Err(e) => Err(e.into()),
-            }
-        }
-        Err(e) => Err(e.into()),
+        Err(TryLockError::WouldBlock) => Ok(false),
+        Err(TryLockError::Error(error)) => Err(error.into()),
     }
 }
 
 pub fn release_lock_impl(pdf_path: &str) -> AppResult<()> {
     let path = lock_path(pdf_path);
-    let contents = match fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e.into()),
-    };
-    match parse_lock_pid(&contents) {
-        Some(pid) if pid == std::process::id() => match fs::remove_file(&path) {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(e.into()),
-        },
-        _ => Ok(()),
+    let mut locks = held_locks()
+        .lock()
+        .map_err(|_| std::io::Error::other("lock registry poisoned"))?;
+    if let Some(file) = locks.remove(&path) {
+        file.unlock()?;
     }
+    // Keep the path: deleting after unlock could unlink a lock another process just acquired.
+    Ok(())
 }
 
 #[tauri::command]
@@ -165,19 +147,23 @@ pub async fn release_lock(pdf_path: String) -> AppResult<()> {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::process::{Child, Command, Stdio};
+    use std::thread;
+    use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
     fn sample_doc() -> EldrawDocument {
-        EldrawDocument {
-            version: 1,
-            pdf_hash: "abc123".into(),
-            pdf_path: Some("/tmp/foo.pdf".into()),
-            pages: vec![
-                json!({"pageIndex": 0, "type": "pdf", "width": 612.0, "height": 792.0, "objects": [], "insertedAfterPdfPage": null}),
+        serde_json::from_value(json!({
+            "version": 1,
+            "pdfHash": "abc123",
+            "pdfPath": "/example/foo.pdf",
+            "pages": [
+                {"pageIndex": 0, "type": "pdf", "pdfSourceIndex": 0, "width": 612.0, "height": 792.0, "objects": [], "insertedAfterPdfPage": null}
             ],
-            palettes: vec![],
-            prefs: json!({}),
-        }
+            "palettes": [],
+            "prefs": {},
+        }))
+        .unwrap()
     }
 
     fn pdf_str(dir: &TempDir, name: &str) -> String {
@@ -230,10 +216,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let pdf = pdf_str(&dir, "doc.pdf");
         assert!(acquire_lock_impl(&pdf).unwrap());
-        // Same-process re-acquire should succeed (we treat our own PID as reclaimable).
+        // Same-process re-acquire is idempotent.
         assert!(acquire_lock_impl(&pdf).unwrap());
         release_lock_impl(&pdf).unwrap();
-        assert!(!lock_path(&pdf).exists());
+        assert!(lock_path(&pdf).exists());
         assert!(acquire_lock_impl(&pdf).unwrap());
         release_lock_impl(&pdf).unwrap();
     }
@@ -248,27 +234,143 @@ mod tests {
         fs::write(lock_path(&pdf), format!("{fake_pid}\nstale\n")).unwrap();
         assert!(acquire_lock_impl(&pdf).unwrap());
         let contents = fs::read_to_string(lock_path(&pdf)).unwrap();
-        let pid = parse_lock_pid(&contents).unwrap();
+        let pid = contents.lines().next().unwrap().parse::<u32>().unwrap();
         assert_eq!(pid, std::process::id());
         release_lock_impl(&pdf).unwrap();
     }
 
-    #[cfg(unix)]
     #[test]
-    fn live_foreign_pid_blocks_lock() {
+    fn stale_lock_race_child() {
+        let Ok(pdf) = std::env::var("ELDRAW_LOCK_RACE_PDF") else {
+            return;
+        };
+        let ready = PathBuf::from(std::env::var("ELDRAW_LOCK_RACE_READY").unwrap());
+        let start = PathBuf::from(std::env::var("ELDRAW_LOCK_RACE_START").unwrap());
+        let finish = PathBuf::from(std::env::var("ELDRAW_LOCK_RACE_FINISH").unwrap());
+        let winner = PathBuf::from(std::env::var("ELDRAW_LOCK_RACE_WINNER").unwrap());
+
+        fs::write(&ready, []).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !start.exists() {
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for race start"
+            );
+            thread::sleep(Duration::from_millis(1));
+        }
+
+        if acquire_lock_impl(&pdf).unwrap() {
+            fs::write(&winner, []).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !finish.exists() {
+                assert!(
+                    Instant::now() < deadline,
+                    "timed out waiting for race finish"
+                );
+                thread::sleep(Duration::from_millis(1));
+            }
+            release_lock_impl(&pdf).unwrap();
+        }
+    }
+
+    #[test]
+    fn stale_lock_reclaim_has_exactly_one_winner() {
+        const CONTENDERS: usize = 12;
+
+        let dir = TempDir::new().unwrap();
+        let pdf = pdf_str(&dir, "race.pdf");
+        let fake_pid: u32 = 4_000_000_000;
+        fs::write(lock_path(&pdf), format!("{fake_pid}\nstale\n")).unwrap();
+
+        let start = dir.path().join("start");
+        let finish = dir.path().join("finish");
+        let test_binary = std::env::current_exe().unwrap();
+        let mut children: Vec<(Child, PathBuf)> = Vec::with_capacity(CONTENDERS);
+
+        for index in 0..CONTENDERS {
+            let ready = dir.path().join(format!("ready-{index}"));
+            let winner = dir.path().join(format!("winner-{index}"));
+            let child = Command::new(&test_binary)
+                .args(["--exact", "storage::tests::stale_lock_race_child"])
+                .env("ELDRAW_LOCK_RACE_PDF", &pdf)
+                .env("ELDRAW_LOCK_RACE_READY", &ready)
+                .env("ELDRAW_LOCK_RACE_START", &start)
+                .env("ELDRAW_LOCK_RACE_FINISH", &finish)
+                .env("ELDRAW_LOCK_RACE_WINNER", &winner)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap();
+            children.push((child, winner));
+
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !ready.exists() {
+                assert!(
+                    Instant::now() < deadline,
+                    "child {index} did not become ready"
+                );
+                thread::sleep(Duration::from_millis(1));
+            }
+        }
+
+        fs::write(&start, []).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let mut completed = 0;
+            for (child, winner) in &mut children {
+                if winner.exists() || child.try_wait().unwrap().is_some() {
+                    completed += 1;
+                }
+            }
+            if completed == CONTENDERS {
+                break;
+            }
+            assert!(Instant::now() < deadline, "lock contenders did not finish");
+            thread::sleep(Duration::from_millis(1));
+        }
+
+        let winners = children
+            .iter()
+            .filter(|(_, winner)| winner.exists())
+            .count();
+        fs::write(&finish, []).unwrap();
+        for (mut child, _) in children {
+            assert!(child.wait().unwrap().success());
+        }
+
+        assert_eq!(winners, 1, "only one process may reclaim a stale lock");
+    }
+
+    #[test]
+    fn live_foreign_process_lock_blocks_acquisition() {
         let dir = TempDir::new().unwrap();
         let pdf = pdf_str(&dir, "doc.pdf");
-        // Spawn a child we know is alive, write its PID into the lock, then
-        // try to acquire.
-        let mut child = std::process::Command::new("sleep")
-            .arg("30")
+        let ready = dir.path().join("ready");
+        let start = dir.path().join("start");
+        let finish = dir.path().join("finish");
+        let winner = dir.path().join("winner");
+        fs::write(&start, []).unwrap();
+
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "storage::tests::stale_lock_race_child"])
+            .env("ELDRAW_LOCK_RACE_PDF", &pdf)
+            .env("ELDRAW_LOCK_RACE_READY", &ready)
+            .env("ELDRAW_LOCK_RACE_START", &start)
+            .env("ELDRAW_LOCK_RACE_FINISH", &finish)
+            .env("ELDRAW_LOCK_RACE_WINNER", &winner)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()
-            .expect("spawn sleep");
-        fs::write(lock_path(&pdf), format!("{}\nx\n", child.id())).unwrap();
-        let result = acquire_lock_impl(&pdf).unwrap();
-        let _ = child.kill();
-        let _ = child.wait();
-        assert!(!result, "expected acquire to fail while foreign PID alive");
-        let _ = fs::remove_file(lock_path(&pdf));
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !winner.exists() {
+            assert!(Instant::now() < deadline, "child did not acquire lock");
+            thread::sleep(Duration::from_millis(1));
+        }
+
+        assert!(!acquire_lock_impl(&pdf).unwrap());
+
+        fs::write(&finish, []).unwrap();
+        assert!(child.wait().unwrap().success());
     }
 }

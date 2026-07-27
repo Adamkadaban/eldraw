@@ -1,21 +1,30 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { renderLatex } from '$lib/text/latex';
+  import type { TextMathMode } from '$lib/types';
+  import { renderMixed } from '$lib/text/render';
 
   interface Props {
     initialContent: string;
     initialLatex: boolean;
+    initialMathMode?: TextMathMode;
     initialFontSize: number;
     initialColor: string;
     screenX: number;
     screenY: number;
-    onok: (result: { content: string; latex: boolean; fontSize: number; color: string }) => void;
+    onok: (result: {
+      content: string;
+      latex: boolean;
+      mathMode: TextMathMode;
+      fontSize: number;
+      color: string;
+    }) => void;
     oncancel: () => void;
   }
 
   let {
     initialContent,
     initialLatex,
+    initialMathMode = initialLatex ? 'latex' : 'plain',
     initialFontSize,
     initialColor,
     screenX,
@@ -25,14 +34,14 @@
   }: Props = $props();
 
   let content = $state(untrack(() => initialContent));
-  let latex = $state(untrack(() => initialLatex));
+  let mode = $state<TextMathMode>(untrack(() => initialMathMode));
   let fontSize = $state(untrack(() => initialFontSize));
   let color = $state(untrack(() => initialColor));
   let textarea: HTMLTextAreaElement | null = $state(null);
 
   const preview = $derived.by(() => {
-    if (!latex || content.length === 0) return null;
-    return renderLatex(content);
+    if (content.length === 0) return null;
+    return renderMixed(content, mode);
   });
 
   onMount(() => {
@@ -41,7 +50,7 @@
   });
 
   function commit() {
-    onok({ content, latex, fontSize, color });
+    onok({ content, latex: mode === 'latex', mathMode: mode, fontSize, color });
   }
 
   function onKeyDown(event: KeyboardEvent) {
@@ -70,33 +79,44 @@
     bind:value={content}
     class="content"
     rows="3"
-    placeholder={latex ? 'e.g. x^2 + y^2 = r^2' : 'Enter text…'}
+    placeholder={mode === 'plain' ? 'Enter text…' : 'e.g. The slope of y = 3x - 1 is 3'}
     style="font-size: {fontSize}px; color: {color};"
   ></textarea>
 
-  {#if latex && preview}
+  {#if preview}
     <div
       class="preview"
-      class:errored={!preview.ok}
+      class:errored={preview.errored}
       aria-live="polite"
-      style={preview.ok
-        ? `font-size: ${fontSize}px; color: ${color};`
-        : `font-size: ${fontSize}px;`}
+      style="font-size: {fontSize}px; color: {color};"
     >
-      {#if preview.ok}
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-        <span>{@html preview.html}</span>
-      {:else}
-        <span class="raw">{content}</span>
-        <span class="err">{preview.error}</span>
-      {/if}
+      {#each preview.runs as run}
+        {#if run.kind === 'text'}
+          <span>{run.value}</span>
+        {:else}
+          <span class:display={run.display} class:raw={run.errored}>
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            {@html run.html}
+          </span>
+        {/if}
+      {/each}
+      {#each preview.runs as run}
+        {#if run.kind === 'math' && run.error}
+          <span class="err">{run.error}</span>
+        {/if}
+      {/each}
     </div>
   {/if}
 
   <div class="row">
-    <label class="check">
-      <input type="checkbox" bind:checked={latex} />
-      LaTeX
+    <label class="mode">
+      Math
+      <select bind:value={mode} aria-label="Text math mode">
+        <option value="plain">Plain</option>
+        <option value="latex">LaTeX</option>
+        <option value="mixed">Delimited</option>
+        <option value="auto">Auto-detect</option>
+      </select>
     </label>
     <label class="size">
       Size
@@ -155,6 +175,7 @@
     border-radius: 4px;
     padding: 6px;
     overflow-x: auto;
+    white-space: pre;
   }
   .preview.errored {
     background: #2a1717;
@@ -169,6 +190,9 @@
   .preview .raw {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
+  .preview .display {
+    display: block;
+  }
   .row {
     display: flex;
     gap: 10px;
@@ -182,6 +206,13 @@
   }
   .row input[type='number'] {
     width: 50px;
+    background: #1b1b1b;
+    color: #eee;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 2px 4px;
+  }
+  .row select {
     background: #1b1b1b;
     color: #eee;
     border: 1px solid #3a3a3a;

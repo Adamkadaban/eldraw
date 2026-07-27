@@ -1,8 +1,30 @@
 import { derived, get } from 'svelte/store';
 import { currentDocument } from '$lib/store/document';
+import { graphPreview } from '$lib/store/graphPreview';
 import { viewportStore } from '$lib/store/viewport';
 import { presenterSync } from '$lib/ipc/presenter';
 import { warn } from '$lib/log';
+import type { EldrawDocument } from '$lib/types';
+
+function documentWithGraphPreview(doc: EldrawDocument | null): EldrawDocument | null {
+  const preview = get(graphPreview);
+  if (!doc || !preview) return doc;
+  const page = doc.pages[preview.pageIndex];
+  if (!page || !page.objects.some((object) => object.id === preview.graph.id)) return doc;
+  return {
+    ...doc,
+    pages: doc.pages.map((candidate, index) =>
+      index === preview.pageIndex
+        ? {
+            ...candidate,
+            objects: candidate.objects.map((object) =>
+              object.id === preview.graph.id ? preview.graph : object,
+            ),
+          }
+        : candidate,
+    ),
+  };
+}
 
 /**
  * Start mirroring document + current page to the presenter window. Returns
@@ -28,7 +50,7 @@ export function startPresenterBridge(): () => void {
     try {
       while (!stopped) {
         pushPending = false;
-        const doc = get(currentDocument);
+        const doc = documentWithGraphPreview(get(currentDocument));
         const view = get(viewportStore);
         try {
           await presenterSync({
@@ -51,10 +73,12 @@ export function startPresenterBridge(): () => void {
   void push();
   const unsubDoc = currentDocument.subscribe(() => void push());
   const unsubPage = pageIndexStore.subscribe(() => void push());
+  const unsubGraphPreview = graphPreview.subscribe(() => void push());
 
   return () => {
     stopped = true;
     unsubDoc();
     unsubPage();
+    unsubGraphPreview();
   };
 }

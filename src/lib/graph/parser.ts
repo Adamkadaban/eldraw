@@ -6,7 +6,7 @@
  *   expr   := term (('+' | '-') term)*
  *   term   := unary (('*' | '/') unary)*
  *   unary  := ('+' | '-') unary | factor
- *   factor := primary ('^' factor)?         // right-associative and tighter
+ *   factor := primary ('^' unary)?          // right-associative and tighter
  *                                           // than unary minus so `-2^2 == -4`.
  *   primary := number | ident | call | '(' expr ')'
  *   call   := ident '(' expr ')'
@@ -20,11 +20,33 @@
  * constant `e`; write `2*10^3` instead of `2e3`.
  */
 
+import type { GraphParameter } from '$lib/types';
+
 export type CompiledFn = (x: number) => number;
 export type CompiledFnXY = (x: number, y: number) => number;
 
 export type ParseResult = { ok: true; fn: CompiledFn } | { ok: false; error: string };
 export type ParseResultXY = { ok: true; fn: CompiledFnXY } | { ok: false; error: string };
+
+export interface ParameterizedFn {
+  fn: CompiledFn;
+  setParameter(name: string, value: number): void;
+  parameterNames: readonly string[];
+}
+
+export interface ParameterizedFnXY {
+  fn: CompiledFnXY;
+  setParameter(name: string, value: number): void;
+  parameterNames: readonly string[];
+}
+
+export type ParameterizedResult =
+  | { ok: true; compiled: ParameterizedFn }
+  | { ok: false; error: string };
+
+export type ParameterizedResultXY =
+  | { ok: true; compiled: ParameterizedFnXY }
+  | { ok: false; error: string };
 
 type BinOp = '+' | '-' | '*' | '/' | '^';
 
@@ -133,6 +155,40 @@ function tokenize(src: string): Tok[] {
   return tokens;
 }
 
+/**
+ * Return free parameter identifiers in first-appearance order. Tokenization
+ * failures produce an empty list so partially typed input is always safe.
+ */
+export function freeVariables(src: string, reserved: readonly string[]): string[] {
+  try {
+    const tokens = tokenize(src);
+    const reservedNames = new Set(reserved);
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (let i = 0; i < tokens.length; i += 1) {
+      const token = tokens[i];
+      if (token.k !== 'ident') continue;
+      const name = token.v;
+      const next = tokens[i + 1];
+      if (
+        (next?.k === 'lp' && next.pos > token.pos) ||
+        Object.hasOwn(FUNCTIONS, name) ||
+        Object.hasOwn(CONSTANTS, name) ||
+        reservedNames.has(name) ||
+        seen.has(name)
+      ) {
+        continue;
+      }
+      seen.add(name);
+      names.push(name);
+    }
+    return names;
+  } catch (err) {
+    if (err instanceof ParseError) return [];
+    throw err;
+  }
+}
+
 interface Cursor {
   toks: Tok[];
   pos: number;
@@ -193,7 +249,7 @@ function parseFactor(c: Cursor): NodeFn {
   const t = peek(c);
   if (t && t.k === 'op' && t.v === '^') {
     consume(c);
-    const exp = parseFactor(c);
+    const exp = parseUnary(c);
     return (v) => Math.pow(base(v), exp(v));
   }
   return base;
@@ -280,6 +336,95 @@ export function parseExpressionXY(src: string): ParseResultXY {
         buf[0] = x;
         buf[1] = y;
         return node(buf);
+      },
+    };
+  } catch (err) {
+    if (err instanceof ParseError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+function parameterLayout(
+  params: readonly GraphParameter[],
+  reserved: readonly string[],
+): {
+  varIndex: Record<string, number>;
+  parameterIndex: Map<string, number>;
+  parameterNames: string[];
+  buffer: number[];
+} {
+  const varIndex = Object.create(null) as Record<string, number>;
+  const parameterIndex = new Map<string, number>();
+  const parameterNames: string[] = [];
+  const buffer = new Array<number>(reserved.length).fill(0);
+
+  for (let i = 0; i < reserved.length; i += 1) {
+    varIndex[reserved[i]] = i;
+  }
+  for (const parameter of params) {
+    if (
+      parameterIndex.has(parameter.name) ||
+      reserved.includes(parameter.name) ||
+      Object.hasOwn(CONSTANTS, parameter.name)
+    ) {
+      continue;
+    }
+    const index = buffer.length;
+    varIndex[parameter.name] = index;
+    parameterIndex.set(parameter.name, index);
+    parameterNames.push(parameter.name);
+    buffer.push(parameter.value);
+  }
+  return { varIndex, parameterIndex, parameterNames, buffer };
+}
+
+export function parseExpressionWithParams(
+  src: string,
+  params: readonly GraphParameter[],
+): ParameterizedResult {
+  try {
+    const layout = parameterLayout(params, ['x']);
+    const node = compile(src, layout.varIndex, false);
+    return {
+      ok: true,
+      compiled: {
+        parameterNames: layout.parameterNames,
+        setParameter(name, value) {
+          const index = layout.parameterIndex.get(name);
+          if (index !== undefined) layout.buffer[index] = value;
+        },
+        fn(x) {
+          layout.buffer[0] = x;
+          return node(layout.buffer);
+        },
+      },
+    };
+  } catch (err) {
+    if (err instanceof ParseError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+export function parseExpressionXYWithParams(
+  src: string,
+  params: readonly GraphParameter[],
+): ParameterizedResultXY {
+  try {
+    const layout = parameterLayout(params, ['x', 'y']);
+    const node = compile(src, layout.varIndex, true);
+    return {
+      ok: true,
+      compiled: {
+        parameterNames: layout.parameterNames,
+        setParameter(name, value) {
+          const index = layout.parameterIndex.get(name);
+          if (index !== undefined) layout.buffer[index] = value;
+        },
+        fn(x, y) {
+          layout.buffer[0] = x;
+          layout.buffer[1] = y;
+          return node(layout.buffer);
+        },
       },
     };
   } catch (err) {

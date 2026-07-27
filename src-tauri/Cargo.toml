@@ -4,6 +4,10 @@ version = "0.1.0-rc.12"
 description = "PDF annotation tool for live math teaching"
 authors = ["Adam"]
 edition = "2021"
+# Pinned by the newest std APIs in use: file locking (File::try_lock /
+# TryLockError, 1.89) in storage.rs and f64::midpoint (1.91) in export.rs.
+# Declared so an older toolchain fails with a clear message.
+rust-version = "1.91"
 
 [lib]
 name = "eldraw_lib"
@@ -27,6 +31,9 @@ pdfium-render = { version = "0.9", default-features = false, features = [
   "thread_safe",
 ] }
 image = "0.25"
+font8x8 = "0.3"
+lopdf = "0.38"
+meval = "0.2"
 tauri-plugin-dialog = "2.7.0"
 lru = "0.12"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "charset"] }

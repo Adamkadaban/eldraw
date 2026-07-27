@@ -56,6 +56,16 @@ describe('temp-ink fade', () => {
     expect(kept[1]).toBe(c);
   });
 
+  it('pruneStrokes drops expired strokes after a live stroke', () => {
+    const olderLive = createTempStroke([pt(0, 0, 0)], STYLE, 2000, 0);
+    const newerExpired = createTempStroke([pt(1, 1, 0)], STYLE, 500, 400);
+    const newestLive = createTempStroke([pt(2, 2, 0)], STYLE, 1000, 800);
+
+    const kept = pruneStrokes([olderLive, newerExpired, newestLive], 1000);
+
+    expect(kept).toEqual([olderLive, newestLive]);
+  });
+
   it('pruneStrokes returns the same array when nothing expired', () => {
     const a = createTempStroke([pt(0, 0, 0)], STYLE, 1000, 100);
     const arr = [a];

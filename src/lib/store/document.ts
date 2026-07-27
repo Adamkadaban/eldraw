@@ -1,6 +1,7 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
-import type { AnyObject, EldrawDocument, ObjectId, Page } from '$lib/types';
+import type { AnyObject, EldrawDocument, ObjectId, Page, Slide } from '$lib/types';
 import { isSafeHexColor } from '$lib/color';
+import { sanitizeSlide } from '$lib/slides/deck';
 import { applyCommand, createHistory, invertCommand, type Command, type History } from './history';
 
 export type PageCommitListener = (pageIndex: number) => void;
@@ -17,7 +18,7 @@ function commandToMutations(pageIndex: number, cmd: Command): MutationEvent[] {
     case 'add':
       return [{ kind: 'add', pageIndex, object: cmd.object }];
     case 'remove':
-      return [{ kind: 'remove', pageIndex, ids: [cmd.object.id] }];
+      return [{ kind: 'remove', pageIndex, ids: [cmd.item.object.id] }];
     case 'removeMany':
       return [{ kind: 'remove', pageIndex, ids: cmd.items.map((i) => i.object.id) }];
     case 'insertMany':
@@ -31,6 +32,11 @@ function commandToMutations(pageIndex: number, cmd: Command): MutationEvent[] {
         id: e.objectId,
         after: e.after,
       }));
+    case 'reorder':
+      return [
+        { kind: 'remove', pageIndex, ids: cmd.before.map((o) => o.id) },
+        ...cmd.after.map((object) => ({ kind: 'add' as const, pageIndex, object })),
+      ];
     case 'clearPage':
       return [{ kind: 'remove', pageIndex, ids: cmd.objects.map((o) => o.id) }];
     case 'restorePage':
@@ -52,6 +58,7 @@ export interface DocumentStore {
   addObject(pageIndex: number, obj: AnyObject): void;
   removeObject(pageIndex: number, id: ObjectId): void;
   removeObjects(pageIndex: number, ids: readonly ObjectId[]): void;
+  reorderObjects(pageIndex: number, objects: readonly AnyObject[]): void;
   updateObject(pageIndex: number, id: ObjectId, patch: Partial<AnyObject>): void;
   /**
    * Apply a batch of object replacements under a single history entry. The
@@ -66,6 +73,10 @@ export interface DocumentStore {
     height: number,
     background?: string,
   ): void;
+  /** Insert an authored slide as a new page after the given array position. */
+  insertSlidePageAfter(afterArrayIndex: number, slide: Slide, width: number, height: number): void;
+  /** Replace the slide content of a slide page. Not undoable via page history. */
+  updateSlide(pageIndex: number, slide: Slide): void;
   movePage(from: number, to: number): void;
   duplicatePage(index: number): void;
   deletePage(index: number): void;
@@ -136,7 +147,7 @@ function lastPdfIndexAtOrBefore(pages: readonly Page[], arrayIndex: number): num
 function normalizeLoaded(doc: EldrawDocument): EldrawDocument {
   let nextDerived = 0;
   const pages = doc.pages.map((p, i) => {
-    const withBg = sanitizePageBackground(p);
+    const withBg = sanitizeLoadedPage(p);
     const base = withBg.pageIndex === i ? withBg : { ...withBg, pageIndex: i };
     if (base.type === 'pdf' && typeof base.pdfSourceIndex !== 'number') {
       const withSource = { ...base, pdfSourceIndex: nextDerived };
@@ -162,6 +173,22 @@ function sanitizePageBackground(page: Page): Page {
   const { background: _drop, ...rest } = page;
   void _drop;
   return rest as Page;
+}
+
+/**
+ * Apply every load-time trust boundary to a page. Slide content reaches the
+ * DOM through `{@html}` and inline styles, so it is sanitized here rather
+ * than at render time. A slide page whose content fails validation degrades
+ * to a blank page instead of being dropped, so annotations are never lost.
+ */
+function sanitizeLoadedPage(page: Page): Page {
+  const withBg = sanitizePageBackground(page);
+  if (withBg.type !== 'slide') return withBg;
+  const slide = sanitizeSlide(withBg.slide);
+  if (slide) return { ...withBg, slide };
+  const { slide: _drop, ...rest } = withBg;
+  void _drop;
+  return { ...(rest as Page), type: 'blank' };
 }
 
 function reindex(pages: Page[]): Page[] {
@@ -255,9 +282,12 @@ export function createDocumentStore(): DocumentStore {
       if (!doc) return;
       const page = doc.pages[pageIndex];
       if (!page) return;
-      const obj = page.objects.find((o) => o.id === id);
-      if (!obj) return;
-      pushAndApply(pageIndex, { type: 'remove', object: obj });
+      const index = page.objects.findIndex((o) => o.id === id);
+      if (index < 0) return;
+      pushAndApply(pageIndex, {
+        type: 'remove',
+        item: { object: page.objects[index], index },
+      });
     },
 
     removeObjects(pageIndex, ids) {
@@ -272,6 +302,25 @@ export function createDocumentStore(): DocumentStore {
         .filter(({ object }) => wanted.has(object.id));
       if (items.length === 0) return;
       pushAndApply(pageIndex, { type: 'removeMany', items });
+    },
+
+    reorderObjects(pageIndex, objects) {
+      const doc = get(state);
+      if (!doc) return;
+      const page = doc.pages[pageIndex];
+      if (!page || page.objects.length !== objects.length) return;
+      // The new order must be a permutation of the current one. Matching only
+      // length and membership would let a duplicated id silently drop another
+      // object from the page.
+      const nextIds = new Set(objects.map((object) => object.id));
+      if (nextIds.size !== objects.length) return;
+      const currentIds = new Set(page.objects.map((object) => object.id));
+      if (objects.some((object) => !currentIds.has(object.id))) return;
+      pushAndApply(pageIndex, {
+        type: 'reorder',
+        before: [...page.objects],
+        after: [...objects],
+      });
     },
 
     updateObject(pageIndex, id, patch) {
@@ -321,6 +370,39 @@ export function createDocumentStore(): DocumentStore {
         pages.splice(insertIdx, 0, blank);
         history.shiftPageIndicesFrom(insertIdx);
         return { ...doc, pages: reindex(pages) };
+      });
+    },
+
+    insertSlidePageAfter(afterArrayIndex, slide, width, height) {
+      const safe = sanitizeSlide(slide);
+      if (!safe) return;
+      state.update((doc) => {
+        if (!doc) return doc;
+        const insertIdx = afterArrayIndex + 1;
+        const page: Page = {
+          pageIndex: insertIdx,
+          type: 'slide',
+          insertedAfterPdfPage: lastPdfIndexAtOrBefore(doc.pages, afterArrayIndex),
+          width,
+          height,
+          slide: safe,
+          objects: [],
+        };
+        const pages = [...doc.pages];
+        pages.splice(insertIdx, 0, page);
+        history.shiftPageIndicesFrom(insertIdx);
+        return { ...doc, pages: reindex(pages) };
+      });
+    },
+
+    updateSlide(pageIndex, slide) {
+      const safe = sanitizeSlide(slide);
+      if (!safe) return;
+      state.update((doc) => {
+        if (!doc) return doc;
+        const page = doc.pages[pageIndex];
+        if (!page || page.type !== 'slide') return doc;
+        return replacePage(doc, pageIndex, { ...page, slide: safe });
       });
     },
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { chapterMarkers, nearestPageChangeAtOrBefore, replayStateAt } from '$lib/session/player';
-import type { Point, StrokeObject, TextObject } from '$lib/types';
+import type { GraphObject, Point, StrokeObject, TextObject } from '$lib/types';
 import type { SessionEvent } from '$lib/session/types';
 
 function pt(x: number, t: number): Point {
@@ -28,6 +28,22 @@ function text(id: string, content = 'x'): TextObject {
     latex: false,
     fontSize: 16,
     color: '#000',
+  };
+}
+
+function graph(id: string): GraphObject {
+  return {
+    id,
+    createdAt: 0,
+    type: 'graph',
+    bounds: { x: 0, y: 0, w: 100, h: 100 },
+    xRange: [-10, 10],
+    yRange: [-10, 10],
+    gridStep: 1,
+    showAxes: true,
+    showGrid: true,
+    functions: [],
+    parameters: [{ name: 'a', value: 1, min: -5, max: 5, step: 0.1 }],
   };
 }
 
@@ -115,6 +131,23 @@ describe('replayStateAt', () => {
     const r = replayStateAt(events, 25);
     const t = r.byPage.get(0)?.[0] as TextObject;
     expect(t.content).toBe('new');
+  });
+
+  it('replays live graph parameter changes', () => {
+    const events: SessionEvent[] = [
+      { kind: 'objectAdd', t: 0, page: 0, obj: graph('g1') },
+      {
+        kind: 'graph.paramChange',
+        t: 20,
+        page: 0,
+        graphId: 'g1',
+        name: 'a',
+        value: 2.5,
+      },
+    ];
+    const r = replayStateAt(events, 25);
+    const replayed = r.byPage.get(0)?.[0] as GraphObject;
+    expect(replayed.parameters?.[0].value).toBe(2.5);
   });
 });
 

@@ -91,6 +91,22 @@ export function replayStateAt(
         }
         break;
       }
+      case 'graph.paramChange': {
+        const arr = byPage.get(ev.page);
+        if (arr) {
+          byPage.set(
+            ev.page,
+            arr.map((object) => {
+              if (object.type !== 'graph' || object.id !== ev.graphId) return object;
+              const parameters = object.parameters?.map((parameter) =>
+                parameter.name === ev.name ? { ...parameter, value: ev.value } : parameter,
+              );
+              return parameters ? { ...object, parameters } : object;
+            }),
+          );
+        }
+        break;
+      }
     }
   }
 

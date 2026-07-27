@@ -1,6 +1,7 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
 import type { ColorPalette, DashStyle, StrokeStyle, ToolKind, ToolPreset } from '$lib/types';
 import { clampFadeMs, DEFAULT_TEMP_INK_FADE_MS } from '$lib/tools/tempInk';
+import { isSafeHexColor } from '$lib/color';
 import { DEFAULT_STRAIGHT_EDGE_SNAP_STEP } from '$lib/tools/straightEdge';
 import type { SnapEdge } from '$lib/sidebar/snap';
 
@@ -696,7 +697,7 @@ function isStrokeStyle(value: unknown): value is StrokeStyle {
   if (!value || typeof value !== 'object') return false;
   const s = value as Record<string, unknown>;
   return (
-    typeof s.color === 'string' &&
+    isSafeHexColor(s.color) &&
     typeof s.width === 'number' &&
     Number.isFinite(s.width) &&
     typeof s.dash === 'string' &&
@@ -711,7 +712,7 @@ function isColorPalette(value: unknown): value is ColorPalette {
   const p = value as Record<string, unknown>;
   if (typeof p.id !== 'string' || typeof p.name !== 'string') return false;
   if (!Array.isArray(p.colors)) return false;
-  return p.colors.every((c): c is string => typeof c === 'string');
+  return p.colors.every(isSafeHexColor);
 }
 
 function sanitizeImportedSidebar(raw: Record<string, unknown>): Partial<SyncableSidebarState> {
@@ -745,10 +746,10 @@ function sanitizeImportedSidebar(raw: Record<string, unknown>): Partial<Syncable
   if (Array.isArray(raw.palettes) && raw.palettes.every(isColorPalette)) {
     out.palettes = raw.palettes.map((p) => ({ ...p, colors: [...p.colors] }));
   }
-  if (typeof raw.activeColor === 'string') out.activeColor = raw.activeColor;
+  if (isSafeHexColor(raw.activeColor)) out.activeColor = raw.activeColor;
   if (raw.laser && typeof raw.laser === 'object') {
     const l = raw.laser as Record<string, unknown>;
-    if (typeof l.color === 'string' && typeof l.radius === 'number' && Number.isFinite(l.radius)) {
+    if (isSafeHexColor(l.color) && typeof l.radius === 'number' && Number.isFinite(l.radius)) {
       out.laser = { color: l.color, radius: clamp(l.radius, MIN_LASER_RADIUS, MAX_LASER_RADIUS) };
     }
   }

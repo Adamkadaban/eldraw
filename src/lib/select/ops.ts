@@ -59,11 +59,6 @@ export function commitDelete(pageIndex: number, ids: ReadonlySet<ObjectId>): voi
   documentStore.removeObjects(pageIndex, [...ids]);
 }
 
-/**
- * Z-order mutation: remove then re-add in the new order. This is currently
- * two history entries because the existing command set has no single
- * reorder op; undoing a reorder takes two undos.
- */
 export function reorderSelection(
   pageIndex: number,
   ids: ReadonlySet<ObjectId>,
@@ -73,11 +68,7 @@ export function reorderSelection(
   if (!current) return;
   const next = reorderArray(current, ids, direction);
   if (arraysEqualById(current, next)) return;
-  documentStore.removeObjects(
-    pageIndex,
-    current.map((o) => o.id),
-  );
-  for (const obj of next) documentStore.addObject(pageIndex, obj);
+  documentStore.reorderObjects(pageIndex, next);
 }
 
 function arraysEqualById(a: AnyObject[], b: AnyObject[]): boolean {
