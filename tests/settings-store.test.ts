@@ -1,3 +1,4 @@
+import { DEFAULT_GRAPH_PRESET } from '$lib/graph/theme';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 function makeLocalStorageStub() {
@@ -58,17 +59,17 @@ describe('settings store', () => {
     expect(settings.snapshot().reloadBehavior).toBe('keep');
   });
 
-  it('defaults graphTheme to classic and graphOverrides to {}', async () => {
+  it('defaults graphTheme to the default preset and graphOverrides to {}', async () => {
     const { settings } = await import('$lib/store/settings');
     const snap = settings.snapshot();
-    expect(snap.graphTheme).toBe('classic');
+    expect(snap.graphTheme).toBe(DEFAULT_GRAPH_PRESET);
     expect(snap.graphOverrides).toEqual({});
   });
 
-  it('migrates a legacy settings blob without graphTheme to classic', async () => {
+  it('migrates a legacy settings blob without graphTheme to the default preset', async () => {
     stub.store.set('eldraw.settings.v1', JSON.stringify({ reloadBehavior: 'discard' }));
     const { settings } = await import('$lib/store/settings');
-    expect(settings.snapshot().graphTheme).toBe('classic');
+    expect(settings.snapshot().graphTheme).toBe(DEFAULT_GRAPH_PRESET);
     expect(settings.snapshot().reloadBehavior).toBe('discard');
   });
 
@@ -87,6 +88,6 @@ describe('settings store', () => {
       JSON.stringify({ reloadBehavior: 'keep', graphTheme: 'nope' }),
     );
     const { settings } = await import('$lib/store/settings');
-    expect(settings.snapshot().graphTheme).toBe('classic');
+    expect(settings.snapshot().graphTheme).toBe(DEFAULT_GRAPH_PRESET);
   });
 });

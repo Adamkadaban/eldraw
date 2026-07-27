@@ -2,7 +2,7 @@
   import { overlays } from '$lib/store/overlays';
   import { sidebar } from '$lib/store/sidebar';
   import { toolStore } from '$lib/store/tool';
-  import { rulerEnd, rulerTicks, type Vec2 } from '$lib/geometry';
+  import { RULER_BODY_PT, rulerEnd, rulerTicks, type Vec2 } from '$lib/geometry';
 
   interface Props {
     ptToPx: number;
@@ -80,7 +80,9 @@
     onClose(e);
   }
 
-  const bodyHeight = 24;
+  // Drawn from the shared point-space constant so the body the user sees is
+  // exactly the band the snap edges bound, at any zoom level.
+  const bodyHeight = $derived(RULER_BODY_PT * ptToPx);
   const closeOffset = 12;
 </script>
 
@@ -201,6 +203,11 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
+    /* The overlay sits above canvas layers inside a transformed page frame.
+       Without its own compositing layer, dragging the ruler repaints against
+       stale backing store and leaves trails behind the moving body. */
+    will-change: transform;
+    transform: translateZ(0);
   }
   .body.interactive {
     cursor: grab;

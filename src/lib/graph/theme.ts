@@ -235,7 +235,7 @@ export const GRAPH_PRESET_LABELS: Readonly<Record<GraphPresetName, string>> = {
   lesson: 'Lesson',
 };
 
-export const DEFAULT_GRAPH_PRESET: GraphPresetName = 'classic';
+export const DEFAULT_GRAPH_PRESET: GraphPresetName = 'lesson';
 
 export interface AppearanceThemeInput {
   graphTheme?: GraphPresetName;
