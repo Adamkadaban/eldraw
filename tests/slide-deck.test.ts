@@ -53,6 +53,8 @@ describe('slide deck operations', () => {
       'callout',
       'image',
       'mapping',
+      'diagram',
+      'numberline',
       'spacer',
     ] as const;
     const blocks = kinds.map(createBlock);
@@ -72,6 +74,22 @@ describe('slide deck operations', () => {
         { from: 1, to: 1 },
       ],
       height: 260,
+    });
+  });
+
+  it('creates diagram and number-line teaching blocks', () => {
+    const diagram = createBlock('diagram');
+    expect(diagram.nodes).toHaveLength(2);
+    expect(diagram.edges).toEqual([{ from: diagram.nodes[0].id, to: diagram.nodes[1].id }]);
+    expect(diagram.height).toBeGreaterThan(0);
+
+    expect(createBlock('numberline')).toMatchObject({
+      min: -10,
+      max: 10,
+      tickStep: 1,
+      labelStep: 5,
+      marks: [],
+      height: 160,
     });
   });
 
@@ -138,6 +156,7 @@ describe('slide deck operations', () => {
       left: ['Changed', ...mapping.left.slice(1)],
       pairs: [{ from: 0, to: 1 }],
     });
+
     expect(slide.blocks[0]).toEqual(mapping);
     expect(next.blocks[0]).toMatchObject({
       kind: 'mapping',
@@ -147,6 +166,37 @@ describe('slide deck operations', () => {
     if (next.blocks[0].kind !== 'mapping') throw new Error('Expected mapping block');
     expect(next.blocks[0].left).not.toBe(mapping.left);
     expect(next.blocks[0].pairs).not.toBe(mapping.pairs);
+  });
+
+  it('deep-clones diagram nodes and edges during updates', () => {
+    const diagram = createBlock('diagram');
+    const slide = freezeDeep({ ...createSlide('content'), blocks: [diagram] });
+    const next = updateBlock(slide, diagram.id, {
+      nodes: diagram.nodes.map((node, index) =>
+        index === 0 ? { ...node, text: 'Changed' } : node,
+      ),
+      edges: diagram.edges.map((edge) => ({ ...edge, label: 'Arrow' })),
+    });
+    expect(slide.blocks[0]).toEqual(diagram);
+    if (next.blocks[0].kind !== 'diagram') throw new Error('Expected diagram block');
+    expect(next.blocks[0].nodes[0].text).toBe('Changed');
+    expect(next.blocks[0].nodes).not.toBe(diagram.nodes);
+    expect(next.blocks[0].nodes[0]).not.toBe(diagram.nodes[0]);
+    expect(next.blocks[0].edges).not.toBe(diagram.edges);
+  });
+
+  it('deep-clones number-line marks during updates', () => {
+    const numberline = createBlock('numberline');
+    numberline.marks = [{ value: 2, kind: 'closed' }];
+    const slide = freezeDeep({ ...createSlide('content'), blocks: [numberline] });
+    const next = updateBlock(slide, numberline.id, {
+      marks: [{ value: 3, kind: 'open' }],
+    });
+    expect(slide.blocks[0]).toEqual(numberline);
+    if (next.blocks[0].kind !== 'numberline') throw new Error('Expected number-line block');
+    expect(next.blocks[0].marks).toEqual([{ value: 3, kind: 'open' }]);
+    expect(next.blocks[0].marks).not.toBe(numberline.marks);
+    expect(next.blocks[0].marks[0]).not.toBe(numberline.marks[0]);
   });
 
   it('returns an independent clone when updating a missing id', () => {

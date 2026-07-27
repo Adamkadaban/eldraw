@@ -18,6 +18,11 @@ describe('slide templates', () => {
       'Worked example',
       'Mapping diagram',
       'Relation practice',
+      'Function machine',
+      'Labelled expression',
+      'Number line',
+      'Sub-numbered steps',
+      'Data table',
       'Practice grid',
       'Concept + tip callout',
       'Blank workspace',
@@ -67,6 +72,35 @@ describe('slide templates', () => {
             { text: 'Is it a function?' },
           ],
         },
+      ],
+    });
+  });
+
+  it('builds the extended math-teaching structures', () => {
+    expect(applyTemplate('function-machine')).toMatchObject({
+      blocks: [{ kind: 'diagram', nodes: expect.any(Array), edges: expect.any(Array) }],
+    });
+    expect(applyTemplate('labelled-expression')).toMatchObject({
+      blocks: [{ kind: 'math' }, { kind: 'diagram' }],
+    });
+    expect(applyTemplate('number-line')).toMatchObject({
+      blocks: [{ kind: 'numberline' }, { kind: 'text' }],
+    });
+    expect(applyTemplate('sub-numbered-steps')).toMatchObject({
+      blocks: [
+        {
+          kind: 'list',
+          marker: 'decimal',
+          markerByLevel: ['decimal', 'alpha'],
+        },
+      ],
+    });
+    expect(applyTemplate('data-table')).toMatchObject({
+      blocks: [
+        { kind: 'table', headerOrientation: 'column' },
+        { kind: 'text' },
+        { kind: 'text' },
+        { kind: 'spacer' },
       ],
     });
   });

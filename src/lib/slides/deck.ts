@@ -1,13 +1,17 @@
 import { isSafeHexColor } from '$lib/color';
 import type {
   GraphFunction,
+  NumberLineMark,
   Slide,
   SlideAlign,
   SlideBlock,
   SlideCalloutBlock,
   SlideCalloutTone,
+  SlideDiagramEdge,
+  SlideDiagramNode,
   SlideGraphSpec,
   SlideLayoutKind,
+  SlideListMarker,
   SlideTheme,
 } from '$lib/types';
 
@@ -18,6 +22,13 @@ const imageDataUrl = /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]*={
 const safeFontFamily = /^[A-Za-z0-9][A-Za-z0-9 _,.-]{0,199}$/;
 const maxMappingElements = 100;
 const maxMappingPairs = 500;
+const listMarkers: readonly SlideListMarker[] = ['bullet', 'decimal', 'alpha', 'roman', 'none'];
+const numberLineMarkKinds = ['open', 'closed', 'arrow-left', 'arrow-right'] as const;
+const maxMarkerLevels = 4;
+const maxDiagramNodes = 100;
+const maxDiagramEdges = 500;
+const maxNumberLineMarks = 200;
+const maxNumberLineTicks = 1_000;
 
 function newId(): string {
   try {
@@ -87,6 +98,10 @@ function optionalAlign(value: unknown): SlideAlign | undefined {
 
 function optionalColor(value: unknown): string | undefined {
   return isSafeHexColor(value) ? value : undefined;
+}
+
+function listMarker(value: unknown, fallback: SlideListMarker): SlideListMarker {
+  return listMarkers.includes(value as SlideListMarker) ? (value as SlideListMarker) : fallback;
 }
 
 function uniqueId(value: unknown, usedIds: Set<string>): string {
@@ -170,6 +185,64 @@ function sanitizeCallout(input: Record<string, unknown>, usedIds: Set<string>): 
   };
 }
 
+function sanitizeDiagramNode(value: unknown, usedIds: Set<string>): SlideDiagramNode | null {
+  const input = objectValue(value);
+  if (!input) return null;
+  const suppliedId = typeof input.id === 'string' ? input.id.trim() : '';
+  const id = uniqueId(suppliedId || undefined, usedIds);
+  const w = optionalNumber(input.w, 0.01, 1);
+  const h = optionalNumber(input.h, 0.01, 1);
+  const shape = input.shape === 'plain' || input.shape === 'box' ? input.shape : undefined;
+  return {
+    id,
+    text: stringValue(input.text),
+    x: finiteNumber(input.x, 0.5, 0, 1),
+    y: finiteNumber(input.y, 0.5, 0, 1),
+    ...(w === undefined ? {} : { w }),
+    ...(h === undefined ? {} : { h }),
+    ...(shape === undefined ? {} : { shape }),
+  };
+}
+
+function sanitizeDiagramEdges(value: unknown, nodeIds: Set<string>): SlideDiagramEdge[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, maxDiagramEdges)
+    .map(objectValue)
+    .filter((edge): edge is Record<string, unknown> => edge !== null)
+    .filter(
+      (edge) =>
+        typeof edge.from === 'string' &&
+        typeof edge.to === 'string' &&
+        edge.from !== edge.to &&
+        nodeIds.has(edge.from) &&
+        nodeIds.has(edge.to),
+    )
+    .map((edge) => ({
+      from: edge.from as string,
+      to: edge.to as string,
+      ...(typeof edge.label === 'string' ? { label: edge.label } : {}),
+    }));
+}
+
+function sanitizeNumberLineMarks(value: unknown, min: number, max: number): NumberLineMark[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, maxNumberLineMarks)
+    .map(objectValue)
+    .filter((mark): mark is Record<string, unknown> => mark !== null)
+    .filter(
+      (mark) =>
+        typeof mark.value === 'number' &&
+        Number.isFinite(mark.value) &&
+        numberLineMarkKinds.includes(mark.kind as (typeof numberLineMarkKinds)[number]),
+    )
+    .map((mark) => ({
+      value: Math.min(max, Math.max(min, mark.value as number)),
+      kind: mark.kind as NumberLineMark['kind'],
+    }));
+}
+
 function sanitizeBlock(value: unknown, usedIds: Set<string>, asideOnly = false): SlideBlock | null {
   const input = objectValue(value);
   if (!input || typeof input.kind !== 'string') return null;
@@ -190,7 +263,11 @@ function sanitizeBlock(value: unknown, usedIds: Set<string>, asideOnly = false):
         ...(typeof input.italic === 'boolean' ? { italic: input.italic } : {}),
         ...(color === undefined ? {} : { color }),
       };
-    case 'list':
+    case 'list': {
+      const marker = listMarker(input.marker, 'bullet');
+      const markerByLevel = Array.isArray(input.markerByLevel)
+        ? input.markerByLevel.slice(0, maxMarkerLevels).map((value) => listMarker(value, marker))
+        : undefined;
       return {
         ...withBase(input, usedIds),
         kind: 'list',
@@ -203,9 +280,11 @@ function sanitizeBlock(value: unknown, usedIds: Set<string>, asideOnly = false):
                 level: Math.round(finiteNumber(item.level, 0, 0, 3)),
               }))
           : [],
-        marker: input.marker === 'decimal' || input.marker === 'none' ? input.marker : 'bullet',
+        marker,
+        ...(markerByLevel === undefined ? {} : { markerByLevel }),
         ...(fontSize === undefined ? {} : { fontSize }),
       };
+    }
     case 'definitions':
       return {
         ...withBase(input, usedIds),
@@ -243,6 +322,7 @@ function sanitizeBlock(value: unknown, usedIds: Set<string>, asideOnly = false):
         ...(typeof input.caption === 'string' ? { caption: input.caption } : {}),
         header: pad(header),
         rows: rows.map(pad),
+        headerOrientation: input.headerOrientation === 'column' ? 'column' : 'row',
         ...(fontSize === undefined ? {} : { fontSize }),
         ...(weights === undefined ? {} : { columnWeights: weights }),
       };
@@ -312,6 +392,54 @@ function sanitizeBlock(value: unknown, usedIds: Set<string>, asideOnly = false):
         ...(typeof input.caption === 'string' ? { caption: input.caption } : {}),
       };
     }
+    case 'diagram': {
+      const nodeIds = new Set<string>();
+      const nodes = Array.isArray(input.nodes)
+        ? input.nodes
+            .slice(0, maxDiagramNodes)
+            .map((node) => sanitizeDiagramNode(node, nodeIds))
+            .filter((node): node is SlideDiagramNode => node !== null)
+        : [];
+      return {
+        ...withBase(input, usedIds),
+        kind: 'diagram',
+        nodes,
+        edges: sanitizeDiagramEdges(input.edges, new Set(nodes.map((node) => node.id))),
+        height: finiteNumber(input.height, 260, 1, 2_000),
+        ...(typeof input.caption === 'string' ? { caption: input.caption } : {}),
+      };
+    }
+    case 'numberline': {
+      let min = finiteNumber(input.min, -10, -1_000_000, 1_000_000);
+      let max = finiteNumber(input.max, 10, -1_000_000, 1_000_000);
+      if (min >= max) {
+        min = -10;
+        max = 10;
+      }
+      const range = max - min;
+      const minimumStep = range / maxNumberLineTicks;
+      const tickCandidate =
+        typeof input.tickStep === 'number' && Number.isFinite(input.tickStep)
+          ? input.tickStep
+          : Math.min(1, range);
+      const labelCandidate =
+        typeof input.labelStep === 'number' && Number.isFinite(input.labelStep)
+          ? input.labelStep
+          : Math.min(5, range);
+      const tickStep = Math.min(range, Math.max(minimumStep, tickCandidate));
+      const labelStep = Math.min(range, Math.max(minimumStep, labelCandidate));
+      return {
+        ...withBase(input, usedIds),
+        kind: 'numberline',
+        min,
+        max,
+        tickStep,
+        labelStep,
+        marks: sanitizeNumberLineMarks(input.marks, min, max),
+        height: finiteNumber(input.height, 160, 1, 2_000),
+        ...(typeof input.caption === 'string' ? { caption: input.caption } : {}),
+      };
+    }
     case 'spacer':
       return {
         ...withBase(input, usedIds),
@@ -358,7 +486,7 @@ export function createBlock(kind: SlideBlock['kind']): SlideBlock {
     case 'definitions':
       return { id, kind, items: [{ term: 'Term', text: 'Add a description' }] };
     case 'table':
-      return { id, kind, header: ['Heading'], rows: [['Value']] };
+      return { id, kind, header: ['Heading'], rows: [['Value']], headerOrientation: 'row' };
     case 'math':
       return { id, kind, latex: 'x = 0', display: true, align: 'center' };
     case 'graph':
@@ -402,6 +530,31 @@ export function createBlock(kind: SlideBlock['kind']): SlideBlock {
           { from: 1, to: 1 },
         ],
         height: 260,
+      };
+    case 'diagram': {
+      const first = newId();
+      const second = newId();
+      return {
+        id,
+        kind,
+        nodes: [
+          { id: first, text: 'Input', x: 0.2, y: 0.5, shape: 'plain' },
+          { id: second, text: 'Operation', x: 0.7, y: 0.5, shape: 'box' },
+        ],
+        edges: [{ from: first, to: second }],
+        height: 260,
+      };
+    }
+    case 'numberline':
+      return {
+        id,
+        kind,
+        min: -10,
+        max: 10,
+        tickStep: 1,
+        labelStep: 5,
+        marks: [],
+        height: 160,
       };
     case 'spacer':
       return { id, kind, height: 120 };

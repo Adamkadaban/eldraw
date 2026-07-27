@@ -241,12 +241,138 @@ describe('sanitizeSlide trust boundary', () => {
     expect(slide.blocks[0].left.every((value) => typeof value === 'string')).toBe(true);
   });
 
+  it('sanitizes diagram nodes, edges, coordinates, ids, and oversized arrays', () => {
+    const input = {
+      layout: 'content',
+      blocks: [
+        {
+          id: 'diagram',
+          kind: 'diagram',
+          nodes: [
+            { id: 'a', text: 1, x: -4, y: 3, w: 0, h: Infinity, shape: 'box' },
+            { id: 'a', text: 'Duplicate', x: 0.4, y: 0.5, shape: 'plain' },
+            { id: 'b', text: 'B', x: NaN, y: Infinity, shape: 'circle' },
+            { id: '', text: 'Generated', x: 0.2, y: 0.3 },
+            ...Array.from({ length: 196 }, (_, index) => ({
+              id: `extra-${index}`,
+              text: 'Extra',
+              x: 0.5,
+              y: 0.5,
+            })),
+          ],
+          edges: [
+            { from: 'a', to: 'a' },
+            { from: 'a', to: 'missing' },
+            { from: 'missing', to: 'b' },
+            null,
+            ...Array.from({ length: 600 }, () => ({ from: 'a', to: 'b' })),
+          ],
+          height: Infinity,
+        },
+      ],
+    };
+    expect(() => sanitizeSlide(input)).not.toThrow();
+    const slide = sanitizeSlide(input);
+    if (slide?.blocks[0]?.kind !== 'diagram') throw new Error('Expected diagram block');
+    const diagram = slide.blocks[0];
+    expect(diagram.nodes).toHaveLength(100);
+    expect(new Set(diagram.nodes.map((node) => node.id)).size).toBe(100);
+    expect(diagram.nodes[0]).toMatchObject({ id: 'a', text: '', x: 0, y: 1, w: 0.01 });
+    expect(diagram.nodes[0]).not.toHaveProperty('h');
+    expect(diagram.nodes[2]).toMatchObject({ id: 'b', x: 0.5, y: 0.5 });
+    expect(diagram.nodes[2]).not.toHaveProperty('shape');
+    expect(diagram.edges).toHaveLength(496);
+    expect(diagram.edges.every((edge) => edge.from === 'a' && edge.to === 'b')).toBe(true);
+    expect(diagram.height).toBe(260);
+  });
+
+  it('repairs number lines and bounds tick and mark counts', () => {
+    const input = {
+      layout: 'content',
+      blocks: [
+        {
+          id: 'numberline',
+          kind: 'numberline',
+          min: 10,
+          max: -10,
+          tickStep: 0,
+          labelStep: NaN,
+          height: Infinity,
+          marks: [
+            { value: -999, kind: 'open' },
+            { value: 999, kind: 'closed' },
+            { value: 0, kind: 'invalid' },
+            { value: NaN, kind: 'open' },
+            ...Array.from({ length: 250 }, () => ({ value: 1, kind: 'arrow-right' })),
+          ],
+        },
+        {
+          id: 'tiny-step',
+          kind: 'numberline',
+          min: 0,
+          max: 1_000_000,
+          tickStep: 1e-12,
+          labelStep: -4,
+          marks: [],
+          height: 100,
+        },
+      ],
+    };
+    expect(() => sanitizeSlide(input)).not.toThrow();
+    const slide = sanitizeSlide(input);
+    if (slide?.blocks[0]?.kind !== 'numberline') throw new Error('Expected number-line block');
+    expect(slide.blocks[0]).toMatchObject({
+      min: -10,
+      max: 10,
+      tickStep: 0.02,
+      labelStep: 5,
+      height: 160,
+    });
+    expect(slide.blocks[0].marks).toHaveLength(198);
+    expect(slide.blocks[0].marks.slice(0, 2)).toEqual([
+      { value: -10, kind: 'open' },
+      { value: 10, kind: 'closed' },
+    ]);
+    if (slide?.blocks[1]?.kind !== 'numberline') throw new Error('Expected number-line block');
+    expect(slide.blocks[1].tickStep).toBe(1_000);
+    expect(slide.blocks[1].labelStep).toBe(1_000);
+  });
+
+  it('restricts list markers and table header orientation', () => {
+    const slide = sanitizeSlide({
+      layout: 'content',
+      blocks: [
+        {
+          id: 'list',
+          kind: 'list',
+          marker: 'invalid',
+          markerByLevel: ['decimal', 'invalid', 'roman', 'alpha', 'none'],
+          items: [],
+        },
+        {
+          id: 'table',
+          kind: 'table',
+          header: ['A'],
+          rows: [['B']],
+          headerOrientation: 'diagonal',
+        },
+      ],
+    });
+    expect(slide?.blocks[0]).toMatchObject({
+      marker: 'bullet',
+      markerByLevel: ['decimal', 'bullet', 'roman', 'alpha'],
+    });
+    expect(slide?.blocks[1]).toMatchObject({ headerOrientation: 'row' });
+  });
+
   it('never throws across malformed nested values', () => {
     const hostile: unknown[] = [
       { blocks: null },
       { blocks: [null, [], 1, 'x'] },
       { blocks: [{ kind: 'table', header: null, rows: [null, {}] }] },
       { blocks: [{ kind: 'graph', graph: { functions: [null, 4, []] } }] },
+      { blocks: [{ kind: 'diagram', nodes: [null, 4, []], edges: [null, {}] }] },
+      { blocks: [{ kind: 'numberline', marks: [null, {}, []] }] },
       Object.create(null),
     ];
     for (const input of hostile) expect(() => sanitizeSlide(input)).not.toThrow();
