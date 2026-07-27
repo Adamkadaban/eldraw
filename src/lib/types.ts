@@ -126,13 +126,33 @@ export interface GraphObject extends ObjectBase {
   functions: GraphFunction[];
 }
 
+/**
+ * How a text object's content is interpreted.
+ *
+ * - `plain`  — no math rendering at all.
+ * - `latex`  — the entire content is one LaTeX expression.
+ * - `mixed`  — only explicitly delimited runs (`$…$`, `\(…\)`, `\[…\]`) are math.
+ * - `auto`   — explicit delimiters plus heuristically detected bare math.
+ */
+export type TextMathMode = 'plain' | 'latex' | 'mixed' | 'auto';
+
 export interface TextObject extends ObjectBase {
   type: 'text';
   at: { x: number; y: number };
   content: string;
+  /**
+   * Legacy whole-string LaTeX flag. Kept for sidecar back-compat; `mathMode`
+   * is authoritative when present. Readers should use `textMathMode()`.
+   */
   latex: boolean;
+  mathMode?: TextMathMode;
   fontSize: number;
   color: string;
+}
+
+/** Resolve the effective math mode, honoring the legacy `latex` flag. */
+export function textMathMode(obj: Pick<TextObject, 'latex' | 'mathMode'>): TextMathMode {
+  return obj.mathMode ?? (obj.latex ? 'latex' : 'plain');
 }
 
 export interface AngleMarkObject extends ObjectBase {
@@ -158,7 +178,168 @@ export type AnyObject =
   | TextObject
   | AngleMarkObject;
 
-export type PageKind = 'pdf' | 'blank';
+export type PageKind = 'pdf' | 'blank' | 'slide';
+
+/** Horizontal alignment for slide text blocks. */
+export type SlideAlign = 'left' | 'center' | 'right';
+
+export type SlideCalloutTone = 'tip' | 'warn' | 'note';
+
+export interface SlideListItem {
+  text: string;
+  /** Indent depth; 0 is top level. Clamped to 0..3 at render time. */
+  level: number;
+}
+
+export interface SlideDefinition {
+  term: string;
+  text: string;
+}
+
+/**
+ * Plot spec embedded in a slide. Mirrors the drawable subset of
+ * `GraphObject` so slides can carry graphs without owning an annotation id.
+ */
+export interface SlideGraphSpec {
+  xRange: [number, number];
+  yRange: [number, number];
+  gridStep: number;
+  showAxes: boolean;
+  showGrid: boolean;
+  functions: GraphFunction[];
+}
+
+interface SlideBlockBase {
+  id: string;
+  /** Vertical gap in points inserted before this block. Defaults per kind. */
+  marginTop?: number;
+}
+
+export interface SlideTextBlock extends SlideBlockBase {
+  kind: 'text';
+  text: string;
+  align?: SlideAlign;
+  /** Point size override; falls back to the theme's body size. */
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  color?: string;
+}
+
+export interface SlideListBlock extends SlideBlockBase {
+  kind: 'list';
+  items: SlideListItem[];
+  /** `decimal` numbers top-level items; `none` renders a bare stack. */
+  marker: 'bullet' | 'decimal' | 'none';
+  fontSize?: number;
+}
+
+export interface SlideDefinitionsBlock extends SlideBlockBase {
+  kind: 'definitions';
+  items: SlideDefinition[];
+  fontSize?: number;
+}
+
+export interface SlideTableBlock extends SlideBlockBase {
+  kind: 'table';
+  caption?: string;
+  /** Empty array renders a table with no header row. */
+  header: string[];
+  rows: string[][];
+  fontSize?: number;
+  /** Relative column widths. Equal widths when omitted or length-mismatched. */
+  columnWeights?: number[];
+}
+
+export interface SlideMathBlock extends SlideBlockBase {
+  kind: 'math';
+  latex: string;
+  display: boolean;
+  align?: SlideAlign;
+  fontSize?: number;
+  color?: string;
+}
+
+export interface SlideGraphBlock extends SlideBlockBase {
+  kind: 'graph';
+  graph: SlideGraphSpec;
+  /** Drawn height in points; width fills the containing column. */
+  height: number;
+  /** Optional caption rendered above the plot. */
+  caption?: string;
+}
+
+export interface SlideCalloutBlock extends SlideBlockBase {
+  kind: 'callout';
+  text: string;
+  tone: SlideCalloutTone;
+  fontSize?: number;
+}
+
+export interface SlideImageBlock extends SlideBlockBase {
+  kind: 'image';
+  /** `data:` URL. Slides stay self-contained so sidecars remain portable. */
+  src: string;
+  alt: string;
+  height: number;
+  align?: SlideAlign;
+}
+
+/** Reserved vertical whitespace — the room a teacher writes into live. */
+export interface SlideSpacerBlock extends SlideBlockBase {
+  kind: 'spacer';
+  height: number;
+}
+
+export type SlideBlock =
+  | SlideTextBlock
+  | SlideListBlock
+  | SlideDefinitionsBlock
+  | SlideTableBlock
+  | SlideMathBlock
+  | SlideGraphBlock
+  | SlideCalloutBlock
+  | SlideImageBlock
+  | SlideSpacerBlock;
+
+/**
+ * How a slide's blocks are arranged inside the content area.
+ *
+ * - `title`   — hero title/subtitle centered; blocks stack underneath.
+ * - `content` — single column beneath the heading.
+ * - `columns` — blocks distributed across `columnCount` equal columns.
+ * - `grid`    — blocks placed in a `gridColumns`-wide grid of equal cells,
+ *               each cell padded with writing room (practice-problem sheets).
+ * - `blank`   — no heading chrome; blocks stack from the top margin.
+ */
+export type SlideLayoutKind = 'title' | 'content' | 'columns' | 'grid' | 'blank';
+
+export interface SlideTheme {
+  fontFamily: string;
+  /** Slide background, strict `#rrggbb`. Untrusted input is rejected on load. */
+  background: string;
+  titleColor: string;
+  textColor: string;
+  accent: string;
+  /** Point sizes. */
+  titleSize: number;
+  headingSize: number;
+  bodySize: number;
+}
+
+export interface Slide {
+  layout: SlideLayoutKind;
+  /** Heading text; rendered as the hero title on `title` layouts. */
+  title: string;
+  subtitle?: string;
+  blocks: SlideBlock[];
+  /** Corner callouts, rendered top-right outside the main flow. */
+  aside?: SlideCalloutBlock[];
+  /** Used by `columns` (default 2) and `grid` (default 2). */
+  columnCount?: number;
+  /** Per-slide overrides merged over the document theme. */
+  theme?: Partial<SlideTheme>;
+}
 
 export interface Page {
   pageIndex: number;
@@ -185,6 +366,8 @@ export interface Page {
    * into CSS at render time.
    */
   background?: string;
+  /** Present only when `type === 'slide'`. */
+  slide?: Slide;
   objects: AnyObject[];
 }
 
@@ -213,6 +396,8 @@ export interface EldrawDocument {
   pages: Page[];
   palettes: ColorPalette[];
   prefs: Preferences;
+  /** Deck-wide slide theme. Absent on documents with no slides. */
+  slideTheme?: SlideTheme;
 }
 
 /**
