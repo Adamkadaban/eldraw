@@ -2,12 +2,15 @@
   import { isSafeHexColor } from '$lib/color';
   import GraphLayer from '$lib/canvas/GraphLayer.svelte';
   import { renderLatex } from '$lib/text/latex';
-  import type { Slide, SlideBlock, SlideListItem, SlideTheme } from '$lib/types';
+  import type { Slide, SlideBlock, SlideTheme } from '$lib/types';
+  import { presentList } from '../listMarkers';
   import { layoutSlide, type LayoutBox } from '../layout';
   import { resolveTheme } from '../theme';
+  import { diagramGeometry } from './diagramGeometry';
   import { graphObjectForSlide, graphThemeForSlide } from './graphAdapter';
   import { renderInlineMath } from './inlineMath';
   import { mappingGeometry } from './mappingGeometry';
+  import { slideNumberLineGeometry } from './numberLineGeometry';
 
   interface Props {
     slide: Slide;
@@ -35,25 +38,6 @@
     return Number.isFinite(size) && (size ?? 0) > 0 ? (size as number) : theme.bodySize;
   }
 
-  function level(item: SlideListItem): number {
-    return Number.isFinite(item.level) ? Math.min(3, Math.max(0, Math.floor(item.level))) : 0;
-  }
-
-  function listMarker(
-    items: SlideListItem[],
-    index: number,
-    marker: 'bullet' | 'decimal' | 'none',
-  ): string {
-    if (marker === 'none') return '';
-    if (level(items[index]) > 0) return '•';
-    if (marker === 'bullet') return '•';
-    let number = 0;
-    for (let itemIndex = 0; itemIndex <= index; itemIndex += 1) {
-      if (level(items[itemIndex]) === 0) number += 1;
-    }
-    return `${number}.`;
-  }
-
   function tableColumnCount(block: Extract<SlideBlock, { kind: 'table' }>): number {
     return Math.max(1, block.header.length, ...block.rows.map((row) => row.length));
   }
@@ -73,6 +57,20 @@
     return Array.from({ length: count }, (_, index) => row[index] ?? '');
   }
 
+  function tableRows(block: Extract<SlideBlock, { kind: 'table' }>): string[][] {
+    return block.header.length > 0 ? [block.header, ...block.rows] : block.rows;
+  }
+
+  function isTableHeader(
+    block: Extract<SlideBlock, { kind: 'table' }>,
+    row: number,
+    column: number,
+  ): boolean {
+    return block.headerOrientation === 'column'
+      ? column === 0
+      : block.header.length > 0 && row === 0;
+  }
+
   function calloutBackground(tone: Extract<SlideBlock, { kind: 'callout' }>['tone']): string {
     if (tone === 'tip') return '#e8f3ea';
     if (tone === 'warn') return '#fff1d6';
@@ -85,6 +83,14 @@
 
   function mathHtml(source: string, display: boolean): string {
     return renderLatex(source, { displayMode: display }).html;
+  }
+
+  function horizontalArrowPoints(x: number, y: number, direction: number, size: number): string {
+    return `${x},${y} ${x - direction * size},${y - size * 0.55} ${x - direction * size},${y + size * 0.55}`;
+  }
+
+  function numberLineLabel(value: number): string {
+    return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(6).replace(/\.?0+$/, '');
   }
 </script>
 
@@ -140,14 +146,17 @@
           {@html renderInlineMath(placed.block.text)}
         </div>
       {:else if placed.block.kind === 'list'}
+        {@const listItems = presentList(placed.block)}
         <div class="list" style:font-size={`${fontSize(placed.block.fontSize) * scale}px`}>
-          {#each placed.block.items as item, index}
+          {#each listItems as item}
             <div
               class="list-item"
-              style:padding-left={`${level(item) * fontSize(placed.block.fontSize) * 1.4 * scale}px`}
+              style:padding-left={`${item.indentEm * fontSize(placed.block.fontSize) * scale}px`}
             >
-              <span class="marker"
-                >{listMarker(placed.block.items, index, placed.block.marker)}</span
+              <span
+                class="marker"
+                style:flex-basis={`${item.markerWidthEm}em`}
+                style:width={`${item.markerWidthEm}em`}>{item.marker}</span
               >
               <!-- eslint-disable-next-line svelte/no-at-html-tags -->
               <span>{@html renderInlineMath(item.text)}</span>
@@ -168,6 +177,7 @@
       {:else if placed.block.kind === 'table'}
         {@const columnCount = tableColumnCount(placed.block)}
         {@const weights = tableWeights(placed.block)}
+        {@const rows = tableRows(placed.block)}
         <div class="table-wrap" style:font-size={`${fontSize(placed.block.fontSize) * scale}px`}>
           {#if placed.block.caption}
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -177,16 +187,15 @@
             class="table"
             style:grid-template-columns={weights.map((weight) => `${weight}fr`).join(' ')}
           >
-            {#if placed.block.header.length > 0}
-              {#each paddedRow(placed.block.header, columnCount) as cell}
-                <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                <div class="cell header-cell">{@html renderInlineMath(cell)}</div>
-              {/each}
-            {/if}
-            {#each placed.block.rows as row}
-              {#each paddedRow(row, columnCount) as cell}
-                <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                <div class="cell">{@html renderInlineMath(cell)}</div>
+            {#each rows as row, rowIndex}
+              {#each paddedRow(row, columnCount) as cell, columnIndex}
+                <div
+                  class="cell"
+                  class:header-cell={isTableHeader(placed.block, rowIndex, columnIndex)}
+                >
+                  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                  {@html renderInlineMath(cell)}
+                </div>
               {/each}
             {/each}
           </div>
@@ -330,6 +339,184 @@
             {@html renderInlineMath(placed.block.rightLabel)}
           </div>
         </div>
+      {:else if placed.block.kind === 'diagram'}
+        {@const diagram = diagramGeometry(placed.block, placed.box.w, placed.box.h, theme.bodySize)}
+        <div class="diagram">
+          <svg
+            class="diagram-svg"
+            viewBox={`0 0 ${placed.box.w} ${placed.box.h}`}
+            aria-hidden="true"
+          >
+            {#each diagram.edges as edge}
+              <line
+                x1={edge.from.x}
+                y1={edge.from.y}
+                x2={edge.to.x}
+                y2={edge.to.y}
+                stroke={theme.textColor}
+                stroke-opacity="0.72"
+                stroke-width="1.2"
+              />
+              <polygon
+                points={edge.head.map((point) => `${point.x},${point.y}`).join(' ')}
+                fill={theme.textColor}
+                fill-opacity="0.78"
+              />
+            {/each}
+            {#each diagram.nodes.filter((node) => node.shape === 'box') as node}
+              <rect
+                x={node.x - node.w / 2}
+                y={node.y - node.h / 2}
+                width={node.w}
+                height={node.h}
+                rx={Math.min(theme.bodySize * 0.5, node.h * 0.18)}
+                fill={theme.accent}
+                fill-opacity="0.1"
+                stroke={theme.accent}
+                stroke-opacity="0.48"
+                stroke-width="1.1"
+              />
+            {/each}
+          </svg>
+          {#if diagram.caption && placed.block.caption}
+            <div
+              class="diagram-caption"
+              style:left={`${diagram.caption.x * scale}px`}
+              style:top={`${diagram.caption.y * scale}px`}
+              style:font-size={`${theme.bodySize * scale}px`}
+            >
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html renderInlineMath(placed.block.caption)}
+            </div>
+          {/if}
+          {#each diagram.nodes as node}
+            <div
+              class="diagram-node"
+              class:plain={node.shape === 'plain'}
+              style:left={`${node.x * scale}px`}
+              style:top={`${node.y * scale}px`}
+              style:width={`${node.w * scale}px`}
+              style:height={`${node.h * scale}px`}
+              style:font-size={`${theme.bodySize * scale}px`}
+            >
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html renderInlineMath(node.text)}
+            </div>
+          {/each}
+          {#each diagram.edges.filter((edge) => edge.label) as edge}
+            <div
+              class="diagram-edge-label"
+              style:left={`${edge.labelAt.x * scale}px`}
+              style:top={`${edge.labelAt.y * scale}px`}
+              style:font-size={`${theme.bodySize * 0.86 * scale}px`}
+              style:background={theme.background}
+            >
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html renderInlineMath(edge.label ?? '')}
+            </div>
+          {/each}
+        </div>
+      {:else if placed.block.kind === 'numberline'}
+        {@const numberLine = slideNumberLineGeometry(
+          placed.block,
+          placed.box.w,
+          placed.box.h,
+          theme,
+        )}
+        <div class="slide-number-line">
+          <svg
+            class="number-line-svg"
+            viewBox={`0 0 ${placed.box.w} ${placed.box.h}`}
+            aria-hidden="true"
+          >
+            {#if numberLine.valid}
+              <line
+                x1={numberLine.x0}
+                y1={numberLine.y}
+                x2={numberLine.x1}
+                y2={numberLine.y}
+                stroke={theme.textColor}
+                stroke-width="1.4"
+              />
+              <polygon
+                points={horizontalArrowPoints(
+                  numberLine.x0,
+                  numberLine.y,
+                  -1,
+                  numberLine.arrowSize,
+                )}
+                fill={theme.textColor}
+              />
+              <polygon
+                points={horizontalArrowPoints(numberLine.x1, numberLine.y, 1, numberLine.arrowSize)}
+                fill={theme.textColor}
+              />
+              {#each numberLine.ticks as tick}
+                <line
+                  x1={tick.x}
+                  y1={numberLine.y - theme.bodySize * 0.34}
+                  x2={tick.x}
+                  y2={numberLine.y + theme.bodySize * 0.34}
+                  stroke={theme.textColor}
+                  stroke-width="1"
+                />
+              {/each}
+              {#each numberLine.marks as mark}
+                {#if mark.kind === 'open' || mark.kind === 'closed'}
+                  <circle
+                    cx={mark.x}
+                    cy={numberLine.y}
+                    r={theme.bodySize * 0.31}
+                    fill={mark.kind === 'closed' ? theme.accent : theme.background}
+                    stroke={theme.accent}
+                    stroke-width="1.5"
+                  />
+                {:else}
+                  {@const rayEnd = mark.kind === 'arrow-left' ? numberLine.x0 : numberLine.x1}
+                  {@const direction = mark.kind === 'arrow-left' ? -1 : 1}
+                  <line
+                    x1={mark.x}
+                    y1={numberLine.y}
+                    x2={rayEnd}
+                    y2={numberLine.y}
+                    stroke={theme.accent}
+                    stroke-width="2"
+                  />
+                  <polygon
+                    points={horizontalArrowPoints(
+                      rayEnd,
+                      numberLine.y,
+                      direction,
+                      numberLine.arrowSize,
+                    )}
+                    fill={theme.accent}
+                  />
+                {/if}
+              {/each}
+            {/if}
+          </svg>
+          {#if numberLine.captionY !== null && placed.block.caption}
+            <div
+              class="number-line-caption"
+              style:left={`${((numberLine.x0 + numberLine.x1) / 2) * scale}px`}
+              style:top={`${numberLine.captionY * scale}px`}
+              style:font-size={`${theme.bodySize * scale}px`}
+            >
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html renderInlineMath(placed.block.caption)}
+            </div>
+          {/if}
+          {#each numberLine.labels as label}
+            <div
+              class="number-line-label"
+              style:left={`${label.x * scale}px`}
+              style:top={`${(numberLine.y + theme.bodySize * 1.05) * scale}px`}
+              style:font-size={`${theme.bodySize * 0.82 * scale}px`}
+            >
+              {numberLineLabel(label.value)}
+            </div>
+          {/each}
+        </div>
       {:else if placed.block.kind === 'callout'}
         <div
           class="callout"
@@ -468,6 +655,52 @@
   .mapping-label,
   .mapping-caption {
     font-weight: 600;
+  }
+
+  .diagram,
+  .diagram-svg,
+  .slide-number-line,
+  .number-line-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .diagram-node {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    transform: translate(-50%, -50%);
+    padding: 0.3em 0.6em;
+    text-align: center;
+    overflow: hidden;
+  }
+
+  .diagram-node.plain {
+    padding: 0;
+  }
+
+  .diagram-caption,
+  .diagram-edge-label,
+  .number-line-caption,
+  .number-line-label {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  .diagram-caption,
+  .number-line-caption {
+    font-weight: 600;
+  }
+
+  .diagram-edge-label {
+    padding: 0 0.25em;
   }
 
   .callout {
