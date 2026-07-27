@@ -125,4 +125,33 @@ describe('commit ops', () => {
     u();
     expect(objs.map((o) => o.id)).toEqual(['a', 'c', 'b']);
   });
+
+  it('reorderSelection is one undoable action that preserves every object', () => {
+    const a = mkShape('a');
+    const b = mkShape('b');
+    const c = mkShape('c');
+    documentStore.load(doc([a, b, c]));
+
+    reorderSelection(0, new Set(['a']), 'forward');
+    documentStore.undo(0);
+
+    let objs: ShapeObject[] = [];
+    const u = documentStore.objectsOnPage(0).subscribe((v) => (objs = v as ShapeObject[]));
+    u();
+    expect(objs.map((o) => o.id)).toEqual(['a', 'b', 'c']);
+
+    let canUndo = true;
+    const historySubscription = documentStore.history
+      .canUndo(0)
+      .subscribe((value) => (canUndo = value));
+    historySubscription();
+    expect(canUndo).toBe(false);
+
+    documentStore.redo(0);
+    const redoSubscription = documentStore
+      .objectsOnPage(0)
+      .subscribe((value) => (objs = value as ShapeObject[]));
+    redoSubscription();
+    expect(objs.map((o) => o.id)).toEqual(['b', 'a', 'c']);
+  });
 });

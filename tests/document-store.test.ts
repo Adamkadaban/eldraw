@@ -58,14 +58,14 @@ describe('documentStore', () => {
     expect(get(store.canRedo(0))).toBe(true);
   });
 
-  it('removeObject drops and undo restores', () => {
+  it('removeObject undo restores the object at its original z-order position', () => {
     const store = createDocumentStore();
     const initial = docWithPages([{ ...pdfPage(0), objects: [stroke('a'), stroke('b')] }]);
     store.load(initial);
     store.removeObject(0, 'a');
     expect(get(store)!.pages[0].objects.map((o) => o.id)).toEqual(['b']);
     store.undo(0);
-    expect(get(store)!.pages[0].objects.map((o) => o.id)).toEqual(['b', 'a']);
+    expect(get(store)!.pages[0].objects.map((o) => o.id)).toEqual(['a', 'b']);
   });
 
   it('updateObject patches, undo reverts', () => {

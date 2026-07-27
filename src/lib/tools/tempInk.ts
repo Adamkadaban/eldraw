@@ -70,10 +70,14 @@ export function fadeOpacity(stroke: TempInkStroke, now: number): number {
 }
 
 export function pruneStrokes(strokes: TempInkStroke[], now: number): TempInkStroke[] {
-  let expired = 0;
-  for (const s of strokes) {
-    if (fadeOpacity(s, now) <= 0) expired++;
-    else break;
+  let kept: TempInkStroke[] | null = null;
+  for (let index = 0; index < strokes.length; index += 1) {
+    const stroke = strokes[index];
+    if (fadeOpacity(stroke, now) <= 0) {
+      kept ??= strokes.slice(0, index);
+    } else {
+      kept?.push(stroke);
+    }
   }
-  return expired === 0 ? strokes : strokes.slice(expired);
+  return kept ?? strokes;
 }

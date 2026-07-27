@@ -19,11 +19,12 @@ export interface UpdateEntry {
 
 export type Command =
   | { type: 'add'; object: AnyObject }
-  | { type: 'remove'; object: AnyObject }
+  | { type: 'remove'; item: IndexedObject }
   | { type: 'removeMany'; items: IndexedObject[] }
   | { type: 'insertMany'; items: IndexedObject[] }
   | { type: 'update'; objectId: ObjectId; before: AnyObject; after: AnyObject }
   | { type: 'updateMany'; entries: UpdateEntry[] }
+  | { type: 'reorder'; before: AnyObject[]; after: AnyObject[] }
   | { type: 'clearPage'; objects: AnyObject[] }
   | { type: 'restorePage'; objects: AnyObject[] };
 
@@ -34,7 +35,7 @@ export function applyCommand(page: Page, cmd: Command): Page {
     case 'add':
       return { ...page, objects: [...page.objects, cmd.object] };
     case 'remove':
-      return { ...page, objects: page.objects.filter((o) => o.id !== cmd.object.id) };
+      return { ...page, objects: page.objects.filter((o) => o.id !== cmd.item.object.id) };
     case 'removeMany': {
       const drop = new Set(cmd.items.map((i) => i.object.id));
       return { ...page, objects: page.objects.filter((o) => !drop.has(o.id)) };
@@ -59,6 +60,8 @@ export function applyCommand(page: Page, cmd: Command): Page {
         objects: page.objects.map((o) => byId.get(o.id) ?? o),
       };
     }
+    case 'reorder':
+      return { ...page, objects: [...cmd.after] };
     case 'clearPage':
       return { ...page, objects: [] };
     case 'restorePage':
@@ -69,9 +72,9 @@ export function applyCommand(page: Page, cmd: Command): Page {
 export function invertCommand(cmd: Command): Command {
   switch (cmd.type) {
     case 'add':
-      return { type: 'remove', object: cmd.object };
+      return { type: 'removeMany', items: [{ object: cmd.object, index: 0 }] };
     case 'remove':
-      return { type: 'add', object: cmd.object };
+      return { type: 'insertMany', items: [cmd.item] };
     case 'removeMany':
       return { type: 'insertMany', items: cmd.items };
     case 'insertMany':
@@ -92,6 +95,8 @@ export function invertCommand(cmd: Command): Command {
           after: e.before,
         })),
       };
+    case 'reorder':
+      return { type: 'reorder', before: cmd.after, after: cmd.before };
     case 'clearPage':
       return { type: 'restorePage', objects: cmd.objects };
     case 'restorePage':
