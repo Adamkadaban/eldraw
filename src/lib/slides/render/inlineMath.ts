@@ -1,34 +1,17 @@
-import { escapeHtml, renderLatex } from '$lib/text/latex';
-import { segmentLatex } from '$lib/text/segment';
-
-type SharedRenderer = {
-  renderMixed?: (source: string, mode: 'auto') => unknown;
-};
-
-const sharedModules = import.meta.glob('../../text/render.ts', { eager: true });
-const sharedRenderer = Object.values(sharedModules)[0] as SharedRenderer | undefined;
-
-function sharedHtml(result: unknown): string | null {
-  if (typeof result === 'string') return result;
-  if (typeof result !== 'object' || result === null) return null;
-  const html = (result as Record<string, unknown>).html;
-  return typeof html === 'string' ? html : null;
-}
+import { escapeHtml } from '$lib/text/latex';
+import { renderMixed } from '$lib/text/render';
 
 /**
- * Narrow compatibility seam for the shared mixed-text renderer. The local
- * fallback keeps this branch standalone until `$lib/text/render` is present.
+ * Render a slide string as HTML with inline math typeset.
+ *
+ * Slide strings are authored as prose, so they use `auto` mode: explicitly
+ * delimited runs are honored and bare math is detected heuristically.
+ *
+ * The result is injected with `{@html}`, so every text run is escaped here and
+ * every math run carries either KaTeX output or an escaped fallback.
  */
 export function renderInlineMath(source: string): string {
-  if (sharedRenderer?.renderMixed) {
-    const html = sharedHtml(sharedRenderer.renderMixed(source, 'auto'));
-    if (html !== null) return html;
-  }
-
-  return segmentLatex(source)
-    .map((segment) => {
-      if (segment.kind === 'text') return escapeHtml(segment.value);
-      return renderLatex(segment.value, { displayMode: segment.display }).html;
-    })
+  return renderMixed(source, 'auto')
+    .runs.map((run) => (run.kind === 'text' ? escapeHtml(run.value) : run.html))
     .join('');
 }
