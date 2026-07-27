@@ -47,6 +47,12 @@ jobs:
           workspaces: src-tauri
           shared-key: tauri-release
           cache-on-failure: true
+      # Without this the pdfium-backed rasterization tests skip themselves and
+      # report success, so PDF rendering would never actually be exercised.
+      - name: Fetch pdfium
+        run: ./scripts/fetch-pdfium.sh linux
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml
+        env:
+          ELDRAW_REQUIRE_PDFIUM: '1'

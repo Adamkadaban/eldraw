@@ -2611,6 +2611,14 @@ mod tests {
             .join("pdfium")
             .join(library_name);
         if !library.exists() {
+            // Skipping silently once let this test report success in CI while
+            // pdfium rendering was never exercised at all. CI sets this so a
+            // missing binary is a failure rather than a quiet pass.
+            assert!(
+                std::env::var_os("ELDRAW_REQUIRE_PDFIUM").is_none(),
+                "ELDRAW_REQUIRE_PDFIUM is set but {} is missing; run scripts/fetch-pdfium.sh",
+                library.display()
+            );
             eprintln!("pdfium binary is not installed; source raster smoke test skipped");
             return;
         }

@@ -51,9 +51,11 @@ impl AppState {
 /// Returns a process-wide Pdfium handle. The native binary is resolved by
 /// trying, in order:
 ///   1. `<resource_dir>/pdfium/` — bundled library shipped with the installer.
-///   2. The directory containing the current executable — useful for portable
-///      layouts and local `cargo run` with a sibling binary.
-///   3. The system loader — last-resort for developers who have pdfium
+///   2. The directory containing the current executable, and a `pdfium/`
+///      folder beside it — portable layouts and local `cargo run`.
+///   3. `<crate>/pdfium/` in debug builds — where `scripts/fetch-pdfium.sh`
+///      installs, so a dev build works straight after the documented setup.
+///   4. The system loader — last-resort for developers who have pdfium
 ///      installed system-wide.
 ///
 /// Initialization happens once per process; subsequent calls reuse the handle
@@ -75,6 +77,20 @@ pub fn pdfium(app: &AppHandle) -> AppResult<&'static Pdfium> {
             .and_then(|p| p.parent().map(PathBuf::from))
         {
             if let Some(pdfium) = try_bind(&exe_dir, &mut attempts) {
+                return Ok(pdfium);
+            }
+            let sibling = exe_dir.join("pdfium");
+            if let Some(pdfium) = try_bind(&sibling, &mut attempts) {
+                return Ok(pdfium);
+            }
+        }
+
+        // `scripts/fetch-pdfium.sh` installs into the source tree, which is not
+        // next to the binary a dev build produces. Without this, the documented
+        // fetch-then-`tauri dev` flow fails to find the library it just placed.
+        if cfg!(debug_assertions) {
+            let source_tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("pdfium");
+            if let Some(pdfium) = try_bind(&source_tree, &mut attempts) {
                 return Ok(pdfium);
             }
         }
