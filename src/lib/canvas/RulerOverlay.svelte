@@ -1,5 +1,6 @@
 <script lang="ts">
   import { overlays } from '$lib/store/overlays';
+  import { sidebar } from '$lib/store/sidebar';
   import { toolStore } from '$lib/store/tool';
   import { rulerEnd, rulerTicks, type Vec2 } from '$lib/geometry';
 
@@ -66,6 +67,9 @@
 
   function onClose(e: Event) {
     overlays.setRulerVisible(false);
+    // Leaving the ruler tool selected with no ruler on screen is incoherent,
+    // and it would also stop re-picking the tool from showing it again.
+    if (isRulerTool) sidebar.setTool('pen');
     e.stopPropagation();
   }
 
@@ -155,7 +159,6 @@
   >
     <circle
       class="close"
-      class:interactive={isRulerTool}
       cx={-closeOffset}
       cy={bodyHeight / 2}
       r="8"
@@ -163,11 +166,11 @@
       stroke="#1e88e5"
       stroke-width="1"
       role="button"
-      tabindex={isRulerTool ? 0 : -1}
+      tabindex="0"
       aria-label="Hide ruler"
-      onclick={isRulerTool ? onClose : null}
-      onpointerdown={isRulerTool ? onClose : null}
-      onkeydown={isRulerTool ? onCloseKey : null}
+      onclick={onClose}
+      onpointerdown={onClose}
+      onkeydown={onCloseKey}
     />
     <line
       x1={-closeOffset - 3}
@@ -207,7 +210,8 @@
     cursor: grab;
     pointer-events: auto;
   }
-  .close.interactive {
+  /* Always reachable: otherwise switching tools leaves an undismissable ruler. */
+  .close {
     cursor: pointer;
     pointer-events: auto;
   }

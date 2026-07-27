@@ -33,14 +33,21 @@ describe('RulerOverlay snap-only mode (regression for #123)', () => {
     );
   });
 
-  for (const sel of ['.body', '.end-handle', '.close'] as const) {
+  for (const sel of ['.body', '.end-handle'] as const) {
     it(`${sel} only opts into pointer-events when interactive (ruler tool active)`, () => {
       expect(styleRule(`${sel}.interactive`)).toMatch(/pointer-events:\s*auto/);
       expect(() => styleRule(sel)).toThrow();
     });
   }
 
-  for (const sel of ['body', 'end-handle', 'close'] as const) {
+  // Gating close on the ruler tool made the ruler impossible to dismiss: once
+  // another tool was selected the button went inert and the overlay stayed up.
+  it('.close always opts into pointer-events so the ruler can be dismissed', () => {
+    expect(styleRule('.close')).toMatch(/pointer-events:\s*auto/);
+    expect(() => styleRule('.close.interactive')).toThrow();
+  });
+
+  for (const sel of ['body', 'end-handle'] as const) {
     it(`${sel} element gets class:interactive bound to isRulerTool`, () => {
       const re = new RegExp(
         `<[^>]*class="${sel}"[^>]*class:interactive=\\{\\s*isRulerTool\\s*\\}[^>]*>`,
@@ -61,19 +68,25 @@ describe('RulerOverlay snap-only mode (regression for #123)', () => {
     );
   });
 
-  it('close button handlers are gated on isRulerTool', () => {
-    expect(source).toMatch(/onclick\s*=\s*\{\s*isRulerTool\s*\?\s*onClose\s*:\s*null\s*\}/);
-    expect(source).toMatch(/onpointerdown\s*=\s*\{\s*isRulerTool\s*\?\s*onClose\s*:\s*null\s*\}/);
-    expect(source).toMatch(/onkeydown\s*=\s*\{\s*isRulerTool\s*\?\s*onCloseKey\s*:\s*null\s*\}/);
+  it('close button handlers stay active regardless of the selected tool', () => {
+    expect(source).toMatch(/onclick=\{onClose\}/);
+    expect(source).toMatch(/onpointerdown=\{onClose\}/);
+    expect(source).toMatch(/onkeydown=\{onCloseKey\}/);
+  });
+
+  it('closing while the ruler tool is active also leaves the ruler tool', () => {
+    expect(source).toMatch(/sidebar\.setTool\(/);
   });
 
   it('outer ruler SVG is aria-hidden when the ruler tool is inactive', () => {
     expect(source).toMatch(/aria-hidden\s*=\s*\{\s*!\s*isRulerTool\s*\}/);
   });
 
-  it('focusable ruler elements gate tabindex on isRulerTool', () => {
+  it('drag handles gate tabindex on isRulerTool', () => {
     const matches = source.match(/tabindex\s*=\s*\{\s*isRulerTool\s*\?\s*0\s*:\s*-1\s*\}/g) ?? [];
-    expect(matches.length).toBeGreaterThanOrEqual(3);
+    // The body and end handle. Close stays focusable so it can always be reached.
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+    expect(source).toMatch(/tabindex="0"/);
   });
 });
 
