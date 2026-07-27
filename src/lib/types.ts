@@ -226,11 +226,19 @@ export interface SlideTextBlock extends SlideBlockBase {
   color?: string;
 }
 
+export type SlideListMarker = 'bullet' | 'decimal' | 'alpha' | 'roman' | 'none';
+
 export interface SlideListBlock extends SlideBlockBase {
   kind: 'list';
   items: SlideListItem[];
-  /** `decimal` numbers top-level items; `none` renders a bare stack. */
-  marker: 'bullet' | 'decimal' | 'none';
+  /** Marker for top-level items. */
+  marker: SlideListMarker;
+  /**
+   * Per-depth marker overrides. Index 0 is the top level. When absent, nested
+   * levels step down automatically (decimal to alpha to roman, bullet to
+   * hollow bullet), matching how worked steps are normally sub-numbered.
+   */
+  markerByLevel?: SlideListMarker[];
   fontSize?: number;
 }
 
@@ -246,6 +254,11 @@ export interface SlideTableBlock extends SlideBlockBase {
   /** Empty array renders a table with no header row. */
   header: string[];
   rows: string[][];
+  /**
+   * `row` treats `header` as the top row. `column` treats the first cell of
+   * each row as that row's header, for data laid out left-to-right.
+   */
+  headerOrientation?: 'row' | 'column';
   fontSize?: number;
   /** Relative column widths. Equal widths when omitted or length-mismatched. */
   columnWeights?: number[];
@@ -313,6 +326,50 @@ export interface SlideMappingBlock extends SlideBlockBase {
   caption?: string;
 }
 
+/**
+ * A node-and-arrow diagram: labelled boxes joined by arrows. Covers function
+ * machines and leader-line labels pointing at parts of an expression.
+ *
+ * Node positions are fractions of the block box in [0, 1] so a diagram keeps
+ * its proportions at any page size.
+ */
+export interface SlideDiagramNode {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  /** Fractions of the block box. Sized to the text when omitted. */
+  w?: number;
+  h?: number;
+  shape?: 'box' | 'plain';
+}
+
+export interface SlideDiagramEdge {
+  from: string;
+  to: string;
+  label?: string;
+}
+
+export interface SlideDiagramBlock extends SlideBlockBase {
+  kind: 'diagram';
+  nodes: SlideDiagramNode[];
+  edges: SlideDiagramEdge[];
+  height: number;
+  caption?: string;
+}
+
+/** A number line drawn as slide content, distinct from the annotation tool. */
+export interface SlideNumberLineBlock extends SlideBlockBase {
+  kind: 'numberline';
+  min: number;
+  max: number;
+  tickStep: number;
+  labelStep: number;
+  marks: NumberLineMark[];
+  height: number;
+  caption?: string;
+}
+
 export type SlideBlock =
   | SlideTextBlock
   | SlideListBlock
@@ -323,6 +380,8 @@ export type SlideBlock =
   | SlideCalloutBlock
   | SlideImageBlock
   | SlideMappingBlock
+  | SlideDiagramBlock
+  | SlideNumberLineBlock
   | SlideSpacerBlock;
 
 /**
