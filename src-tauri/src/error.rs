@@ -27,6 +27,15 @@ pub enum AppError {
     #[error("invalid input: {0}")]
     InvalidInput(String),
 
+    #[error("invalid output path: {0}")]
+    InvalidOutputPath(String),
+
+    #[error("export: {0}")]
+    Export(String),
+
+    #[error("resource limit: {0}")]
+    ResourceLimit(String),
+
     #[error("window: {0}")]
     Window(String),
 }
