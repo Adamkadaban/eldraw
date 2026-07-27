@@ -52,11 +52,27 @@ describe('slide deck operations', () => {
       'graph',
       'callout',
       'image',
+      'mapping',
       'spacer',
     ] as const;
     const blocks = kinds.map(createBlock);
     expect(blocks.map((block) => block.kind)).toEqual(kinds);
     expect(new Set(blocks.map((block) => block.id)).size).toBe(kinds.length);
+  });
+
+  it('creates a mapping block with valid starter arrows', () => {
+    const mapping = createBlock('mapping');
+    expect(mapping).toMatchObject({
+      leftLabel: 'Domain',
+      rightLabel: 'Range',
+      left: ['Input 1', 'Input 2'],
+      right: ['Output 1', 'Output 2'],
+      pairs: [
+        { from: 0, to: 0 },
+        { from: 1, to: 1 },
+      ],
+      height: 260,
+    });
   });
 
   describe('slide pages', () => {
@@ -113,6 +129,24 @@ describe('slide deck operations', () => {
     expectInputUnchanged(slide, next);
     expect(next.blocks[0]).toMatchObject({ id: target.id, text: 'Changed', bold: true });
     expect(next.blocks[1]).not.toBe(slide.blocks[1]);
+  });
+
+  it('updates mapping data without sharing nested arrays or pairs', () => {
+    const mapping = createBlock('mapping');
+    const slide = freezeDeep({ ...createSlide('content'), blocks: [mapping] });
+    const next = updateBlock(slide, mapping.id, {
+      left: ['Changed', ...mapping.left.slice(1)],
+      pairs: [{ from: 0, to: 1 }],
+    });
+    expect(slide.blocks[0]).toEqual(mapping);
+    expect(next.blocks[0]).toMatchObject({
+      kind: 'mapping',
+      left: ['Changed', 'Input 2'],
+      pairs: [{ from: 0, to: 1 }],
+    });
+    if (next.blocks[0].kind !== 'mapping') throw new Error('Expected mapping block');
+    expect(next.blocks[0].left).not.toBe(mapping.left);
+    expect(next.blocks[0].pairs).not.toBe(mapping.pairs);
   });
 
   it('returns an independent clone when updating a missing id', () => {

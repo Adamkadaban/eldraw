@@ -16,6 +16,8 @@ describe('slide templates', () => {
       'Equation + graph',
       'Graph trio',
       'Worked example',
+      'Mapping diagram',
+      'Relation practice',
       'Practice grid',
       'Concept + tip callout',
       'Blank workspace',
@@ -44,5 +46,28 @@ describe('slide templates', () => {
   it('applies known templates and rejects unknown ids', () => {
     expect(applyTemplate('worked-example')?.title).toBe('Worked example');
     expect(applyTemplate('missing')).toBeNull();
+  });
+
+  it('builds the mapping templates with their intended teaching structures', () => {
+    expect(applyTemplate('mapping-diagram')).toMatchObject({
+      layout: 'content',
+      blocks: [{ kind: 'mapping' }, { kind: 'text' }],
+    });
+    expect(applyTemplate('relation-practice')).toMatchObject({
+      layout: 'columns',
+      columnCount: 2,
+      blocks: [
+        { kind: 'mapping' },
+        {
+          kind: 'list',
+          marker: 'decimal',
+          items: [
+            { text: 'Find the domain.' },
+            { text: 'Find the range.' },
+            { text: 'Is it a function?' },
+          ],
+        },
+      ],
+    });
   });
 });

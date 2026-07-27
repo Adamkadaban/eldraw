@@ -178,6 +178,7 @@ describe('sanitizeSlide trust boundary', () => {
         },
       ],
     });
+
     expect(slide?.theme).toBeUndefined();
     expect(slide?.blocks[0]).not.toHaveProperty('fontSize');
     expect(slide?.blocks[0]).not.toHaveProperty('marginTop');
@@ -191,6 +192,53 @@ describe('sanitizeSlide trust boundary', () => {
         functions: [{ width: 2 }],
       },
     });
+  });
+
+  it('bounds mapping elements and drops every invalid pair index', () => {
+    const input = {
+      layout: 'content',
+      blocks: [
+        {
+          id: 'mapping',
+          kind: 'mapping',
+          leftLabel: 'Domain',
+          rightLabel: 'Range',
+          left: Array.from({ length: 100_000 }, (_, index) => index),
+          right: Array.from({ length: 100_000 }, (_, index) => `R${index}`),
+          pairs: [
+            { from: 0, to: 0 },
+            { from: 99, to: 99 },
+            { from: -1, to: 0 },
+            { from: 100, to: 0 },
+            { from: 0, to: 100 },
+            { from: 0.5, to: 0 },
+            { from: 0, to: 1.5 },
+            { from: '0', to: 0 },
+            { from: NaN, to: 0 },
+            { from: 0, to: NaN },
+            { from: Infinity, to: 0 },
+            null,
+          ],
+          height: Infinity,
+        },
+      ],
+    };
+    expect(() => sanitizeSlide(input)).not.toThrow();
+    const slide = sanitizeSlide(input);
+    expect(slide?.blocks[0]).toMatchObject({
+      kind: 'mapping',
+      leftLabel: 'Domain',
+      rightLabel: 'Range',
+      pairs: [
+        { from: 0, to: 0 },
+        { from: 99, to: 99 },
+      ],
+      height: 260,
+    });
+    if (slide?.blocks[0]?.kind !== 'mapping') throw new Error('Expected mapping block');
+    expect(slide.blocks[0].left).toHaveLength(100);
+    expect(slide.blocks[0].right).toHaveLength(100);
+    expect(slide.blocks[0].left.every((value) => typeof value === 'string')).toBe(true);
   });
 
   it('never throws across malformed nested values', () => {

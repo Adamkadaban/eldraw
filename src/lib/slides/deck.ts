@@ -16,6 +16,8 @@ const aligns: readonly SlideAlign[] = ['left', 'center', 'right'];
 const calloutTones: readonly SlideCalloutTone[] = ['tip', 'warn', 'note'];
 const imageDataUrl = /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]*={0,2}$/;
 const safeFontFamily = /^[A-Za-z0-9][A-Za-z0-9 _,.-]{0,199}$/;
+const maxMappingElements = 100;
+const maxMappingPairs = 500;
 
 function newId(): string {
   try {
@@ -275,6 +277,41 @@ function sanitizeBlock(value: unknown, usedIds: Set<string>, asideOnly = false):
         height: finiteNumber(input.height, 240, 1, 2_000),
         ...(align === undefined ? {} : { align }),
       };
+    case 'mapping': {
+      const left = Array.isArray(input.left)
+        ? input.left.slice(0, maxMappingElements).map((item) => stringValue(item))
+        : [];
+      const right = Array.isArray(input.right)
+        ? input.right.slice(0, maxMappingElements).map((item) => stringValue(item))
+        : [];
+      const pairs = Array.isArray(input.pairs)
+        ? input.pairs
+            .slice(0, maxMappingPairs)
+            .map(objectValue)
+            .filter((pair): pair is Record<string, unknown> => pair !== null)
+            .filter(
+              (pair) =>
+                Number.isInteger(pair.from) &&
+                Number.isInteger(pair.to) &&
+                (pair.from as number) >= 0 &&
+                (pair.from as number) < left.length &&
+                (pair.to as number) >= 0 &&
+                (pair.to as number) < right.length,
+            )
+            .map((pair) => ({ from: pair.from as number, to: pair.to as number }))
+        : [];
+      return {
+        ...withBase(input, usedIds),
+        kind: 'mapping',
+        leftLabel: stringValue(input.leftLabel, 'Domain'),
+        rightLabel: stringValue(input.rightLabel, 'Range'),
+        left,
+        right,
+        pairs,
+        height: finiteNumber(input.height, 260, 1, 2_000),
+        ...(typeof input.caption === 'string' ? { caption: input.caption } : {}),
+      };
+    }
     case 'spacer':
       return {
         ...withBase(input, usedIds),
@@ -352,6 +389,20 @@ export function createBlock(kind: SlideBlock['kind']): SlideBlock {
       return { id, kind, text: 'Add a note', tone: 'note' };
     case 'image':
       return { id, kind, src: 'data:image/png;base64,', alt: '', height: 240 };
+    case 'mapping':
+      return {
+        id,
+        kind,
+        leftLabel: 'Domain',
+        rightLabel: 'Range',
+        left: ['Input 1', 'Input 2'],
+        right: ['Output 1', 'Output 2'],
+        pairs: [
+          { from: 0, to: 0 },
+          { from: 1, to: 1 },
+        ],
+        height: 260,
+      };
     case 'spacer':
       return { id, kind, height: 120 };
   }

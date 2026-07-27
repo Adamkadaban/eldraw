@@ -8,6 +8,7 @@
     SlideCalloutTone,
     SlideGraphBlock,
     SlideLayoutKind,
+    SlideMappingBlock,
     SlideTableBlock,
   } from '$lib/types';
   import {
@@ -28,6 +29,7 @@
   let { slide, onchange, onclose }: Props = $props();
   let addKind = $state<SlideBlock['kind']>('text');
   let imageError = $state('');
+  let mappingSelections = $state<Record<string, { from: number; to: number }>>({});
 
   const layouts: { value: SlideLayoutKind; label: string }[] = [
     { value: 'title', label: 'Title' },
@@ -46,6 +48,7 @@
     { value: 'graph', label: 'Graph' },
     { value: 'callout', label: 'Callout' },
     { value: 'image', label: 'Image' },
+    { value: 'mapping', label: 'Mapping diagram' },
     { value: 'spacer', label: 'Writing space' },
   ];
 
@@ -221,6 +224,96 @@
     range[index] = value;
     if (range[0] >= range[1]) return;
     updateGraph(block, { [axis]: range });
+  }
+
+  function updateMapping(block: SlideMappingBlock, patch: Partial<SlideMappingBlock>): void {
+    onchange(updateBlock(slide, block.id, patch));
+  }
+
+  function setMappingElement(
+    block: SlideMappingBlock,
+    side: 'left' | 'right',
+    index: number,
+    value: string,
+  ): void {
+    updateMapping(block, {
+      [side]: block[side].map((item, itemIndex) => (itemIndex === index ? value : item)),
+    });
+  }
+
+  function addMappingElement(block: SlideMappingBlock, side: 'left' | 'right'): void {
+    updateMapping(block, { [side]: [...block[side], 'Value'] });
+  }
+
+  function removeMappingElement(
+    block: SlideMappingBlock,
+    side: 'left' | 'right',
+    index: number,
+  ): void {
+    const pairKey = side === 'left' ? 'from' : 'to';
+    updateMapping(block, {
+      [side]: block[side].filter((_, itemIndex) => itemIndex !== index),
+      pairs: block.pairs
+        .filter((pair) => pair[pairKey] !== index)
+        .map((pair) => ({
+          ...pair,
+          [pairKey]: pair[pairKey] > index ? pair[pairKey] - 1 : pair[pairKey],
+        })),
+    });
+  }
+
+  function moveMappingElement(
+    block: SlideMappingBlock,
+    side: 'left' | 'right',
+    index: number,
+    direction: -1 | 1,
+  ): void {
+    const destination = index + direction;
+    if (destination < 0 || destination >= block[side].length) return;
+    const values = [...block[side]];
+    [values[index], values[destination]] = [values[destination], values[index]];
+    const pairKey = side === 'left' ? 'from' : 'to';
+    updateMapping(block, {
+      [side]: values,
+      pairs: block.pairs.map((pair) => ({
+        ...pair,
+        [pairKey]:
+          pair[pairKey] === index
+            ? destination
+            : pair[pairKey] === destination
+              ? index
+              : pair[pairKey],
+      })),
+    });
+  }
+
+  function setMappingPair(
+    block: SlideMappingBlock,
+    pairIndex: number,
+    patch: Partial<SlideMappingBlock['pairs'][number]>,
+  ): void {
+    updateMapping(block, {
+      pairs: block.pairs.map((pair, index) => (index === pairIndex ? { ...pair, ...patch } : pair)),
+    });
+  }
+
+  function setMappingSelection(blockId: string, side: 'from' | 'to', value: number): void {
+    const current = mappingSelections[blockId] ?? { from: 0, to: 0 };
+    mappingSelections[blockId] = { ...current, [side]: value };
+  }
+
+  function addMappingPair(block: SlideMappingBlock): void {
+    if (block.left.length === 0 || block.right.length === 0) return;
+    const selection = mappingSelections[block.id] ?? { from: 0, to: 0 };
+    const from = Math.min(block.left.length - 1, Math.max(0, selection.from));
+    const to = Math.min(block.right.length - 1, Math.max(0, selection.to));
+    updateMapping(block, { pairs: [...block.pairs, { from, to }] });
+  }
+
+  function removeMappingPair(block: SlideMappingBlock, index: number): void {
+    updateMapping(block, {
+      pairs: block.pairs.filter((_, pairIndex) => pairIndex !== index),
+    });
   }
 
   async function loadImage(
@@ -871,6 +964,216 @@
               {#if imageError}
                 <p class="error" role="alert">{imageError}</p>
               {/if}
+            {:else if block.kind === 'mapping'}
+              <label>
+                Left label
+                <input
+                  type="text"
+                  value={block.leftLabel}
+                  oninput={(event) =>
+                    updateMapping(block, {
+                      leftLabel: (event.currentTarget as HTMLInputElement).value,
+                    })}
+                />
+              </label>
+              <label>
+                Right label
+                <input
+                  type="text"
+                  value={block.rightLabel}
+                  oninput={(event) =>
+                    updateMapping(block, {
+                      rightLabel: (event.currentTarget as HTMLInputElement).value,
+                    })}
+                />
+              </label>
+              <label class="wide">
+                Caption
+                <input
+                  type="text"
+                  value={block.caption ?? ''}
+                  oninput={(event) =>
+                    updateMapping(block, {
+                      caption: (event.currentTarget as HTMLInputElement).value,
+                    })}
+                />
+              </label>
+              <div class="wide mapping-columns">
+                <section class="mapping-side" aria-label="Left mapping elements">
+                  <strong>{block.leftLabel || 'Left elements'}</strong>
+                  {#each block.left as item, itemIndex}
+                    <div class="mapping-item">
+                      <input
+                        type="text"
+                        value={item}
+                        aria-label={`Left element ${itemIndex + 1}`}
+                        oninput={(event) =>
+                          setMappingElement(
+                            block,
+                            'left',
+                            itemIndex,
+                            (event.currentTarget as HTMLInputElement).value,
+                          )}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Move left element ${itemIndex + 1} up`}
+                        disabled={itemIndex === 0}
+                        onclick={() => moveMappingElement(block, 'left', itemIndex, -1)}>↑</button
+                      >
+                      <button
+                        type="button"
+                        aria-label={`Move left element ${itemIndex + 1} down`}
+                        disabled={itemIndex === block.left.length - 1}
+                        onclick={() => moveMappingElement(block, 'left', itemIndex, 1)}>↓</button
+                      >
+                      <button
+                        type="button"
+                        class="danger"
+                        aria-label={`Delete left element ${itemIndex + 1}`}
+                        onclick={() => removeMappingElement(block, 'left', itemIndex)}>×</button
+                      >
+                    </div>
+                  {/each}
+                  <button
+                    type="button"
+                    class="add-small"
+                    onclick={() => addMappingElement(block, 'left')}>+ left value</button
+                  >
+                </section>
+                <section class="mapping-side" aria-label="Right mapping elements">
+                  <strong>{block.rightLabel || 'Right elements'}</strong>
+                  {#each block.right as item, itemIndex}
+                    <div class="mapping-item">
+                      <input
+                        type="text"
+                        value={item}
+                        aria-label={`Right element ${itemIndex + 1}`}
+                        oninput={(event) =>
+                          setMappingElement(
+                            block,
+                            'right',
+                            itemIndex,
+                            (event.currentTarget as HTMLInputElement).value,
+                          )}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Move right element ${itemIndex + 1} up`}
+                        disabled={itemIndex === 0}
+                        onclick={() => moveMappingElement(block, 'right', itemIndex, -1)}>↑</button
+                      >
+                      <button
+                        type="button"
+                        aria-label={`Move right element ${itemIndex + 1} down`}
+                        disabled={itemIndex === block.right.length - 1}
+                        onclick={() => moveMappingElement(block, 'right', itemIndex, 1)}>↓</button
+                      >
+                      <button
+                        type="button"
+                        class="danger"
+                        aria-label={`Delete right element ${itemIndex + 1}`}
+                        onclick={() => removeMappingElement(block, 'right', itemIndex)}>×</button
+                      >
+                    </div>
+                  {/each}
+                  <button
+                    type="button"
+                    class="add-small"
+                    onclick={() => addMappingElement(block, 'right')}>+ right value</button
+                  >
+                </section>
+              </div>
+              <div class="wide mapping-pairs">
+                <strong>Arrows</strong>
+                {#each block.pairs as pair, pairIndex}
+                  <div class="mapping-pair">
+                    <select
+                      value={pair.from}
+                      aria-label={`Arrow ${pairIndex + 1} left element`}
+                      onchange={(event) =>
+                        setMappingPair(block, pairIndex, {
+                          from: Number((event.currentTarget as HTMLSelectElement).value),
+                        })}
+                    >
+                      {#each block.left as item, itemIndex}
+                        <option value={itemIndex}>{item || `Left ${itemIndex + 1}`}</option>
+                      {/each}
+                    </select>
+                    <span aria-hidden="true">→</span>
+                    <select
+                      value={pair.to}
+                      aria-label={`Arrow ${pairIndex + 1} right element`}
+                      onchange={(event) =>
+                        setMappingPair(block, pairIndex, {
+                          to: Number((event.currentTarget as HTMLSelectElement).value),
+                        })}
+                    >
+                      {#each block.right as item, itemIndex}
+                        <option value={itemIndex}>{item || `Right ${itemIndex + 1}`}</option>
+                      {/each}
+                    </select>
+                    <button
+                      type="button"
+                      class="danger"
+                      aria-label={`Delete arrow ${pairIndex + 1}`}
+                      onclick={() => removeMappingPair(block, pairIndex)}>×</button
+                    >
+                  </div>
+                {/each}
+                <div class="new-mapping-pair">
+                  <label>
+                    From
+                    <select
+                      value={mappingSelections[block.id]?.from ?? 0}
+                      disabled={block.left.length === 0}
+                      onchange={(event) =>
+                        setMappingSelection(
+                          block.id,
+                          'from',
+                          Number((event.currentTarget as HTMLSelectElement).value),
+                        )}
+                    >
+                      {#each block.left as item, itemIndex}
+                        <option value={itemIndex}>{item || `Left ${itemIndex + 1}`}</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <label>
+                    To
+                    <select
+                      value={mappingSelections[block.id]?.to ?? 0}
+                      disabled={block.right.length === 0}
+                      onchange={(event) =>
+                        setMappingSelection(
+                          block.id,
+                          'to',
+                          Number((event.currentTarget as HTMLSelectElement).value),
+                        )}
+                    >
+                      {#each block.right as item, itemIndex}
+                        <option value={itemIndex}>{item || `Right ${itemIndex + 1}`}</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={block.left.length === 0 || block.right.length === 0}
+                    onclick={() => addMappingPair(block)}>+ arrow</button
+                  >
+                </div>
+              </div>
+              <label>
+                Height
+                <input
+                  type="number"
+                  min="1"
+                  max="2000"
+                  value={block.height}
+                  onchange={(event) =>
+                    updateMapping(block, { height: numberValue(event, block.height) })}
+                />
+              </label>
             {:else if block.kind === 'spacer'}
               <label>
                 Writing-space height
@@ -1169,6 +1472,38 @@
     grid-template-columns: 28px 78px minmax(0, 1fr) 25px;
     gap: 4px;
   }
+  .mapping-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .mapping-side,
+  .mapping-pairs {
+    display: grid;
+    gap: 5px;
+  }
+  .mapping-side strong,
+  .mapping-pairs strong {
+    color: #bbb;
+    font-size: 11px;
+  }
+  .mapping-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(3, 25px);
+    gap: 3px;
+  }
+  .mapping-pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 25px;
+    gap: 5px;
+    align-items: center;
+  }
+  .new-mapping-pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 5px;
+    align-items: end;
+  }
   .empty {
     padding: 10px;
     color: #999;
@@ -1194,6 +1529,9 @@
     }
     .range-row {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .mapping-columns {
+      grid-template-columns: 1fr;
     }
   }
 </style>

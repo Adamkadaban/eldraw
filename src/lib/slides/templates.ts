@@ -127,6 +127,31 @@ function workedExample(): Slide {
   return { ...createSlide('content', 'Worked example'), blocks: [equation, space] };
 }
 
+function mappingDiagram(): Slide {
+  const mapping = block<'mapping'>('mapping');
+  mapping.left = ['Input', 'Input'];
+  mapping.right = ['Output', 'Output'];
+  const prompt = block<'text'>('text');
+  prompt.text = 'Add a short prompt';
+  return { ...createSlide('content', 'Mapping diagram'), blocks: [mapping, prompt] };
+}
+
+function relationPractice(): Slide {
+  const mapping = block<'mapping'>('mapping');
+  const questions = block<'list'>('list');
+  questions.marker = 'decimal';
+  questions.items = [
+    { text: 'Find the domain.', level: 0 },
+    { text: 'Find the range.', level: 0 },
+    { text: 'Is it a function?', level: 0 },
+  ];
+  return {
+    ...createSlide('columns', 'Relation practice'),
+    columnCount: 2,
+    blocks: [mapping, questions],
+  };
+}
+
 function practiceGrid(): Slide {
   const blocks: (SlideTextBlock | SlideSpacerBlock)[] = [];
   for (let index = 1; index <= 4; index += 1) {
@@ -239,6 +264,20 @@ export const slideTemplates: SlideTemplate[] = [
     description: 'An equation with room for live working',
     group: 'Practice',
     build: workedExample,
+  },
+  {
+    id: 'mapping-diagram',
+    name: 'Mapping diagram',
+    description: 'A domain-to-range mapping with a short prompt',
+    group: 'Math',
+    build: mappingDiagram,
+  },
+  {
+    id: 'relation-practice',
+    name: 'Relation practice',
+    description: 'A mapping beside domain and range questions',
+    group: 'Practice',
+    build: relationPractice,
   },
   {
     id: 'practice-grid',
