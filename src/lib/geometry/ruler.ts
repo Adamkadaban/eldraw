@@ -93,9 +93,38 @@ export interface RulerEdge {
   b: Vec2;
 }
 
-/** Long edge (segment) of the ruler in PDF-space. */
+/**
+ * Thickness of the ruler body in PDF points. Expressed in points, not pixels,
+ * so the straightedge keeps its physical size as the page is zoomed and the
+ * snap edges stay where they are drawn.
+ */
+export const RULER_BODY_PT = 22;
+
+/** Long edge (segment) of the ruler in PDF-space — the top drawing edge. */
 export function rulerEdge(state: RulerState): RulerEdge {
   return { a: state.from, b: rulerEnd(state) };
+}
+
+/**
+ * The far long edge, offset across the body. A physical straightedge has two
+ * edges to draw against and users reach for whichever is nearer.
+ */
+export function rulerFarEdge(state: RulerState): RulerEdge {
+  const radians = (state.rotation * Math.PI) / 180;
+  // Normal of the ruler direction, pointing across the body.
+  const nx = -Math.sin(radians) * RULER_BODY_PT;
+  const ny = Math.cos(radians) * RULER_BODY_PT;
+  const { a, b } = rulerEdge(state);
+  return { a: { x: a.x + nx, y: a.y + ny }, b: { x: b.x + nx, y: b.y + ny } };
+}
+
+/** Both long edges, nearest to `p` first. */
+export function rulerEdgesNearest(p: Vec2, state: RulerState): [RulerEdge, RulerEdge] {
+  const near = rulerEdge(state);
+  const far = rulerFarEdge(state);
+  const dn = distanceToSegment(p, near.a, near.b);
+  const df = distanceToSegment(p, far.a, far.b);
+  return df < dn ? [far, near] : [near, far];
 }
 
 /** Orthogonal projection of `p` onto the infinite line through `a`–`b`. */
@@ -133,17 +162,20 @@ export interface RulerSnapResult {
 }
 
 /**
- * Snap a point to the ruler's long edge when within `thresholdPt` of the
- * segment. Snapping projects onto the infinite line through the edge so ink
- * continues straight even past the ruler's ends; the proximity test uses the
- * finite segment so snapping only triggers while the pen is "touching" the
- * physical straightedge.
+ * Snap a point to whichever of the ruler's two long edges is nearer, when
+ * within `thresholdPt` of it. Snapping projects onto the infinite line through
+ * that edge so ink continues straight past the ruler's ends; the proximity
+ * test uses the finite segment so snapping only triggers while the pen is
+ * "touching" the straightedge.
+ *
+ * Both edges matter: only offering the top one meant ink drawn along the lower
+ * edge, a body-width away, never snapped.
  */
 export function snapPointToRuler(p: Vec2, state: RulerState, thresholdPt: number): RulerSnapResult {
-  const { a, b } = rulerEdge(state);
-  const dist = distanceToSegment(p, a, b);
+  const [near] = rulerEdgesNearest(p, state);
+  const dist = distanceToSegment(p, near.a, near.b);
   if (dist > thresholdPt) return { point: { x: p.x, y: p.y }, snapped: false };
-  return { point: projectOntoLine(p, a, b), snapped: true };
+  return { point: projectOntoLine(p, near.a, near.b), snapped: true };
 }
 
 /**

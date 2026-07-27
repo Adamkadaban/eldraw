@@ -50,7 +50,7 @@
   }
 
   function addFunction(): void {
-    applyFunctions([...graph.functions, createGraphFunction()]);
+    applyFunctions([...graph.functions, createGraphFunction(graph.functions)]);
   }
 
   function setRange(axis: 'x' | 'y', which: 0 | 1, value: number): void {

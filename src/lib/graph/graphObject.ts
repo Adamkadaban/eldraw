@@ -1,4 +1,5 @@
 import type { GraphFunction, GraphObject } from '$lib/types';
+import { nextCurveColor } from './curvePalette';
 
 function uid(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -14,8 +15,8 @@ export function createGraphObject(bounds: {
     id: uid('fn'),
     expr: 'x',
     kind: 'explicit',
-    color: '#1e88e5',
-    width: 2,
+    color: nextCurveColor([]),
+    width: 1.8,
     dash: 'solid',
     domain: null,
   };
@@ -33,13 +34,13 @@ export function createGraphObject(bounds: {
   };
 }
 
-export function createGraphFunction(): GraphFunction {
+export function createGraphFunction(existing: readonly GraphFunction[] = []): GraphFunction {
   return {
     id: uid('fn'),
     expr: 'x',
     kind: 'explicit',
-    color: '#e53935',
-    width: 2,
+    color: nextCurveColor(existing.map((fn) => fn.color)),
+    width: 1.8,
     dash: 'solid',
     domain: null,
   };
